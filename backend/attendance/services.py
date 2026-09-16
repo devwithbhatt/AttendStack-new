@@ -4,12 +4,20 @@ from datetime import date, timedelta
 from decimal import Decimal, ROUND_DOWN
 
 from django.db import transaction
+from django.utils import timezone
 
 from employees.models import ATTENDANCE_WORKING_STATUSES, Employee
 from holidays.models import Holiday
 from settings.models import SystemSettings
 
-from .models import AttendanceRecord, AttendanceStatus, LeaveStatus, LeaveType
+from .models import (
+    AttendanceRecord,
+    AttendanceStatus,
+    LeaveRequest,
+    LeaveStatus,
+    LeaveType,
+    AUTO_PRESERVED_STATUSES,
+)
 
 
 def iter_dates(start_date: date, end_date: date):
@@ -502,32 +510,99 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
     return {"created": created_count, "updated": updated_count, "skipped": skipped_count}
 
 
+# Starting date for enforcing auto-marked absences and payroll deductions.
+# Historical dates prior to this baseline remain intact and are never auto-marked absent.
+ABSENT_TRACKING_START_DATE = date(2026, 9, 16)
+
+
+def auto_mark_absent_employees(start_date: date | None = None, end_date: date | None = None) -> dict[str, int]:
+    """
+    Marks active working employees as 'Absent' if they have no attendance record
+    and no approved leave for working days.
+
+    Enforces business rules:
+    - Only applies to dates on or after ABSENT_TRACKING_START_DATE (protects historical data).
+    - Only applies up to today (does not prematurely mark future dates).
+    - Skips non-working days: Sundays and configured company holidays.
+    - If an approved leave exists for the date, ensures leave attendance is synced instead.
+    - If a punch record (check_in) exists, preserves it.
+    """
+    today = timezone.localdate()
+    effective_start = max(start_date or today, ABSENT_TRACKING_START_DATE)
+    effective_end = min(end_date or today, today)
+
+    if effective_start > effective_end:
+        return {"created": 0, "skipped": 0}
+
+    holiday_dates = set(
+        Holiday.objects.filter(date__gte=effective_start, date__lte=effective_end).values_list("date", flat=True)
+    )
+
+    created_count = 0
+    skipped_count = 0
+
+    current = effective_start
+    while current <= effective_end:
+        # Skip Sundays (weekday 6) and holidays
+        if current.weekday() == 6 or current in holiday_dates:
+            current += timedelta(days=1)
+            continue
+
+        active_employees = Employee.objects.attendance_eligible_on(current).filter(
+            attendance_status_on_date__in=ATTENDANCE_WORKING_STATUSES,
+            joining_date__lte=current,
+        )
+
+        for employee in active_employees:
+            existing = AttendanceRecord.objects.filter(employee=employee, date=current).first()
+
+            if existing:
+                # If employee checked in, or has a preserved leave/holiday/sunday status, preserve it
+                if existing.check_in or existing.status in AUTO_PRESERVED_STATUSES:
+                    skipped_count += 1
+                    continue
+                # If already absent without check-in, ensure is_paid=False
+                if existing.status == AttendanceStatus.ABSENT:
+                    if existing.is_paid:
+                        existing.is_paid = False
+                        existing.save(auto_refresh_status=False, update_fields=["is_paid", "updated_at"])
+                    skipped_count += 1
+                    continue
+
+            # Check if employee has an approved leave covering this day
+            approved_leave = LeaveRequest.objects.filter(
+                employee=employee,
+                start_date__lte=current,
+                end_date__gte=current,
+                status=LeaveStatus.APPROVED,
+            ).first()
+
+            if approved_leave:
+                sync_leave_request_attendance(approved_leave)
+                skipped_count += 1
+                continue
+
+            # No check-in and no approved leave -> Auto-mark as ABSENT
+            AttendanceRecord.objects.update_or_create(
+                employee=employee,
+                date=current,
+                defaults={
+                    "status": AttendanceStatus.ABSENT,
+                    "is_paid": False,
+                    "notes": "Auto-marked: Absent",
+                },
+            )
+            created_count += 1
+
+        current += timedelta(days=1)
+
+    return {"created": created_count, "skipped": skipped_count}
+
+
 def auto_mark_absent_yesterday():
     """Marks active employees as 'Absent' if they have no attendance record for yesterday."""
-    yesterday = date.today() - timedelta(days=1)
-    
-    # Skip execution on weekends and holidays
-    if yesterday.weekday() >= 5: # Saturday or Sunday
-        return {"status": "skipped", "reason": "Weekend"}
-        
-    if Holiday.objects.filter(date=yesterday).exists():
-        return {"status": "skipped", "reason": "Holiday"}
-
-    active_employees = Employee.objects.attendance_eligible_on(yesterday).filter(
-        attendance_status_on_date__in=ATTENDANCE_WORKING_STATUSES,
-        joining_date__lte=yesterday,
-    )
-    marked_absent_count = 0
-    
-    for employee in active_employees:
-        has_record = AttendanceRecord.objects.filter(employee=employee, date=yesterday).exists()
-        if not has_record:
-            AttendanceRecord.objects.create(
-                employee=employee,
-                date=yesterday,
-                status=AttendanceStatus.ABSENT,
-                notes="Auto-marked: Absent"
-            )
-            marked_absent_count += 1
-            
-    return {"status": "completed", "marked_absent": marked_absent_count}
+    yesterday = timezone.localdate() - timedelta(days=1)
+    if yesterday < ABSENT_TRACKING_START_DATE:
+        return {"status": "skipped", "reason": "Prior to absent tracking start date"}
+    result = auto_mark_absent_employees(yesterday, yesterday)
+    return {"status": "completed", "marked_absent": result["created"]}
