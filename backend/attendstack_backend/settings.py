@@ -27,11 +27,6 @@ if not DEBUG and SECRET_KEY == "unsafe-secret-key":
 
 ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
 
-# Honor the 'X-Forwarded-Proto' header for request.is_secure() behind reverse proxies (Nginx/Cloudflare)
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-USE_X_FORWARDED_HOST = True
-USE_X_FORWARDED_PORT = True
-
 # ──────────────────────────────────────────────────────────────────────────────
 # APPLICATION DEFINITION
 # ──────────────────────────────────────────────────────────────────────────────
@@ -245,7 +240,7 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in config(
         "CORS_ALLOWED_ORIGINS",
-        default="http://localhost:3000, http://127.0.0.1:3000, http://localhost:8002",
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8001",
     ).split(",")
     if origin.strip()
 ]

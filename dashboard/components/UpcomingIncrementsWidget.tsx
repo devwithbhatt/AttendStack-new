@@ -601,7 +601,7 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                   <tr>
                     <th className="ps-3 py-2.5 text-nowrap">Employee</th>
                     <th className="py-2.5 text-nowrap">Current Salary</th>
-                    {/* <th className="py-2.5 text-nowrap">Proposed Raise</th> */}
+                    <th className="py-2.5 text-nowrap">Proposed Raise</th>
                     <th className="py-2.5 text-nowrap">New Salary</th>
                     <th className="py-2.5 text-nowrap">Due Date</th>
                     <th className="py-2.5 text-nowrap">Status</th>
@@ -615,11 +615,11 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                     const isAnnual = Number(inc.current_salary) > 50000;
                     const monthlyCurrent = isAnnual ? Math.round(Number(inc.current_salary) / 12) : Number(inc.current_salary);
                     const monthlyNew = isAnnual ? Math.round(Number(inc.new_salary) / 12) : Number(inc.new_salary);
-                    // const monthlyRaiseAmount = isAnnual ? Math.round(Number(inc.calculated_increment_amount) / 12) : Number(inc.calculated_increment_amount);
-                    // const formattedPct = inc.increment_value ? parseFloat(String(inc.increment_value)) : 10;
-                    // const effectivePct = Number(inc.current_salary) > 0
-                    //   ? ((Number(inc.calculated_increment_amount) / Number(inc.current_salary)) * 100).toFixed(1)
-                    //   : "0";
+                    const monthlyRaiseAmount = isAnnual ? Math.round(Number(inc.calculated_increment_amount) / 12) : Number(inc.calculated_increment_amount);
+                    const formattedPct = inc.increment_value ? parseFloat(String(inc.increment_value)) : 10;
+                    const effectivePct = Number(inc.current_salary) > 0
+                      ? ((Number(inc.calculated_increment_amount) / Number(inc.current_salary)) * 100).toFixed(1)
+                      : "0";
 
                     return (
                       <tr key={inc.id} style={{ height: "48px" }}>
@@ -665,7 +665,7 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                           </div>
                         </td>
 
-                        {/* <td className="py-2 text-nowrap">
+                        <td className="py-2 text-nowrap">
                           <div className="d-inline-flex align-items-center gap-1.5">
                             <span
                               className="badge px-1.5 py-0.5 rounded-pill fw-bold text-success bg-success-subtle border border-success-subtle"
@@ -674,7 +674,7 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                               {inc.increment_type === "PERCENTAGE"
                                 ? `+${formattedPct}%`
                                 : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`}
-                            </span> 
+                            </span>
                             <span className="text-muted fw-medium" style={{ fontSize: "11px" }}>
                               {inc.increment_type === "PERCENTAGE"
                                 ? `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`
@@ -691,7 +691,7 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                               </Badge>
                             )}
                           </div>
-                        </td> */}
+                        </td>
 
                         <td className="py-2 text-nowrap">
                           <div className="fw-bold text-success" style={{ fontSize: "12.5px" }}>
