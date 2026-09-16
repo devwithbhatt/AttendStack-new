@@ -25,6 +25,9 @@ import {
   IconUpload,
   IconCheck,
   IconClock,
+  IconCopy,
+  IconBuilding,
+  IconPhoneCall,
 } from "@tabler/icons-react";
 
 type Employee = {
@@ -95,12 +98,6 @@ type ShiftOption = {
   is_night_shift?: boolean;
 };
 
-type SectionItem = {
-  label: string;
-  value?: string | null;
-  icon?: React.ReactNode;
-};
-
 type EmployeeProfileClientProps = {
   employeeId?: string;
   employee?: {
@@ -120,20 +117,26 @@ type LeavePolicy = {
   company_sick_leave_days: number;
   balances: Array<{ leave_type: string; label: string; entitlement: number; used: number; remaining: number }>;
   leave_requests: Array<{
-    id: number; leave_type_label: string; start_date: string; end_date: string;
-    is_half_day: boolean; reason: string; status: string; status_label: string;
+    id: number;
+    leave_type_label: string;
+    start_date: string;
+    end_date: string;
+    is_half_day: boolean;
+    reason: string;
+    status: string;
+    status_label: string;
   }>;
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
 
 const statusBadgeClass: Record<Employee["status"], string> = {
-  ACTIVE: "bg-success-subtle text-success",
-  PROVISION: "bg-info-subtle text-info",
-  ON_LEAVE: "bg-warning-subtle text-warning",
-  NOTICE_PERIOD: "bg-warning-subtle text-danger",
-  INACTIVE: "bg-secondary-subtle text-secondary",
-  TERMINATED: "bg-danger-subtle text-danger",
+  ACTIVE: "bg-success-subtle text-success border border-success-subtle",
+  PROVISION: "bg-info-subtle text-info border border-info-subtle",
+  ON_LEAVE: "bg-warning-subtle text-warning border border-warning-subtle",
+  NOTICE_PERIOD: "bg-warning-subtle text-danger border border-danger-subtle",
+  INACTIVE: "bg-secondary-subtle text-secondary border border-secondary-subtle",
+  TERMINATED: "bg-danger-subtle text-danger border border-danger-subtle",
 };
 
 const formatDate = (value?: string | null) => {
@@ -142,17 +145,6 @@ const formatDate = (value?: string | null) => {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(value));
-};
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return "Not provided";
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   }).format(new Date(value));
 };
 
@@ -169,45 +161,76 @@ const displayValue = (value?: string | null) => {
   return value && String(value).trim() ? value : "Not provided";
 };
 
-const InfoItem = ({ label, value, icon }: SectionItem) => (
-  <div className="employee-info-item">
-    <div className="employee-info-icon">{icon || <IconFileText size={18} />}</div>
-    <div>
-      <div className="employee-info-label">{label}</div>
-      <div className="employee-info-value">{displayValue(value)}</div>
-    </div>
-  </div>
-);
+const calculateTenure = (joiningDate?: string | null) => {
+  if (!joiningDate) return null;
+  const start = new Date(joiningDate);
+  const now = new Date();
+  if (isNaN(start.getTime())) return null;
+  const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (diffMonths <= 0) return "Joined recently";
+  if (diffMonths < 12) return `${diffMonths} mo${diffMonths > 1 ? "s" : ""} tenure`;
+  const years = Math.floor(diffMonths / 12);
+  const rem = diffMonths % 12;
+  return `${years} yr${years > 1 ? "s" : ""}${rem > 0 ? ` ${rem} mo${rem > 1 ? "s" : ""}` : ""} tenure`;
+};
 
-const InfoSection = ({
-  title,
-  subtitle,
-  items,
+// Polished, color-accented Info Card
+const ProfileInfoCard = ({
+  label,
+  value,
+  icon,
+  theme = "default",
+  isCopyable = false,
+  subtext,
 }: {
-  title: string;
-  subtitle?: string;
-  items: SectionItem[];
-}) => (
-  <section className="employee-profile-section">
-    <div className="mb-4">
-      <h5 className="mb-1">{title}</h5>
-      {subtitle && <p className="text-secondary mb-0">{subtitle}</p>}
-    </div>
-    <div className="row g-3">
-      {items.map((item) => (
-        <div className="col-md-6 col-xl-4" key={item.label}>
-          <InfoItem {...item} />
+  label: string;
+  value?: string | null;
+  icon?: React.ReactNode;
+  theme?: "indigo" | "emerald" | "amber" | "sky" | "rose" | "purple" | "default";
+  isCopyable?: boolean;
+  subtext?: string;
+}) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (text?: string | null) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className={`profile-info-card theme-${theme}`}>
+      <div className={`profile-info-icon icon-${theme}`}>{icon || <IconFileText size={18} />}</div>
+      <div className="profile-info-content min-w-0 flex-grow-1">
+        <div className="profile-info-label">{label}</div>
+        <div className="d-flex align-items-center justify-content-between gap-2">
+          <div className={`profile-info-value ${label.includes("Address") ? "text-break" : "text-truncate"}`} title={String(value || "")}>
+            {displayValue(value)}
+          </div>
+          {isCopyable && value && value !== "Not provided" && (
+            <button
+              type="button"
+              className="btn btn-sm p-0 text-muted copy-btn flex-shrink-0"
+              onClick={() => handleCopy(value)}
+              title="Copy to clipboard"
+            >
+              {copied ? <IconCheck size={14} className="text-success" /> : <IconCopy size={14} />}
+            </button>
+          )}
         </div>
-      ))}
+        {subtext && <div className="profile-info-subtext">{subtext}</div>}
+      </div>
     </div>
-  </section>
-);
+  );
+};
 
 const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: EmployeeProfileClientProps) => {
   const resolvedEmployeeId = employeeId || legacyEmployee?.id || "";
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"overview" | "personal" | "compensation" | "leave">("overview");
+
   const [leavePolicy, setLeavePolicy] = useState<LeavePolicy | null>(null);
   const [isEditingLeavePolicy, setIsEditingLeavePolicy] = useState(false);
   const [casualOverride, setCasualOverride] = useState("");
@@ -239,12 +262,27 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
 
+  // Shift Management State
   const [availableShifts, setAvailableShifts] = useState<ShiftOption[]>([]);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [selectedShiftId, setSelectedShiftId] = useState("");
   const [isSavingShift, setIsSavingShift] = useState(false);
   const [shiftSuccessMessage, setShiftSuccessMessage] = useState("");
   const [shiftErrorMessage, setShiftErrorMessage] = useState("");
+
+  // Hash change detection (for URL routing to #leave-entitlement)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const handleHash = () => {
+        if (window.location.hash === "#leave-entitlement") {
+          setActiveTab("leave");
+        }
+      };
+      handleHash();
+      window.addEventListener("hashchange", handleHash);
+      return () => window.removeEventListener("hashchange", handleHash);
+    }
+  }, []);
 
   useEffect(() => {
     const loadShifts = async () => {
@@ -263,6 +301,63 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
     };
     loadShifts();
   }, []);
+
+  useEffect(() => {
+    const loadEmployee = async () => {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        if (!resolvedEmployeeId) {
+          throw new Error("Employee ID is missing from the profile route.");
+        }
+
+        const token = localStorage.getItem("authToken");
+        const response = await fetch(`${API_URL}${resolvedEmployeeId}/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (response.status === 404) {
+          throw new Error("Employee profile was not found.");
+        }
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("You are not authorized to view this employee profile.");
+        }
+        if (!response.ok) {
+          throw new Error("Unable to load employee profile.");
+        }
+
+        const data = (await response.json()) as Employee;
+        setEmployee(data);
+
+        const leaveResponse = await fetch(`${API_URL}${resolvedEmployeeId}/leave-policy/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (leaveResponse.ok) {
+          const policy = (await leaveResponse.json()) as LeavePolicy;
+          setLeavePolicy(policy);
+          setCasualOverride(policy.casual_leave_days_override ?? "");
+          setSickOverride(policy.sick_leave_days_override ?? "");
+        }
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Unable to load employee profile.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadEmployee();
+  }, [resolvedEmployeeId]);
+
+  useEffect(() => {
+    if (!profilePhotoFile) {
+      setPhotoPreview(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(profilePhotoFile);
+    setPhotoPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [profilePhotoFile]);
 
   const openShiftModal = () => {
     if (!employee) return;
@@ -314,61 +409,6 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
       setIsSavingShift(false);
     }
   };
-
-  useEffect(() => {
-    const loadEmployee = async () => {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        if (!resolvedEmployeeId) {
-          throw new Error("Employee ID is missing from the profile route.");
-        }
-
-        const token = localStorage.getItem("authToken");
-        const response = await fetch(`${API_URL}${resolvedEmployeeId}/`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-
-        if (response.status === 404) {
-          throw new Error("Employee profile was not found.");
-        }
-        if (response.status === 401 || response.status === 403) {
-          throw new Error("You are not authorized to view this employee profile.");
-        }
-        if (!response.ok) {
-          throw new Error("Unable to load employee profile.");
-        }
-
-        setEmployee((await response.json()) as Employee);
-        const leaveResponse = await fetch(`${API_URL}${resolvedEmployeeId}/leave-policy/`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-        if (leaveResponse.ok) {
-          const policy = (await leaveResponse.json()) as LeavePolicy;
-          setLeavePolicy(policy);
-          setCasualOverride(policy.casual_leave_days_override ?? "");
-          setSickOverride(policy.sick_leave_days_override ?? "");
-        }
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Unable to load employee profile.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadEmployee();
-  }, [resolvedEmployeeId]);
-
-  useEffect(() => {
-    if (!profilePhotoFile) {
-      setPhotoPreview(null);
-      return;
-    }
-    const objectUrl = URL.createObjectURL(profilePhotoFile);
-    setPhotoPreview(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [profilePhotoFile]);
 
   const openEditModal = () => {
     if (!employee) return;
@@ -523,408 +563,891 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
     }
   };
 
-  const sections = useMemo(() => {
-    if (!employee) return [];
-
-    return [
-      {
-        title: "Personal Information",
-        subtitle: "Identity and contact details captured from the employee form.",
-        items: [
-          { label: "Full Name", value: employee.full_name, icon: <IconUser size={18} /> },
-          { label: "Email Address", value: employee.email, icon: <IconMail size={18} /> },
-          { label: "Phone Number", value: employee.phone, icon: <IconPhone size={18} /> },
-          { label: "Date of Birth", value: formatDate(employee.date_of_birth), icon: <IconCalendar size={18} /> },
-          { label: "Aadhaar Number", value: employee.aadhaar_number, icon: <IconId size={18} /> },
-          { label: "Address", value: employee.address, icon: <IconMapPin size={18} /> },
-        ],
-      },
-      {
-        title: "Emergency Contact",
-        subtitle: "People to contact if urgent assistance is needed.",
-        items: [
-          { label: "Contact Name", value: employee.emergency_contact_name, icon: <IconUsers size={18} /> },
-          { label: "Relationship", value: employee.emergency_contact_relationship, icon: <IconShieldCheck size={18} /> },
-          { label: "Contact Phone", value: employee.emergency_contact_phone, icon: <IconPhone size={18} /> },
-        ],
-      },
-      {
-        title: "Employment Details",
-        subtitle: "Role, department, manager, and employment status.",
-        items: [
-          { label: "Employee ID", value: employee.employee_id, icon: <IconId size={18} /> },
-          { label: "Joining Date", value: formatDate(employee.joining_date), icon: <IconCalendar size={18} /> },
-          { label: "Department", value: employee.department, icon: <IconBriefcase size={18} /> },
-          { label: "Designation", value: employee.designation, icon: <IconBriefcase size={18} /> },
-          { label: "Company", value: "Bhatt Square Pvt Ltd", icon: <IconBriefcase size={18} /> },
-          { label: "Employment Type", value: employee.employment_type_label || employee.employment_type, icon: <IconUsers size={18} /> },
-          {
-            label: "Work Shift",
-            value: employee.shift_details?.name
-              ? `${employee.shift_details.name} (${employee.shift ? "Custom Assigned" : "Company Default"})`
-              : (employee.shift_name ? `${employee.shift_name} (Custom Assigned)` : "Default Company Shift"),
-            icon: <IconClock size={18} />
-          },
-          { label: "Reporting Manager", value: employee.reporting_manager, icon: <IconUser size={18} /> },
-          { label: "Login Account", value: employee.account_exists ? "Created" : "Not created", icon: <IconShieldCheck size={18} /> },
-          ...(employee.status_end_date ? [
-            { label: "Status End Date", value: formatDate(employee.status_end_date), icon: <IconCalendar size={18} /> },
-            { label: "Next Auto Transition", value: employee.auto_transition_status_label || employee.auto_transition_status || "-", icon: <IconShieldCheck size={18} /> },
-          ] : []),
-        ],
-      },
-      {
-        title: "Salary & Bank",
-        subtitle: "Payroll and bank details saved for this employee.",
-        items: [
-          { label: "Annual Salary", value: formatCurrency(employee.annual_salary), icon: <IconWallet size={18} /> },
-          { label: "Pay Frequency", value: employee.pay_frequency_label || employee.pay_frequency, icon: <IconCalendar size={18} /> },
-          { label: "Bank Name", value: employee.bank_name, icon: <IconBuildingBank size={18} /> },
-          { label: "Bank Account Number", value: employee.bank_account_number, icon: <IconId size={18} /> },
-          { label: "IFSC Code", value: employee.ifsc_code, icon: <IconBuildingBank size={18} /> },
-          { label: "PAN Number", value: employee.pan_number || employee.tax_id, icon: <IconFileText size={18} /> },
-          { label: "P.F. A/C Number", value: employee.pf_number, icon: <IconId size={18} /> },
-          { label: "UAN Number", value: employee.uan_number, icon: <IconId size={18} /> },
-        ],
-      },
-      {
-        title: "System Details",
-        subtitle: "Record timestamps from AttendStack.",
-        items: [
-          { label: "Created At", value: formatDateTime(employee.created_at), icon: <IconCalendar size={18} /> },
-          { label: "Last Updated", value: formatDateTime(employee.updated_at), icon: <IconCalendar size={18} /> },
-        ],
-      },
-    ];
-  }, [employee]);
-
   if (isLoading) {
     return (
-      <div className="card border-0 shadow-sm">
-        <div className="card-body py-5 text-center text-secondary">Loading employee profile...</div>
+      <div className="card border-0 shadow-sm rounded-4 p-5 text-center">
+        <div className="spinner-border text-primary mx-auto mb-3" role="status" />
+        <div className="text-secondary fw-medium">Loading executive employee profile...</div>
       </div>
     );
   }
 
   if (error || !employee) {
     return (
-      <div className="card border-0 shadow-sm">
-        <div className="card-body p-4">
-          <div className="alert alert-danger d-flex align-items-center gap-2 mb-4">
-            <IconAlertCircle size={20} />
-            <span>{error || "Employee profile could not be loaded."}</span>
-          </div>
-          <Link href={backUrl} className="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
-            <IconArrowLeft size={18} /> {backLabel}
-          </Link>
+      <div className="card border-0 shadow-sm rounded-4 p-4">
+        <div className="alert alert-danger d-flex align-items-center gap-2 mb-4">
+          <IconAlertCircle size={20} />
+          <span>{error || "Employee profile could not be loaded."}</span>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="employee-profile">
-      <div className="d-flex align-items-center justify-content-between mb-4">
         <Link href={backUrl} className="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
           <IconArrowLeft size={18} /> {backLabel}
         </Link>
       </div>
+    );
+  }
 
-      <div className="employee-profile-header mb-4">
-        <div className="d-flex flex-column flex-md-row align-items-md-center gap-4 justify-content-between">
-          <div className="d-flex flex-column flex-md-row align-items-md-center gap-4">
-            <div className="position-relative d-inline-block">
+  const tenure = calculateTenure(employee.joining_date);
+  const shift = employee.shift_details;
+  const isShiftCustom = Boolean(employee.shift);
+
+  return (
+    <div className="employee-profile-wrapper">
+      {/* Top Breadcrumb Navigation */}
+      <div className="profile-topbar d-flex align-items-center justify-content-between mb-3">
+        <Link href={backUrl} className="btn btn-sm btn-light border d-inline-flex align-items-center gap-2 text-secondary fw-semibold shadow-2xs profile-back-btn">
+          <IconArrowLeft size={16} /> {backLabel}
+        </Link>
+        <div className="d-flex align-items-center gap-1.5 profile-topbar-meta">
+          <span className="badge bg-white text-secondary border px-2.5 py-1.5 fw-medium">{employee.department || "Directory"}</span>
+          <span className="badge bg-dark text-white px-2.5 py-1.5 fw-semibold">ID: {employee.employee_id}</span>
+        </div>
+      </div>
+
+      {/* Executive Hero Header Card */}
+      <div className="executive-profile-header mb-4">
+        <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4">
+          <div className="d-flex flex-column flex-sm-row align-items-start align-items-sm-center gap-4">
+            <div className="position-relative flex-shrink-0">
               <img
                 src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
                 alt={employee.full_name}
-                className="employee-profile-avatar"
+                className="profile-hero-avatar"
               />
               <button
                 type="button"
-                className="btn btn-primary btn-sm rounded-circle p-1 position-absolute bottom-0 end-0 border border-2 border-white shadow-sm d-flex align-items-center justify-content-center"
-                style={{ width: "32px", height: "32px" }}
+                className="avatar-edit-fab"
                 onClick={openEditModal}
-                title="Change Photo / Edit Profile"
+                title="Update photo / edit profile"
               >
-                <IconCamera size={16} />
+                <IconCamera size={15} />
               </button>
             </div>
+
             <div>
-              <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                <h2 className="mb-0">{employee.full_name}</h2>
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-1.5">
+                <h2 className="profile-hero-name mb-0">{employee.full_name}</h2>
                 <span className={`badge ${statusBadgeClass[employee.status] || "bg-secondary-subtle text-secondary"}`}>
+                  <span className="status-indicator-dot" />
                   {employee.status_label}
                 </span>
-                <span className="badge bg-light text-dark border d-inline-flex align-items-center gap-1.5 py-1.5 px-2.5" style={{ fontSize: "13px", fontWeight: 500 }}>
-                  <IconClock size={14} className="text-primary" />
-                  {employee.shift_details?.name || employee.shift_name || "Default Shift"}
+              </div>
+
+              {/* Badges / Quick Pills */}
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-2.5">
+                <span className="profile-hero-pill pill-indigo">
+                  <IconClock size={13} />
+                  {shift?.name || employee.shift_name || "General Shift"}
+                  <span className="opacity-75 ms-1">({shift?.start_time || "10:00"} - {shift?.end_time || "18:00"})</span>
+                </span>
+                <span className="profile-hero-pill pill-slate">
+                  <IconBriefcase size={13} />
+                  {employee.designation || "Designation Not Set"} • {employee.department || "General"}
+                </span>
+                {tenure && (
+                  <span className="profile-hero-pill pill-emerald">
+                    <IconCalendar size={13} />
+                    {tenure}
+                  </span>
+                )}
+                <span className="profile-hero-pill pill-light">
+                  <IconBuilding size={13} />
+                  Bhatt Square Pvt Ltd
                 </span>
               </div>
-              <p className="text-secondary mb-2">{employee.designation} - {employee.department}</p>
-              <div className="d-flex flex-wrap gap-3 text-secondary small">
-                <span className="d-inline-flex align-items-center gap-1"><IconId size={16} /> {employee.employee_id}</span>
-                <span className="d-inline-flex align-items-center gap-1"><IconMail size={16} /> {employee.email}</span>
-                <span className="d-inline-flex align-items-center gap-1"><IconPhone size={16} /> {employee.phone}</span>
+
+              {/* Contact metadata strip */}
+              <div className="d-flex flex-wrap align-items-center gap-3 text-secondary small">
+                {employee.email && (
+                  <a href={`mailto:${employee.email}`} className="text-decoration-none text-secondary d-inline-flex align-items-center gap-1 hover-primary">
+                    <IconMail size={15} className="text-primary" /> {employee.email}
+                  </a>
+                )}
+                {employee.phone && (
+                  <a href={`tel:${employee.phone}`} className="text-decoration-none text-secondary d-inline-flex align-items-center gap-1 hover-primary">
+                    <IconPhone size={15} className="text-primary" /> {employee.phone}
+                  </a>
+                )}
+                <span className="d-inline-flex align-items-center gap-1 text-muted">
+                  <IconCalendar size={15} /> Joined {formatDate(employee.joining_date)}
+                </span>
               </div>
             </div>
           </div>
-          <div className="d-flex align-items-center gap-2 align-self-start align-self-md-center mt-2 mt-md-0">
+
+          {/* Header Action Buttons */}
+          <div className="d-flex align-items-center gap-2 align-self-stretch align-self-lg-center justify-content-end flex-wrap header-actions-group">
             {!isMe && (
               <button
                 type="button"
-                className="btn btn-primary d-inline-flex align-items-center gap-2"
+                className="btn btn-primary d-inline-flex align-items-center justify-content-center gap-2 fw-semibold px-3 py-2 shadow-xs"
                 onClick={openShiftModal}
               >
-                <IconClock size={16} /> Change Shift
+                <IconClock size={17} /> Change Shift
               </button>
             )}
             <button
               type="button"
-              className="btn btn-outline-primary d-inline-flex align-items-center gap-2"
+              className="btn btn-outline-secondary d-inline-flex align-items-center justify-content-center gap-2 fw-semibold px-3 py-2"
               onClick={openEditModal}
             >
-              <IconEdit size={16} /> Edit Profile
+              <IconEdit size={17} /> Edit Profile
             </button>
           </div>
         </div>
       </div>
 
-      <section className="employee-profile-section">
-        <div className="mb-4">
-          <h5 className="mb-1">Documents</h5>
-          <p className="text-secondary mb-0">Uploaded files attached during employee onboarding.</p>
-        </div>
-        <div className="row g-3">
-          <div className="col-md-6">
-            <div className="employee-document-tile">
-              <div>
-                <div className="employee-info-label">Profile Photo</div>
-                <div className="employee-info-value">{employee.profile_photo_url ? "Uploaded" : "Not uploaded"}</div>
-              </div>
-              {employee.profile_photo_url && (
-                <a href={employee.profile_photo_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
-                  <IconEye size={16} /> Preview
-                </a>
-              )}
-            </div>
-          </div>
-          <div className="col-md-6">
-            <div className="employee-document-tile">
-              <div>
-                <div className="employee-info-label">PAN Card</div>
-                <div className="employee-info-value">{employee.pan_card_document_url ? "Uploaded" : "Not uploaded"}</div>
-              </div>
-              {employee.pan_card_document_url && (
-                <a href={employee.pan_card_document_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
-                  <IconEye size={16} /> Preview
-                </a>
-              )}
-            </div>
-          </div>
-          <div className="col-md-6">
-            <div className="employee-document-tile">
-              <div>
-                <div className="employee-info-label">CV / Resume</div>
-                <div className="employee-info-value">{employee.cv_document_url ? "Uploaded" : "Not uploaded"}</div>
-              </div>
-              {employee.cv_document_url && (
-                <a href={employee.cv_document_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
-                  <IconEye size={16} /> Preview
-                </a>
-              )}
-            </div>
-          </div>
-          <div className="col-md-6">
-            <div className="employee-document-tile">
-              <div>
-                <div className="employee-info-label">Aadhaar Document</div>
-                <div className="employee-info-value">{employee.aadhaar_document_url ? "Uploaded" : "Not uploaded"}</div>
-              </div>
-              {employee.aadhaar_document_url && (
-                <a href={employee.aadhaar_document_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
-                  <IconEye size={16} /> Preview
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Modern Tab Navigation */}
+      <div className="profile-tabs-nav mb-4">
+        <button
+          type="button"
+          className={`profile-tab-button ${activeTab === "overview" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("overview")}
+        >
+          <IconBriefcase size={17} />
+          <span>Work & Shift</span>
+        </button>
+        <button
+          type="button"
+          className={`profile-tab-button ${activeTab === "personal" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("personal")}
+        >
+          <IconUser size={17} />
+          <span>
+            <span className="d-none d-sm-inline">Personal & Documents</span>
+            <span className="d-sm-none">Personal & Docs</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`profile-tab-button ${activeTab === "compensation" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("compensation")}
+        >
+          <IconWallet size={17} />
+          <span>Salary & Bank</span>
+        </button>
+        <button
+          type="button"
+          className={`profile-tab-button ${activeTab === "leave" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("leave")}
+        >
+          <IconCalendarStats size={17} />
+          <span>
+            <span className="d-none d-sm-inline">Leave Entitlement</span>
+            <span className="d-sm-none">Leaves</span>
+          </span>
+        </button>
+      </div>
 
-      {sections.map((section) => {
-        if (section.title === "Salary & Bank") {
-          return (
-            <div key="work-shift-and-salary">
-              {/* Work Shift & Schedule Card */}
-              <section className="employee-profile-section mb-4">
-                <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-                  <div>
-                    <div className="d-flex align-items-center gap-2">
-                      <h5 className="mb-0">Work Shift & Schedule</h5>
-                      <span className={`badge ${employee.shift ? "bg-primary-subtle text-primary" : "bg-secondary-subtle text-secondary"}`}>
-                        {employee.shift ? "Custom Assigned Shift" : "Company Default Shift"}
-                      </span>
-                    </div>
-                    <p className="text-secondary small mb-0 mt-1">
-                      Configured work hours, late arrival grace period, and early departure salary deduction policies.
-                    </p>
+      {/* Tab 1: Work & Shift Overview */}
+      {activeTab === "overview" && (
+        <div className="tab-fade-in">
+          {/* Work Shift & Schedule Hero Card */}
+          <div className="profile-section-card border-indigo-subtle mb-4">
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+              <div>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="icon-box-indigo">
+                    <IconClock size={20} />
                   </div>
-                  {!isMe && (
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2"
-                      onClick={openShiftModal}
-                    >
-                      <IconClock size={16} /> Change Shift
-                    </button>
-                  )}
+                  <div>
+                    <h5 className="mb-0 fw-bold">Work Shift & Schedule</h5>
+                    <div className="d-flex align-items-center gap-2 mt-0.5">
+                      <span className={`badge ${isShiftCustom ? "bg-primary-subtle text-primary" : "bg-secondary-subtle text-secondary"}`}>
+                        {isShiftCustom ? "Custom Assigned Shift" : "Company Default Shift"}
+                      </span>
+                      {shift?.code && <span className="badge bg-light text-dark border">Code: {shift.code}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {!isMe && (
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1.5 fw-semibold"
+                  onClick={openShiftModal}
+                >
+                  <IconClock size={15} /> Reassign Shift
+                </button>
+              )}
+            </div>
+
+            {/* Visual Shift Schedule Timeline */}
+            <div className="shift-timeline-bar mb-4 p-3 rounded-3 bg-light border">
+              <div className="d-flex justify-content-between align-items-center text-xs text-muted mb-1.5 fw-semibold text-uppercase timeline-milestones">
+                <span>Start: {shift?.start_time || "10:00"}</span>
+                <span>Grace Ends: +{shift?.late_grace_minutes ?? 15}m</span>
+                <span>Early Cutoff: -{shift?.early_checkout_grace_minutes ?? 15}m</span>
+                <span>End: {shift?.end_time || "18:00"}</span>
+              </div>
+              <div className="progress" style={{ height: "8px" }}>
+                <div className="progress-bar bg-success" style={{ width: "20%" }} title="Normal arrival window" />
+                <div className="progress-bar bg-primary" style={{ width: "55%" }} title="Core working hours" />
+                <div className="progress-bar bg-warning" style={{ width: "15%" }} title="Early departure grace threshold" />
+                <div className="progress-bar bg-info" style={{ width: "10%" }} title="Shift completion" />
+              </div>
+              <div className="d-flex justify-content-between text-muted mt-1.5 timeline-subtext" style={{ fontSize: "11px" }}>
+                <span>Punch in window</span>
+                <span>Standard full work duration</span>
+                <span>End threshold</span>
+              </div>
+            </div>
+
+            {/* Shift Rules Grid */}
+            <div className="row g-3">
+              <div className="col-sm-6 col-lg-3">
+                <ProfileInfoCard
+                  theme="indigo"
+                  icon={<IconClock size={18} />}
+                  label="Daily Working Hours"
+                  value={`${shift?.start_time || "10:00"} - ${shift?.end_time || "18:00"}`}
+                  subtext="Expected daily office hours"
+                />
+              </div>
+              <div className="col-sm-6 col-lg-3">
+                <ProfileInfoCard
+                  theme="amber"
+                  icon={<IconClock size={18} />}
+                  label="Late Arrival Grace"
+                  value={`${shift?.late_grace_minutes ?? 15} Minutes`}
+                  subtext="Grace before marked Late"
+                />
+              </div>
+              <div className="col-sm-6 col-lg-3">
+                <ProfileInfoCard
+                  theme="rose"
+                  icon={<IconAlertCircle size={18} />}
+                  label="Early Checkout Rule"
+                  value={`${shift?.early_checkout_grace_minutes ?? 15} Mins Grace`}
+                  subtext={`Penalty: ${shift?.early_checkout_penalty_label || (shift?.early_checkout_penalty === "PRO_RATED" ? "Pro-Rated Deduction" : "Half Day Deduction")}`}
+                />
+              </div>
+              <div className="col-sm-6 col-lg-3">
+                <ProfileInfoCard
+                  theme="emerald"
+                  icon={<IconFileText size={18} />}
+                  label="Attendance Credit Hours"
+                  value={`Half: ${shift?.min_hours_half_day ?? 4}h • Full: ${shift?.min_hours_full_day ?? 8}h`}
+                  subtext="Required hours threshold"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Two-Column Grid: Employment Details & Quick Metadata */}
+          <div className="row g-4">
+            <div className="col-lg-8">
+              <div className="profile-section-card h-100">
+                <div className="section-header-row mb-3">
+                  <div>
+                    <h5 className="mb-0 fw-bold">Employment Details</h5>
+                    <p className="text-muted small mb-0">Role, department, organizational alignment, and account status.</p>
+                  </div>
+                  <span className="badge bg-light text-secondary border">Official Record</span>
                 </div>
 
                 <div className="row g-3">
-                  <div className="col-md-6 col-xl-4">
-                    <div className="employee-info-item">
-                      <div className="employee-info-icon"><IconClock size={18} className="text-primary" /></div>
-                      <div>
-                        <div className="employee-info-label">Assigned Shift</div>
-                        <div className="employee-info-value">
-                          {employee.shift_details?.name || employee.shift_name || "General Shift"}
-                          {employee.shift_details?.code ? ` (${employee.shift_details.code})` : ""}
-                        </div>
-                        <div className="small text-muted">{employee.shift ? "Custom shift assigned" : "Company default shift"}</div>
-                      </div>
-                    </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="sky"
+                      icon={<IconId size={18} />}
+                      label="Employee ID"
+                      value={employee.employee_id}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="sky"
+                      icon={<IconCalendar size={18} />}
+                      label="Joining Date"
+                      value={formatDate(employee.joining_date)}
+                      subtext={tenure || undefined}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconBriefcase size={18} />}
+                      label="Department"
+                      value={employee.department}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconBriefcase size={18} />}
+                      label="Designation"
+                      value={employee.designation}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="default"
+                      icon={<IconBuilding size={18} />}
+                      label="Company"
+                      value="Bhatt Square Pvt Ltd"
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="default"
+                      icon={<IconUsers size={18} />}
+                      label="Employment Type"
+                      value={employee.employment_type_label || employee.employment_type}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconClock size={18} />}
+                      label="Assigned Work Shift"
+                      value={shift?.name || employee.shift_name || "General Shift"}
+                      subtext={isShiftCustom ? "Custom assigned" : "Company default"}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme={employee.status === "ACTIVE" ? "emerald" : employee.status === "INACTIVE" || employee.status === "TERMINATED" ? "rose" : "amber"}
+                      icon={<IconShieldCheck size={18} />}
+                      label="Employment Status"
+                      value={employee.status_label || employee.status}
+                      subtext={employee.status_end_date ? `Effective until ${formatDate(employee.status_end_date)}` : "Current standing status"}
+                    />
                   </div>
 
-                  <div className="col-md-6 col-xl-4">
-                    <div className="employee-info-item">
-                      <div className="employee-info-icon"><IconCalendar size={18} className="text-primary" /></div>
-                      <div>
-                        <div className="employee-info-label">Working Hours</div>
-                        <div className="employee-info-value">
-                          {employee.shift_details?.start_time || "10:00"} - {employee.shift_details?.end_time || "18:00"}
-                        </div>
-                        <div className="small text-muted">Daily expected operating hours</div>
+                  {employee.status_end_date && (
+                    <>
+                      <div className="col-sm-6">
+                        <ProfileInfoCard
+                          theme="amber"
+                          icon={<IconCalendar size={18} />}
+                          label="Status Effective End Date"
+                          value={formatDate(employee.status_end_date)}
+                        />
                       </div>
+                      <div className="col-sm-6">
+                        <ProfileInfoCard
+                          theme="amber"
+                          icon={<IconShieldCheck size={18} />}
+                          label="Next Auto Transition"
+                          value={employee.auto_transition_status_label || employee.auto_transition_status || "-"}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar Column: Reporting Line & System Audit */}
+            <div className="col-lg-4">
+              <div className="d-flex flex-column gap-3">
+                {/* Reporting Line Card */}
+                <div className="profile-section-card">
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <div className="icon-box-purple">
+                      <IconUser size={18} />
+                    </div>
+                    <div>
+                      <h6 className="mb-0 fw-bold">Reporting Manager</h6>
+                      <small className="text-muted">Direct supervisory line</small>
                     </div>
                   </div>
+                  <div className="p-3 bg-light rounded-3 border">
+                    <div className="fw-semibold text-dark fs-6">{employee.reporting_manager || "Direct to Organization Head"}</div>
+                    <small className="text-muted d-block mt-0.5">Primary approver for leaves & attendance requests</small>
+                  </div>
+                </div>
 
-                  <div className="col-md-6 col-xl-4">
-                    <div className="employee-info-item">
-                      <div className="employee-info-icon"><IconClock size={18} className="text-primary" /></div>
-                      <div>
-                        <div className="employee-info-label">Late Arrival Grace</div>
-                        <div className="employee-info-value">
-                          {employee.shift_details?.late_grace_minutes ?? 15} Minutes
-                        </div>
-                        <div className="small text-muted">Permitted grace before late entry mark</div>
-                      </div>
+                {/* Emergency Contact Card */}
+                <div className="profile-section-card">
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <div className="icon-box-rose">
+                      <IconPhoneCall size={18} />
+                    </div>
+                    <div>
+                      <h6 className="mb-0 fw-bold">Emergency Contact</h6>
+                      <small className="text-muted">Emergency phone & family</small>
                     </div>
                   </div>
+                  <div className="p-3 bg-light rounded-3 border">
+                    <div className="d-flex justify-content-between align-items-start mb-1">
+                      <span className="fw-semibold text-dark">{displayValue(employee.emergency_contact_name)}</span>
+                      {employee.emergency_contact_relationship && (
+                        <span className="badge bg-white text-secondary border">
+                          {employee.emergency_contact_relationship}
+                        </span>
+                      )}
+                    </div>
+                    {employee.emergency_contact_phone ? (
+                      <a href={`tel:${employee.emergency_contact_phone}`} className="btn btn-sm btn-outline-danger w-100 mt-2 d-inline-flex align-items-center justify-content-center gap-1.5">
+                        <IconPhone size={14} /> Call {employee.emergency_contact_phone}
+                      </a>
+                    ) : (
+                      <span className="text-muted small">No emergency number provided</span>
+                    )}
+                  </div>
+                </div>
 
-                  <div className="col-md-6 col-xl-4">
-                    <div className="employee-info-item">
-                      <div className="employee-info-icon"><IconAlertCircle size={18} className="text-warning" /></div>
-                      <div>
-                        <div className="employee-info-label">Early Checkout Rule</div>
-                        <div className="employee-info-value">
-                          {employee.shift_details?.early_checkout_grace_minutes ?? 15} Mins Grace
-                        </div>
-                        <div className="small text-muted">Penalty: {employee.shift_details?.early_checkout_penalty_label || (employee.shift_details?.early_checkout_penalty === "PRO_RATED" ? "Pro-Rated Salary Deduction" : "Half Day Deduction")}</div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Personal & Documents */}
+      {activeTab === "personal" && (
+        <div className="tab-fade-in">
+          <div className="row g-4 mb-4">
+            {/* Personal Details */}
+            <div className="col-lg-8">
+              <div className="profile-section-card h-100">
+                <div className="section-header-row mb-3">
+                  <div>
+                    <h5 className="mb-0 fw-bold">Personal Information</h5>
+                    <p className="text-muted small mb-0">Identity and contact details captured from onboarding form.</p>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5" onClick={openEditModal}>
+                    <IconEdit size={14} /> Edit Details
+                  </button>
+                </div>
+
+                <div className="row g-3">
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="emerald"
+                      icon={<IconUser size={18} />}
+                      label="Full Legal Name"
+                      value={employee.full_name}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="emerald"
+                      icon={<IconMail size={18} />}
+                      label="Primary Email"
+                      value={employee.email}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="emerald"
+                      icon={<IconPhone size={18} />}
+                      label="Phone Number"
+                      value={employee.phone}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="emerald"
+                      icon={<IconCalendar size={18} />}
+                      label="Date of Birth"
+                      value={formatDate(employee.date_of_birth)}
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconId size={18} />}
+                      label="Aadhaar Number"
+                      value={employee.aadhaar_number}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconMapPin size={18} />}
+                      label="Residential Address"
+                      value={employee.address}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact Card */}
+            <div className="col-lg-4">
+              <div className="profile-section-card h-100">
+                <div className="section-header-row mb-3">
+                  <div>
+                    <h5 className="mb-0 fw-bold">Emergency Contact</h5>
+                    <p className="text-muted small mb-0">Urgent notifications</p>
+                  </div>
+                </div>
+
+                <div className="d-flex flex-column gap-3">
+                  <ProfileInfoCard
+                    theme="rose"
+                    icon={<IconUsers size={18} />}
+                    label="Contact Name"
+                    value={employee.emergency_contact_name}
+                  />
+                  <ProfileInfoCard
+                    theme="rose"
+                    icon={<IconShieldCheck size={18} />}
+                    label="Relationship"
+                    value={employee.emergency_contact_relationship}
+                  />
+                  <ProfileInfoCard
+                    theme="rose"
+                    icon={<IconPhone size={18} />}
+                    label="Contact Phone Number"
+                    value={employee.emergency_contact_phone}
+                    isCopyable
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Documents Section */}
+          <div className="profile-section-card">
+            <div className="section-header-row mb-3">
+              <div>
+                <h5 className="mb-0 fw-bold">Verified Onboarding Documents</h5>
+                <p className="text-muted small mb-0">Official identity proof and credentials uploaded during onboarding.</p>
+              </div>
+              <span className="badge bg-light text-secondary border">Document Repository</span>
+            </div>
+
+            <div className="row g-3">
+              {[
+                { label: "Profile Photo", url: employee.profile_photo_url, type: "Identity Avatar Image", icon: <IconUser size={22} className="text-primary" /> },
+                { label: "PAN Card Document", url: employee.pan_card_document_url, type: "Tax Identification Card", icon: <IconFileText size={22} className="text-info" /> },
+                { label: "Aadhaar Card Document", url: employee.aadhaar_document_url, type: "Government ID Card", icon: <IconId size={22} className="text-success" /> },
+                { label: "CV / Resume", url: employee.cv_document_url, type: "Professional Resume", icon: <IconBriefcase size={22} className="text-purple" /> },
+              ].map((doc) => (
+                <div className="col-md-6 col-xl-3" key={doc.label}>
+                  <div className="document-preview-card p-3 rounded-3 border bg-white h-100 d-flex flex-column justify-content-between shadow-xs">
+                    <div className="d-flex align-items-start gap-3 mb-3">
+                      <div className="p-2.5 rounded-3 bg-light border shadow-2xs flex-shrink-0">
+                        {doc.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="fw-semibold text-dark text-truncate" title={doc.label}>{doc.label}</div>
+                        <div className="text-muted small mt-0.5" style={{ fontSize: "12px" }}>{doc.type}</div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="col-md-6 col-xl-4">
-                    <div className="employee-info-item">
-                      <div className="employee-info-icon"><IconFileText size={18} className="text-primary" /></div>
-                      <div>
-                        <div className="employee-info-label">Minimum Daily Hours</div>
-                        <div className="employee-info-value">
-                          Half: {employee.shift_details?.min_hours_half_day ?? 4}h • Full: {employee.shift_details?.min_hours_full_day ?? 8}h
-                        </div>
-                        <div className="small text-muted">Required working time for attendance credit</div>
-                      </div>
+                    <div className="d-flex align-items-center justify-content-between pt-2.5 mt-2 border-top flex-wrap gap-2">
+                      <span className={`badge ${doc.url ? "bg-success-subtle text-success border border-success-subtle" : "bg-secondary-subtle text-secondary border border-secondary-subtle"}`}>
+                        {doc.url ? "Uploaded & Verified" : "Not Uploaded"}
+                      </span>
+                      {doc.url ? (
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 py-1 px-2.5 fw-semibold"
+                        >
+                          <IconEye size={14} /> Preview
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={openEditModal}
+                          className="btn btn-sm btn-light border text-secondary d-inline-flex align-items-center gap-1 py-1 px-2.5"
+                          title="Upload this document"
+                        >
+                          <IconUpload size={13} /> Upload
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
-              </section>
-
-              <InfoSection key={section.title} {...section} />
+              ))}
             </div>
-          );
-        }
-        return <InfoSection key={section.title} {...section} />;
-      })}
+          </div>
+        </div>
+      )}
 
-      {leavePolicy && (
-        <section className="employee-profile-section" id="leave-entitlement">
-          <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
-            <div>
-              <h5 className="mb-1">Paid Leave Entitlement</h5>
-              <p className="text-secondary mb-0">
-                {leavePolicy.year} balances based on company policy
-                {leavePolicy.is_prorated ? `, prorated across ${leavePolicy.eligible_months} eligible months from the joining month.` : "."}
-              </p>
+      {/* Tab 3: Salary & Bank */}
+      {activeTab === "compensation" && (
+        <div className="tab-fade-in">
+          {/* Compensation Banner */}
+          <div className="compensation-banner mb-4 p-4 rounded-3 border">
+            <div className="row g-3 align-items-center">
+              <div className="col-md-4 compensation-col border-md-end">
+                <div className="text-uppercase small fw-bold text-muted letter-spacing-1">Annual CTC Salary</div>
+                <div className="h2 compensation-figure mb-0 fw-bold text-success mt-1">{formatCurrency(employee.annual_salary)}</div>
+                <small className="text-muted">Total annual compensation package</small>
+              </div>
+              <div className="col-md-4 compensation-col border-md-end">
+                <div className="text-uppercase small fw-bold text-muted letter-spacing-1">Estimated Monthly Gross</div>
+                <div className="h3 compensation-figure mb-0 fw-bold text-dark mt-1">
+                  {employee.annual_salary ? formatCurrency(String(Number(employee.annual_salary) / 12)) : "Not set"}
+                </div>
+                <small className="text-muted">Calculated on 12 month basis</small>
+              </div>
+              <div className="col-md-4 compensation-col">
+                <div className="text-uppercase small fw-bold text-muted letter-spacing-1">Pay Frequency</div>
+                <div className="h4 compensation-figure mb-0 fw-bold text-primary mt-1">{employee.pay_frequency_label || employee.pay_frequency || "Monthly"}</div>
+                <small className="text-muted">Company disbursement cycle</small>
+              </div>
             </div>
-            {!isMe && (
-              <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2" onClick={() => setIsEditingLeavePolicy(!isEditingLeavePolicy)}>
-                <IconEdit size={16} /> {isEditingLeavePolicy ? "Cancel" : "Edit Entitlement"}
-              </button>
-            )}
           </div>
 
-          {isEditingLeavePolicy && (
-            <div className="row g-3 align-items-end border-bottom pb-4 mb-4">
-              {leavePolicyError && <div className="col-12"><div className="alert alert-danger mb-0">{leavePolicyError}</div></div>}
-              <div className="col-md-5">
-                <label className="form-label small fw-semibold">Annual Casual / PL Override</label>
-                <input type="number" min="0" max="365" step="0.5" className="form-control" value={casualOverride} onChange={(event) => setCasualOverride(event.target.value)} placeholder={`Company default: ${leavePolicy.company_casual_leave_days}`} />
-                <div className="form-text">Leave blank to follow company policy.</div>
+          <div className="row g-4">
+            {/* Bank Account Details */}
+            <div className="col-lg-6">
+              <div className="profile-section-card h-100">
+                <div className="section-header-row mb-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="icon-box-emerald">
+                      <IconBuildingBank size={20} />
+                    </div>
+                    <div>
+                      <h5 className="mb-0 fw-bold">Bank Account Details</h5>
+                      <small className="text-muted">Account information for salary direct deposit</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="d-flex flex-column gap-3">
+                  <ProfileInfoCard
+                    theme="emerald"
+                    icon={<IconBuildingBank size={18} />}
+                    label="Bank Name"
+                    value={employee.bank_name}
+                  />
+                  <ProfileInfoCard
+                    theme="emerald"
+                    icon={<IconId size={18} />}
+                    label="Bank Account Number"
+                    value={employee.bank_account_number}
+                    isCopyable
+                  />
+                  <ProfileInfoCard
+                    theme="emerald"
+                    icon={<IconBuildingBank size={18} />}
+                    label="IFSC Code"
+                    value={employee.ifsc_code}
+                    isCopyable
+                  />
+                </div>
               </div>
-              <div className="col-md-5">
-                <label className="form-label small fw-semibold">Annual Sick Leave Override</label>
-                <input type="number" min="0" max="365" step="0.5" className="form-control" value={sickOverride} onChange={(event) => setSickOverride(event.target.value)} placeholder={`Company default: ${leavePolicy.company_sick_leave_days}`} />
-                <div className="form-text">Leave blank to follow company policy.</div>
+            </div>
+
+            {/* Statutory & Tax IDs */}
+            <div className="col-lg-6">
+              <div className="profile-section-card h-100">
+                <div className="section-header-row mb-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="icon-box-indigo">
+                      <IconFileText size={20} />
+                    </div>
+                    <div>
+                      <h5 className="mb-0 fw-bold">Statutory & Tax Registrations</h5>
+                      <small className="text-muted">Government IDs for payroll deductions & PF compliance</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="row g-3">
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconFileText size={18} />}
+                      label="PAN Number / Tax ID"
+                      value={employee.pan_number || employee.tax_id}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconId size={18} />}
+                      label="P.F. Account Number"
+                      value={employee.pf_number}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconId size={18} />}
+                      label="Universal Account No. (UAN)"
+                      value={employee.uan_number}
+                      isCopyable
+                    />
+                  </div>
+                  <div className="col-sm-6">
+                    <ProfileInfoCard
+                      theme="indigo"
+                      icon={<IconShieldCheck size={18} />}
+                      label="ESIC Number"
+                      value={employee.esic_number}
+                      isCopyable
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="col-md-2">
-                <button className="btn btn-primary w-100" onClick={saveLeavePolicy} disabled={isSavingLeavePolicy}>
-                  {isSavingLeavePolicy ? "Saving..." : "Save"}
-                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Leave Entitlement */}
+      {activeTab === "leave" && (
+        <div className="tab-fade-in">
+          {leavePolicy ? (
+            <div className="profile-section-card" id="leave-entitlement">
+              <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+                <div>
+                  <h5 className="mb-1 fw-bold">Paid Leave Entitlement ({leavePolicy.year})</h5>
+                  <p className="text-secondary mb-0 small">
+                    Balances based on company policy
+                    {leavePolicy.is_prorated ? `, prorated across ${leavePolicy.eligible_months} eligible months from the joining month.` : "."}
+                  </p>
+                </div>
+                {!isMe && (
+                  <button
+                    className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1.5 fw-semibold"
+                    onClick={() => setIsEditingLeavePolicy(!isEditingLeavePolicy)}
+                  >
+                    <IconEdit size={16} /> {isEditingLeavePolicy ? "Cancel" : "Edit Entitlement Overrides"}
+                  </button>
+                )}
               </div>
+
+              {isEditingLeavePolicy && (
+                <div className="p-3 bg-light rounded-3 border mb-4">
+                  <h6 className="fw-bold mb-2">Override Annual Entitlement Days</h6>
+                  {leavePolicyError && <div className="alert alert-danger py-2 small mb-3">{leavePolicyError}</div>}
+                  <div className="row g-3 align-items-end">
+                    <div className="col-md-5">
+                      <label className="form-label small fw-semibold">Annual Casual / PL Override</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="365"
+                        step="0.5"
+                        className="form-control"
+                        value={casualOverride}
+                        onChange={(e) => setCasualOverride(e.target.value)}
+                        placeholder={`Company default: ${leavePolicy.company_casual_leave_days}`}
+                      />
+                      <div className="form-text small">Leave blank to follow default policy.</div>
+                    </div>
+                    <div className="col-md-5">
+                      <label className="form-label small fw-semibold">Annual Sick Leave Override</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="365"
+                        step="0.5"
+                        className="form-control"
+                        value={sickOverride}
+                        onChange={(e) => setSickOverride(e.target.value)}
+                        placeholder={`Company default: ${leavePolicy.company_sick_leave_days}`}
+                      />
+                      <div className="form-text small">Leave blank to follow default policy.</div>
+                    </div>
+                    <div className="col-md-2">
+                      <button className="btn btn-primary w-100" onClick={saveLeavePolicy} disabled={isSavingLeavePolicy}>
+                        {isSavingLeavePolicy ? "Saving..." : "Save Override"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Balances Grid with Visual Progress */}
+              <div className="row g-3 mb-4">
+                {leavePolicy.balances.map((balance) => {
+                  const percentUsed = balance.entitlement > 0 ? Math.min(100, Math.round((balance.used / balance.entitlement) * 100)) : 0;
+                  return (
+                    <div className="col-sm-6 col-xl-4" key={balance.leave_type}>
+                      <div className="leave-balance-card p-3 rounded-3 border bg-white h-100 shadow-xs">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <span className="fw-semibold text-dark">{balance.label}</span>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle">
+                            {balance.remaining} Left
+                          </span>
+                        </div>
+                        <div className="d-flex align-items-baseline gap-1 mb-2">
+                          <span className="h4 mb-0 fw-bold text-dark">{balance.remaining}</span>
+                          <span className="text-muted small">of {balance.entitlement} days entitlement</span>
+                        </div>
+                        <div className="progress mb-2" style={{ height: "6px" }}>
+                          <div
+                            className="progress-bar bg-success"
+                            style={{ width: `${100 - percentUsed}%` }}
+                            title={`${balance.remaining} days remaining`}
+                          />
+                        </div>
+                        <div className="d-flex justify-content-between text-muted" style={{ fontSize: "11px" }}>
+                          <span>{balance.used} days used</span>
+                          <span>{balance.entitlement} total assigned</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Leave Applications Table */}
+              <h6 className="fw-bold mb-3">Leave Applications History</h6>
+              <div className="table-responsive">
+                <table className="table table-hover align-middle mb-0" style={{ minWidth: "520px" }}>
+                  <thead className="table-light">
+                    <tr>
+                      <th>Leave Type</th>
+                      <th>Duration Period</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leavePolicy.leave_requests.length ? (
+                      leavePolicy.leave_requests.map((leave) => (
+                        <tr key={leave.id}>
+                          <td className="fw-semibold text-dark">
+                            {leave.leave_type_label}
+                            {leave.is_half_day && <span className="badge bg-light text-secondary ms-1.5 border">Half Day</span>}
+                          </td>
+                          <td>
+                            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                          </td>
+                          <td className="text-break" style={{ maxWidth: 360 }}>
+                            {leave.reason}
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                leave.status === "APPROVED"
+                                  ? "bg-success-subtle text-success border border-success-subtle"
+                                  : leave.status === "REJECTED"
+                                  ? "bg-danger-subtle text-danger border border-danger-subtle"
+                                  : "bg-warning-subtle text-warning border border-warning-subtle"
+                              }`}
+                            >
+                              {leave.status_label}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="text-center text-secondary py-4">
+                          No leave applications recorded for this employee.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="card border-0 shadow-sm p-4 text-center text-muted">
+              Leave policy data is not configured for this employee.
             </div>
           )}
-
-          <div className="row g-3 mb-4">
-            {leavePolicy.balances.map((balance) => (
-              <div className="col-sm-6 col-xl-4" key={balance.leave_type}>
-                <div className="employee-info-item">
-                  <div className="employee-info-icon"><IconCalendarStats size={18} /></div>
-                  <div>
-                    <div className="employee-info-label">{balance.label}</div>
-                    <div className="employee-info-value">{balance.remaining} of {balance.entitlement} days remaining</div>
-                    <div className="small text-secondary">{balance.used} days used</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <h6 className="mb-3">Leave Applications</h6>
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead className="table-light"><tr><th>Type</th><th>Period</th><th>Reason</th><th>Status</th></tr></thead>
-              <tbody>
-                {leavePolicy.leave_requests.length ? leavePolicy.leave_requests.map((leave) => (
-                  <tr key={leave.id}>
-                    <td>{leave.leave_type_label}{leave.is_half_day ? " (Half day)" : ""}</td>
-                    <td>{formatDate(leave.start_date)} - {formatDate(leave.end_date)}</td>
-                    <td className="text-break" style={{ maxWidth: 360 }}>{leave.reason}</td>
-                    <td><span className={`badge ${leave.status === "APPROVED" ? "bg-success-subtle text-success" : leave.status === "REJECTED" ? "bg-danger-subtle text-danger" : "bg-warning-subtle text-warning"}`}>{leave.status_label}</span></td>
-                  </tr>
-                )) : <tr><td colSpan={4} className="text-center text-secondary py-4">No leave applications found.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        </div>
       )}
 
       {/* Edit Profile Modal */}
@@ -936,8 +1459,8 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                 <IconEdit size={22} />
               </div>
               <div>
-                <Modal.Title className="h5 mb-0 fw-bold">Edit Profile</Modal.Title>
-                <small className="text-muted">Update personal information, emergency contacts, and documents</small>
+                <Modal.Title className="h5 mb-0 fw-bold">Edit Employee Profile</Modal.Title>
+                <small className="text-muted">Update personal information, emergency contacts, and document attachments</small>
               </div>
             </div>
           </Modal.Header>
@@ -950,42 +1473,39 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
               </div>
             )}
 
-            {/* Profile Photo Section */}
+            {/* Profile Photo Upload */}
             <div className="p-3 mb-4 rounded-3 border bg-light d-flex align-items-center gap-4 flex-wrap">
               <img
-                src={photoPreview || employee?.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
-                alt="Profile Preview"
-                style={{ width: "72px", height: "72px", objectFit: "cover" }}
+                src={photoPreview || employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                alt={employee.full_name}
                 className="rounded-circle border border-2 border-white shadow-sm"
+                style={{ width: "72px", height: "72px", objectFit: "cover" }}
               />
               <div className="flex-grow-1">
-                <Form.Label className="fw-semibold mb-1">Profile Photo</Form.Label>
-                <Form.Control
+                <label className="form-label fw-semibold mb-1">Profile Photo</label>
+                <input
                   type="file"
-                  size="sm"
-                  accept="image/jpeg,image/png,image/webp,image/jpg"
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  accept="image/png, image/jpeg, image/webp"
+                  className="form-control form-control-sm"
+                  onChange={(e) => {
                     const file = e.target.files?.[0] || null;
                     setProfilePhotoFile(file);
                   }}
                 />
-                <Form.Text className="text-muted small">
-                  Supports JPG, PNG, WEBP up to 10MB.
-                </Form.Text>
+                <div className="form-text small">Accepted formats: JPG, PNG, WEBP. Max 10MB.</div>
               </div>
             </div>
 
-            <h6 className="fw-bold mb-3 text-uppercase text-secondary small letter-spacing-1">Personal Details</h6>
+            <h6 className="fw-bold mb-3 text-uppercase text-secondary small letter-spacing-1">Personal Information</h6>
             <Row className="g-3 mb-4">
               <Col xs={12} md={6}>
                 <Form.Group controlId="editFullName">
-                  <Form.Label className="fw-semibold small">Full Name <span className="text-danger">*</span></Form.Label>
+                  <Form.Label className="fw-semibold small">Full Name *</Form.Label>
                   <Form.Control
                     type="text"
+                    required
                     value={personalForm.full_name}
                     onChange={(e) => updatePersonalField("full_name", e.target.value)}
-                    placeholder="Enter full name"
-                    required
                   />
                 </Form.Group>
               </Col>
@@ -996,41 +1516,37 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                     type="tel"
                     value={personalForm.phone}
                     onChange={(e) => updatePersonalField("phone", e.target.value)}
-                    placeholder="10-digit mobile number"
-                    maxLength={15}
                   />
                 </Form.Group>
               </Col>
               <Col xs={12} md={6}>
-                <Form.Group controlId="editDateOfBirth">
+                <Form.Group controlId="editDob">
                   <Form.Label className="fw-semibold small">Date of Birth</Form.Label>
                   <Form.Control
                     type="date"
-                    value={personalForm.date_of_birth || ""}
+                    value={personalForm.date_of_birth}
                     onChange={(e) => updatePersonalField("date_of_birth", e.target.value)}
                   />
                 </Form.Group>
               </Col>
               <Col xs={12} md={6}>
-                <Form.Group controlId="editAadhaarNumber">
-                  <Form.Label className="fw-semibold small">Aadhaar Number</Form.Label>
+                <Form.Group controlId="editAadhaar">
+                  <Form.Label className="fw-semibold small">Aadhaar Number (12 Digits)</Form.Label>
                   <Form.Control
                     type="text"
                     value={personalForm.aadhaar_number}
-                    onChange={(e) => updatePersonalField("aadhaar_number", e.target.value.replace(/\D/g, "").slice(0, 12))}
-                    placeholder="12-digit Aadhaar number"
+                    onChange={(e) => updatePersonalField("aadhaar_number", e.target.value)}
                     maxLength={12}
                   />
                 </Form.Group>
               </Col>
               <Col xs={12} md={6}>
                 <Form.Group controlId="editTaxId">
-                  <Form.Label className="fw-semibold small">Tax ID / PAN Number</Form.Label>
+                  <Form.Label className="fw-semibold small">PAN / Tax ID</Form.Label>
                   <Form.Control
                     type="text"
                     value={personalForm.tax_id}
-                    onChange={(e) => updatePersonalField("tax_id", e.target.value.toUpperCase())}
-                    placeholder="e.g. ABCDE1234F"
+                    onChange={(e) => updatePersonalField("tax_id", e.target.value)}
                     maxLength={20}
                   />
                 </Form.Group>
@@ -1039,11 +1555,9 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                 <Form.Group controlId="editAddress">
                   <Form.Label className="fw-semibold small">Residential Address</Form.Label>
                   <Form.Control
-                    as="textarea"
-                    rows={2}
+                    type="text"
                     value={personalForm.address}
                     onChange={(e) => updatePersonalField("address", e.target.value)}
-                    placeholder="Enter full address"
                   />
                 </Form.Group>
               </Col>
@@ -1058,8 +1572,6 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                     type="text"
                     value={personalForm.emergency_contact_name}
                     onChange={(e) => updatePersonalField("emergency_contact_name", e.target.value)}
-                    placeholder="e.g. Spouse / Parent"
-                    maxLength={150}
                   />
                 </Form.Group>
               </Col>
@@ -1071,7 +1583,6 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                     value={personalForm.emergency_contact_relationship}
                     onChange={(e) => updatePersonalField("emergency_contact_relationship", e.target.value)}
                     placeholder="e.g. Father, Mother, Spouse"
-                    maxLength={80}
                   />
                 </Form.Group>
               </Col>
@@ -1082,29 +1593,21 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                     type="tel"
                     value={personalForm.emergency_contact_phone}
                     onChange={(e) => updatePersonalField("emergency_contact_phone", e.target.value)}
-                    placeholder="Emergency phone number"
-                    maxLength={15}
                   />
                 </Form.Group>
               </Col>
             </Row>
 
-            <h6 className="fw-bold mb-3 text-uppercase text-secondary small letter-spacing-1">Documents Upload</h6>
+            <h6 className="fw-bold mb-3 text-uppercase text-secondary small letter-spacing-1">Document Attachments</h6>
             <Row className="g-3">
               <Col xs={12} md={4}>
                 <Form.Group controlId="editAadhaarDoc">
                   <Form.Label className="fw-semibold small">Aadhaar Card File</Form.Label>
                   <Form.Control
                     type="file"
-                    size="sm"
-                    accept=".pdf,image/jpeg,image/png,image/webp,image/jpg"
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setAadhaarDocFile(e.target.files?.[0] || null);
-                    }}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e: any) => setAadhaarDocFile(e.target.files?.[0] || null)}
                   />
-                  <Form.Text className="text-muted small">
-                    {employee?.aadhaar_document_url ? "Currently uploaded. Select new file to replace." : "PDF or Image up to 10MB."}
-                  </Form.Text>
                 </Form.Group>
               </Col>
               <Col xs={12} md={4}>
@@ -1112,31 +1615,19 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                   <Form.Label className="fw-semibold small">PAN Card File</Form.Label>
                   <Form.Control
                     type="file"
-                    size="sm"
-                    accept=".pdf,image/jpeg,image/png,image/webp,image/jpg"
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setPanDocFile(e.target.files?.[0] || null);
-                    }}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e: any) => setPanDocFile(e.target.files?.[0] || null)}
                   />
-                  <Form.Text className="text-muted small">
-                    {employee?.pan_card_document_url ? "Currently uploaded. Select new file to replace." : "PDF or Image up to 10MB."}
-                  </Form.Text>
                 </Form.Group>
               </Col>
               <Col xs={12} md={4}>
                 <Form.Group controlId="editCvDoc">
-                  <Form.Label className="fw-semibold small">Resume / CV File</Form.Label>
+                  <Form.Label className="fw-semibold small">CV / Resume File</Form.Label>
                   <Form.Control
                     type="file"
-                    size="sm"
                     accept=".pdf,.doc,.docx"
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setCvDocFile(e.target.files?.[0] || null);
-                    }}
+                    onChange={(e: any) => setCvDocFile(e.target.files?.[0] || null)}
                   />
-                  <Form.Text className="text-muted small">
-                    {employee?.cv_document_url ? "Currently uploaded. Select new file to replace." : "PDF, DOC, DOCX up to 10MB."}
-                  </Form.Text>
                 </Form.Group>
               </Col>
             </Row>
@@ -1146,7 +1637,7 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
             <Button variant="outline-secondary" onClick={closeEditModal} disabled={isSavingProfile}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={isSavingProfile} className="d-inline-flex align-items-center gap-2">
+            <Button variant="primary" type="submit" disabled={isSavingProfile} className="d-inline-flex align-items-center gap-2 fw-semibold">
               {isSavingProfile ? (
                 <>
                   <Spinner size="sm" animation="border" />
@@ -1216,7 +1707,7 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
             <Button variant="outline-secondary" onClick={closeShiftModal} disabled={isSavingShift}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={isSavingShift} className="d-flex align-items-center gap-2">
+            <Button variant="primary" type="submit" disabled={isSavingShift} className="d-flex align-items-center gap-2 fw-semibold">
               {isSavingShift ? (
                 <>
                   <Spinner size="sm" />
@@ -1230,72 +1721,484 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
         </Form>
       </Modal>
 
+      {/* Modern Executive Styling */}
       <style jsx global>{`
-        .employee-profile-header,
-        .employee-profile-section {
-          background: #fff;
-          border: 1px solid #edf1f5;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
-          padding: 24px;
+        .employee-profile-wrapper {
+          max-width: 1300px;
+          margin: 0 auto;
         }
 
-        .employee-profile-section {
-          margin-bottom: 24px;
+        .executive-profile-header {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+          padding: 24px 28px;
+          position: relative;
         }
 
-        .employee-profile-avatar {
-          width: 112px;
-          height: 112px;
+        .profile-hero-avatar {
+          width: 96px;
+          height: 96px;
           border-radius: 50%;
           object-fit: cover;
-          border: 4px solid #f3f7fa;
-          background: #f8fafc;
+          border: 3px solid #f8fafc;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          background: #f1f5f9;
         }
 
-        .employee-info-item,
-        .employee-document-tile {
-          min-height: 86px;
-          height: 100%;
-          border: 1px solid #edf1f5;
-          border-radius: 8px;
-          padding: 14px;
+        .avatar-edit-fab {
+          position: absolute;
+          bottom: 2px;
+          right: 2px;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: #0ea66b;
+          color: #ffffff;
+          border: 2px solid #ffffff;
           display: flex;
-          gap: 12px;
-          align-items: flex-start;
-          background: #fbfcfe;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.15s ease, background 0.15s ease;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         }
 
-        .employee-document-tile {
+        .avatar-edit-fab:hover {
+          background: #0b8a57;
+          transform: scale(1.08);
+        }
+
+        .profile-hero-name {
+          font-size: 1.55rem;
+          font-weight: 700;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+
+        .status-indicator-dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: currentColor;
+          margin-right: 6px;
+          animation: pulseDot 2s infinite ease-in-out;
+        }
+
+        @keyframes pulseDot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.35; }
+        }
+
+        .profile-hero-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 3px 9px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        .pill-indigo {
+          background: #eef2ff;
+          color: #4338ca;
+          border: 1px solid #e0e7ff;
+        }
+
+        .pill-slate {
+          background: #f1f5f9;
+          color: #334155;
+          border: 1px solid #e2e8f0;
+        }
+
+        .pill-emerald {
+          background: #ecfdf5;
+          color: #047857;
+          border: 1px solid #d1fae5;
+        }
+
+        .pill-light {
+          background: #ffffff;
+          color: #64748b;
+          border: 1px solid #e2e8f0;
+        }
+
+        /* Modern Tabs */
+        .profile-tabs-nav {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #f8fafc;
+          padding: 6px;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .profile-tabs-nav::-webkit-scrollbar {
+          display: none;
+        }
+
+        .profile-tab-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 18px;
+          border: none;
+          background: transparent;
+          color: #64748b;
+          font-size: 13.5px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        .profile-tab-button:hover {
+          color: #0f172a;
+          background: rgba(255, 255, 255, 0.6);
+        }
+
+        .profile-tab-button.is-active {
+          background: #ffffff;
+          color: #0ea66b;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+        }
+
+        .tab-counter-badge {
+          background: #eaf8f1;
+          color: #0ea66b;
+          font-size: 11px;
+          padding: 2px 7px;
+          border-radius: 10px;
+          font-weight: 700;
+        }
+
+        /* Section Cards */
+        .profile-section-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          padding: 22px 24px;
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+          transition: border-color 0.15s ease;
+        }
+
+        .border-indigo-subtle {
+          border-color: #e0e7ff;
+        }
+
+        .section-header-row {
+          display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 12px;
         }
 
-        .employee-info-icon {
+        /* Info Item Cards */
+        .profile-info-card {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 13px 15px;
+          border-radius: 10px;
+          border: 1px solid #eef2f6;
+          background: #fbfcfe;
+          height: 100%;
+          transition: all 0.15s ease;
+        }
+
+        .profile-info-card:hover {
+          border-color: #cbd5e1;
+          background: #ffffff;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+        }
+
+        .profile-info-icon {
           width: 36px;
           height: 36px;
           border-radius: 8px;
-          display: inline-flex;
+          display: flex;
           align-items: center;
           justify-content: center;
-          flex: 0 0 auto;
-          color: #0ea66b;
+          flex-shrink: 0;
+        }
+
+        .icon-default, .icon-sky { background: #e0f2fe; color: #0284c7; }
+        .icon-emerald { background: #eaf8f1; color: #0ea66b; }
+        .icon-indigo { background: #eef2ff; color: #4f46e5; }
+        .icon-amber { background: #fef3c7; color: #d97706; }
+        .icon-rose { background: #ffe4e6; color: #e11d48; }
+        .icon-purple { background: #f3e8ff; color: #9333ea; }
+        .icon-slate { background: #f1f5f9; color: #475569; }
+
+        .icon-box-indigo {
+          width: 38px;
+          height: 38px;
+          border-radius: 8px;
+          background: #eef2ff;
+          color: #4f46e5;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .icon-box-emerald {
+          width: 38px;
+          height: 38px;
+          border-radius: 8px;
           background: #eaf8f1;
+          color: #0ea66b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        .employee-info-label {
-          color: #6b7a8c;
-          font-size: 12px;
-          font-weight: 600;
+        .icon-box-purple {
+          width: 38px;
+          height: 38px;
+          border-radius: 8px;
+          background: #f3e8ff;
+          color: #9333ea;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .icon-box-rose {
+          width: 38px;
+          height: 38px;
+          border-radius: 8px;
+          background: #ffe4e6;
+          color: #e11d48;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .icon-box-slate {
+          width: 38px;
+          height: 38px;
+          border-radius: 8px;
+          background: #f1f5f9;
+          color: #475569;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .profile-info-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: #64748b;
           text-transform: uppercase;
-          letter-spacing: 0.02em;
-          margin-bottom: 4px;
+          letter-spacing: 0.03em;
+          margin-bottom: 2px;
         }
 
-        .employee-info-value {
-          color: #0f172a;
+        .profile-info-value {
+          font-size: 13.5px;
           font-weight: 600;
-          overflow-wrap: anywhere;
+          color: #0f172a;
+          line-height: 1.35;
+        }
+
+        .profile-info-subtext {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 2px;
+        }
+
+        .copy-btn {
+          cursor: pointer;
+          opacity: 0.7;
+          transition: opacity 0.15s ease;
+        }
+
+        .copy-btn:hover {
+          opacity: 1;
+        }
+
+        .compensation-banner {
+          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .hover-primary:hover {
+          color: #0ea66b !important;
+        }
+
+        .tab-fade-in {
+          animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsive Breakpoints for Tablet & Mobile */
+        @media (min-width: 768px) {
+          .compensation-col.border-md-end {
+            border-right: 1px solid #e2e8f0;
+          }
+        }
+
+        @media (max-width: 767.98px) {
+          .executive-profile-header {
+            padding: 20px 18px;
+          }
+
+          .compensation-banner {
+            padding: 18px 16px !important;
+          }
+
+          .compensation-col:not(:last-child) {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 14px;
+          }
+
+          .compensation-figure {
+            font-size: 1.45rem !important;
+          }
+        }
+
+        @media (max-width: 575.98px) {
+          .executive-profile-header {
+            padding: 16px 14px;
+            border-radius: 12px;
+          }
+
+          .profile-hero-avatar {
+            width: 76px;
+            height: 76px;
+          }
+
+          .avatar-edit-fab {
+            width: 26px;
+            height: 26px;
+          }
+
+          .profile-hero-name {
+            font-size: 1.3rem;
+          }
+
+          .profile-hero-pill {
+            font-size: 11px;
+            padding: 3px 8px;
+          }
+
+          .header-actions-group {
+            width: 100%;
+            display: flex !important;
+            gap: 8px;
+          }
+
+          .header-actions-group .btn {
+            flex: 1 1 0;
+            font-size: 13.5px;
+            padding: 9px 8px;
+            white-space: nowrap;
+          }
+
+          .profile-topbar {
+            margin-bottom: 12px !important;
+          }
+
+          .profile-back-btn {
+            font-size: 12.5px;
+            padding: 6px 10px;
+          }
+
+          .profile-section-card {
+            padding: 16px 14px;
+            border-radius: 12px;
+          }
+
+          .profile-info-card {
+            padding: 10px 12px;
+          }
+
+          .profile-info-icon {
+            width: 32px;
+            height: 32px;
+          }
+
+          .profile-info-value {
+            font-size: 13px;
+          }
+
+          .shift-timeline-bar {
+            padding: 12px !important;
+          }
+
+          .timeline-milestones {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 8px;
+            font-size: 11px !important;
+            margin-bottom: 8px !important;
+          }
+
+          .timeline-subtext {
+            font-size: 10px !important;
+          }
+
+          .timeline-subtext span:nth-child(2) {
+            display: none;
+          }
+        }
+
+        /* Mobile Segmented 2x2 Tab Grid (< 640px) */
+        @media (max-width: 640px) {
+          .profile-tabs-nav {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 8px !important;
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 14px !important;
+            padding: 8px !important;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
+            overflow-x: visible !important;
+          }
+
+          .profile-tab-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 7px !important;
+            padding: 10px 8px !important;
+            font-size: 12.5px !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            border: 1px solid #f1f5f9 !important;
+            background: #f8fafc !important;
+            color: #475569 !important;
+            white-space: nowrap !important;
+            min-height: 44px !important;
+            transition: all 0.15s ease !important;
+          }
+
+          .profile-tab-button:hover {
+            background: #f1f5f9 !important;
+            color: #0f172a !important;
+          }
+
+          .profile-tab-button.is-active {
+            background: #ecfdf5 !important;
+            color: #065f46 !important;
+            border: 1.5px solid #a7f3d0 !important;
+            box-shadow: 0 2px 8px rgba(14, 166, 107, 0.12) !important;
+            font-weight: 700 !important;
+          }
         }
       `}</style>
     </div>
