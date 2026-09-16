@@ -1,0 +1,97 @@
+// Table
+table tr:last-child td {
+  border-bottom-width: 0px;
+}
+
+// Table centered
+.table-centered td,
+.table-centered th {
+  vertical-align: middle !important;
+}
+
+.table {
+  vertical-align: middle;
+
+  & thead {
+    background-color: var(--#{$prefix}gray-100);
+    th {
+      border: 0px;
+      color: var(--#{$prefix}gray-600);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+  }
+
+  td {
+    vertical-align: middle;
+  }
+}
+
+thead,
+tbody,
+tfoot,
+tr,
+td,
+th {
+  border-color: inherit;
+  border-style: dashed;
+  border-width: 0;
+}
+
+.table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: -ms-autohiding-scrollbar;
+
+  /* Smooth customized modern scrollbar */
+  &::-webkit-scrollbar {
+    height: 5px;
+    width: 5px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Ensure tables on mobile devices maintain a readable column width and scroll smoothly */
+  @media (max-width: 768px) {
+    border-radius: 0.5rem;
+    scrollbar-width: thin;
+    
+    table:not(.table-inline) {
+      min-width: 720px;
+    }
+  }
+
+  @media (max-width: 576px) {
+    table:not(.table-inline) {
+      min-width: 750px;
+    }
+  }
+}
+
+.table-checkbox {
+  tbody {
+    tr:has(.form-check-input:checked) {
+      background-color: rgba(var(--#{$prefix}primary-rgb), $alpha: 0.15);
+    }
+  }
+}
+
+.table-hover > tbody > tr:hover:has(.form-check-input:checked) > * {
+  --ds-table-color-state: rgba(var(--#{$prefix}primary-rgb), $alpha: 1);
+  --ds-table-bg-state: rgba(var(--#{$prefix}primary-rgb), $alpha: 0.75); // Slightly darker on hover
+}
+
