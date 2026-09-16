@@ -168,10 +168,12 @@ const calculateTenure = (joiningDate?: string | null) => {
   if (isNaN(start.getTime())) return null;
   const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
   if (diffMonths <= 0) return "Joined recently";
-  if (diffMonths < 12) return `${diffMonths} mo${diffMonths > 1 ? "s" : ""} tenure`;
+  if (diffMonths < 12) return `${diffMonths} ${diffMonths === 1 ? "Month" : "Months"}`;
   const years = Math.floor(diffMonths / 12);
   const rem = diffMonths % 12;
-  return `${years} yr${years > 1 ? "s" : ""}${rem > 0 ? ` ${rem} mo${rem > 1 ? "s" : ""}` : ""} tenure`;
+  const yearText = `${years} ${years === 1 ? "Year" : "Years"}`;
+  const monthText = rem > 0 ? `, ${rem} ${rem === 1 ? "Month" : "Months"}` : "";
+  return `${yearText}${monthText}`;
 };
 
 // Polished, color-accented Info Card
