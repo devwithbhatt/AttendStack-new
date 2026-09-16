@@ -674,7 +674,7 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                               {inc.increment_type === "PERCENTAGE"
                                 ? `+${formattedPct}%`
                                 : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`}
-                            </span> 
+                            </span>
                             <span className="text-muted fw-medium" style={{ fontSize: "11px" }}>
                               {inc.increment_type === "PERCENTAGE"
                                 ? `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`

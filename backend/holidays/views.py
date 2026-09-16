@@ -20,6 +20,22 @@ class HolidayViewSet(viewsets.ModelViewSet):
     permission_module = "holidays"
     pagination_class = HolidayPagination
 
+    def get_queryset(self):
+        queryset = Holiday.objects.all().order_by('date')
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(name__icontains=search.strip())
+        holiday_type = self.request.query_params.get('type')
+        if holiday_type:
+            queryset = queryset.filter(type=holiday_type)
+        year = self.request.query_params.get('year')
+        if year:
+            try:
+                queryset = queryset.filter(date__year=int(year))
+            except (ValueError, TypeError):
+                pass
+        return queryset
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

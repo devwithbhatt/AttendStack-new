@@ -5,7 +5,6 @@ import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner } fro
 import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconHeart, IconUser, IconEye, IconPaperclip } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 import { useCurrentEmployee } from "../useCurrentEmployee";
-import { resolveMediaUrl } from "../../../../helper/mediaUrl";
 
 interface LeaveRequest {
   id: number;
@@ -802,7 +801,7 @@ const EmployeeLeavesClient = () => {
                         </td>
                         <td className="py-3.5 text-secondary small text-truncate" style={{ maxWidth: "220px" }} title={leave.reason}>
                           <div>{leave.reason}</div>
-                          {leave.attachment && <a href={resolveMediaUrl(leave.attachment)} target="_blank" rel="noreferrer" className="small">View attachment</a>}
+                          {leave.attachment && <a href={leave.attachment} target="_blank" rel="noreferrer" className="small">View attachment</a>}
                         </td>
                         <td className="py-3.5">
                           {getStatusBadge(leave.status)}
@@ -894,7 +893,7 @@ const EmployeeLeavesClient = () => {
               <Col xs={12}>
                 <p className="small text-secondary fw-semibold mb-2">Attachment</p>
                 {viewingLeave.attachment ? (
-                  <Button as="a" href={resolveMediaUrl(viewingLeave.attachment)} target="_blank" rel="noreferrer" variant="outline-primary" size="sm" className="d-inline-flex align-items-center gap-2">
+                  <Button as="a" href={viewingLeave.attachment} target="_blank" rel="noreferrer" variant="outline-primary" size="sm" className="d-inline-flex align-items-center gap-2">
                     <IconPaperclip size={16} />
                     View Attachment
                   </Button>
@@ -1062,7 +1061,7 @@ const EmployeeLeavesClient = () => {
                 className="form-control rounded-3 p-2.5"
               />
               <Form.Text>Optional: PDF, image, or Word document up to 5 MB.</Form.Text>
-              {editingLeave?.attachment && !attachment && <div className="small mt-2"><a href={resolveMediaUrl(editingLeave.attachment)} target="_blank" rel="noreferrer">View current attachment</a></div>}
+              {editingLeave?.attachment && !attachment && <div className="small mt-2"><a href={editingLeave.attachment} target="_blank" rel="noreferrer">View current attachment</a></div>}
             </Form.Group>
           </Modal.Body>
           <Modal.Footer className="border-0 px-4 pb-4 pt-2">

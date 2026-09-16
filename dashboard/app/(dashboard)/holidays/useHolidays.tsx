@@ -10,19 +10,32 @@ import { useState } from "react";
 
 import { Holiday } from "./types";
 
-export const useHolidays = (data: Holiday[], isAdmin: boolean, pageCount: number) => {
-  const [sorting, setSorting] = useState<any>([]);
-  const [columnFilters, setColumnFilters] = useState<any>([]);
-  const [pagination, setPagination] = useState({
+export const useHolidays = (
+  data: Holiday[],
+  isAdmin: boolean,
+  pageCount: number,
+  pagination?: { pageIndex: number; pageSize: number },
+  onPaginationChange?: any
+) => {
+  const [internalPagination, setInternalPagination] = useState({
     pageIndex: 0,
     pageSize: 10,
   });
+  const currentPagination = pagination ?? internalPagination;
+  const handlePaginationChange = onPaginationChange ?? setInternalPagination;
+
+  const [sorting, setSorting] = useState<any>([]);
+  const [columnFilters, setColumnFilters] = useState<any>([]);
 
   const columns = [
     {
       accessorKey: "id",
       header: "Sr. No.",
-      cell: (props: any) => <span>{props.row.index + 1}</span>,
+      cell: (props: any) => (
+        <span>
+          {currentPagination.pageIndex * currentPagination.pageSize + props.row.index + 1}
+        </span>
+      ),
     },
     {
       accessorKey: "name",
@@ -72,11 +85,11 @@ export const useHolidays = (data: Holiday[], isAdmin: boolean, pageCount: number
     state: {
       sorting,
       columnFilters,
-      pagination,
+      pagination: currentPagination,
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: setPagination,
+    onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

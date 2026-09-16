@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from attendance.models import AttendanceRecord, AttendanceStatus, LeaveStatus, LeaveType
 from attendance.eligibility import attendance_eligible_records
-from attendance.services import auto_mark_calendar_days
+from attendance.services import auto_mark_calendar_days, auto_mark_absent_employees
 from employees.models import ATTENDANCE_ELIGIBLE_STATUSES
 
 
@@ -70,6 +70,7 @@ def payable_employment_dates(employee, month: int, year: int) -> list[date]:
 
 def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, manual_deductions=0) -> dict:
     auto_mark_calendar_days(month, year)
+    auto_mark_absent_employees(date(year, month, 1), payroll_period_end(month, year))
 
     monthly_salary = money(Decimal(str(employee.annual_salary or 0)) / Decimal("12"))
     allowances = money(Decimal(str(allowances or 0)))

@@ -126,27 +126,43 @@ class AttendanceRecord(models.Model):
         (Leave, Paid Leave, Holiday, Sunday Unpaid) are never touched."""
         if not self.check_in:
             self.status = AttendanceStatus.ABSENT
+            self.is_paid = False
             return
 
         # Get current system settings for dynamic thresholds
         settings = SystemSettings.get_settings()
         local_check_in = timezone.localtime(self.check_in)
         
-        # Parse late cutoff time from settings
-        late_cutoff_time = settings.late_cutoff_time
-        late_hour, late_minute = map(int, late_cutoff_time.strftime("%H:%M").split(":"))
+        # Helper to safely obtain a datetime.time object
+        def to_time(val, default_h, default_m):
+            if hasattr(val, "hour") and hasattr(val, "minute"):
+                return val
+            if isinstance(val, str):
+                try:
+                    parts = [int(p) for p in val.strip().split(":")[:2]]
+                    from datetime import time as dt_time
+                    return dt_time(parts[0], parts[1])
+                except Exception:
+                    pass
+            from datetime import time as dt_time
+            return dt_time(default_h, default_m)
+
+        shift_start = to_time(settings.shift_start_time, 10, 0)
+        late_cutoff_time = to_time(settings.late_cutoff_time, 10, 15)
+        shift_end = to_time(settings.shift_end_time, 18, 0)
+
         late_cutoff = local_check_in.replace(
-            hour=late_hour, 
-            minute=late_minute, 
+            hour=late_cutoff_time.hour, 
+            minute=late_cutoff_time.minute, 
             second=0, 
             microsecond=0
         )
         
         # Determine whether the employee is late or should be marked as half day.
         scheduled_shift_start = local_check_in.replace(
-            hour=settings.shift_start_time.hour,
-            minute=settings.shift_start_time.minute,
-            second=settings.shift_start_time.second,
+            hour=shift_start.hour,
+            minute=shift_start.minute,
+            second=getattr(shift_start, "second", 0),
             microsecond=0,
         )
         late_half_day_cutoff = scheduled_shift_start + timedelta(hours=3)
@@ -174,9 +190,9 @@ class AttendanceRecord(models.Model):
         elif self.check_out:
             local_check_out = timezone.localtime(self.check_out)
             scheduled_shift_end = local_check_in.replace(
-                hour=settings.shift_end_time.hour,
-                minute=settings.shift_end_time.minute,
-                second=settings.shift_end_time.second,
+                hour=shift_end.hour,
+                minute=shift_end.minute,
+                second=getattr(shift_end, "second", 0),
                 microsecond=0,
             )
             full_day_checkout_cutoff = scheduled_shift_end - timedelta(hours=2)

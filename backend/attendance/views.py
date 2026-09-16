@@ -30,6 +30,7 @@ from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatu
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
 from .services import (
+    auto_mark_absent_employees,
     auto_mark_calendar_days,
     earned_leave_allocation,
     leave_allocation,
@@ -89,6 +90,11 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if self.action in ["check_in", "check_out"]:
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    def list(self, request, *args, **kwargs):
+        today = timezone.localdate()
+        auto_mark_absent_employees(today, today)
+        return super().list(request, *args, **kwargs)
 
     def _organization_for_user(self):
         from organizations.services import get_organization_for_user
@@ -219,6 +225,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def today(self, request):
         today = timezone.localdate()
         auto_mark_calendar_days(today.month, today.year)
+        auto_mark_absent_employees(today, today)
         
         user = request.user
         org = self._organization_for_user()
@@ -257,6 +264,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         employee = self._current_employee()
         today = timezone.localdate()
         auto_mark_calendar_days(today.month, today.year)
+        auto_mark_absent_employees(today, today)
         record = self._today_record(employee)
         serializer = TodayAttendanceSerializer(self._today_payload(employee, record))
         return Response(serializer.data)
@@ -513,13 +521,17 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             )
 
         result = auto_mark_calendar_days(month, year)
+        absent_result = auto_mark_absent_employees(
+            date(year, month, 1),
+            min(today, date(year, month, calendar.monthrange(year, month)[1]))
+        )
 
         return Response(
             {
                 "detail": "Auto-marking completed successfully.",
-                "created": result["created"],
+                "created": result["created"] + absent_result["created"],
                 "updated": result.get("updated", 0),
-                "skipped": result["skipped"],
+                "skipped": result["skipped"] + absent_result["skipped"],
             },
             status=status.HTTP_201_CREATED,
         )

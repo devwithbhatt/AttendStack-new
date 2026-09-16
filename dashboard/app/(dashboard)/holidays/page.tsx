@@ -37,6 +37,9 @@ const HolidaysPage = () => {
     pageIndex: 0,
     pageSize: 10,
   });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
+  const [selectedType, setSelectedType] = useState("");
 
   // Determine user permissions
   useEffect(() => {
@@ -69,15 +72,35 @@ const HolidaysPage = () => {
 
   const hasActionCol = canEdit || canDelete;
 
-  const { table } = useHolidays(holidays, hasActionCol, Math.ceil(totalHolidaysCount / (pagination.pageSize || 10)) || 1);
+  const totalPages = Math.ceil(totalHolidaysCount / (pagination.pageSize || 10)) || 1;
+
+  const { table } = useHolidays(
+    holidays,
+    hasActionCol,
+    totalPages,
+    pagination,
+    setPagination
+  );
 
   // Fetch holidays from Django API
-  const fetchHolidays = async (page = 0, size = 10) => {
+  const fetchHolidays = async (
+    page = pagination.pageIndex,
+    size = pagination.pageSize,
+    search = searchTerm,
+    year = selectedYear,
+    type = selectedType
+  ) => {
     setIsLoading(true);
     setError("");
     try {
-      const offset = page * size;
-      const res = await fetch(`${BASE_URL}?limit=${size}&offset=${offset}`, {
+      const params = new URLSearchParams();
+      params.append("page", String(page + 1));
+      params.append("page_size", String(size));
+      if (search.trim()) params.append("search", search.trim());
+      if (year) params.append("year", year);
+      if (type) params.append("type", type);
+
+      const res = await fetch(`${BASE_URL}?${params.toString()}`, {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Failed to load holiday records.");
@@ -87,7 +110,7 @@ const HolidaysPage = () => {
         setTotalHolidaysCount(data.length);
       } else if (data && Array.isArray(data.results)) {
         setHolidays(data.results);
-        setTotalHolidaysCount(data.count || data.results.length);
+        setTotalHolidaysCount(typeof data.count === "number" ? data.count : data.results.length);
       } else {
         setHolidays([]);
         setTotalHolidaysCount(0);
@@ -100,8 +123,8 @@ const HolidaysPage = () => {
   };
 
   useEffect(() => {
-    fetchHolidays(pagination.pageIndex, pagination.pageSize);
-  }, [pagination.pageIndex, pagination.pageSize]);
+    fetchHolidays(pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType);
+  }, [pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType]);
 
   const handleShowAddModal = () => {
     if (!canEdit) {
@@ -156,7 +179,7 @@ const HolidaysPage = () => {
         const errorData = await res.json();
         throw new Error(errorData.detail || errorData.date?.[0] || "Failed to create holiday record.");
       }
-      await fetchHolidays(pagination.pageIndex, pagination.pageSize);
+      await fetchHolidays(pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType);
     } catch (err) {
       Swal.fire({
         title: "Creation Failed",
@@ -188,7 +211,7 @@ const HolidaysPage = () => {
         const errorData = await res.json();
         throw new Error(errorData.detail || errorData.date?.[0] || "Failed to update holiday.");
       }
-      await fetchHolidays(pagination.pageIndex, pagination.pageSize);
+      await fetchHolidays(pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType);
     } catch (err) {
       Swal.fire({
         title: "Update Failed",
@@ -227,7 +250,14 @@ const HolidaysPage = () => {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete the holiday record.");
-      await fetchHolidays(pagination.pageIndex, pagination.pageSize);
+      
+      const newTotal = Math.max(0, totalHolidaysCount - 1);
+      const newTotalPages = Math.ceil(newTotal / (pagination.pageSize || 10)) || 1;
+      if (pagination.pageIndex >= newTotalPages) {
+        setPagination((prev) => ({ ...prev, pageIndex: Math.max(0, newTotalPages - 1) }));
+      } else {
+        await fetchHolidays(pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType);
+      }
       Swal.fire({
         title: "Deleted!",
         text: "Holiday has been removed successfully.",
@@ -255,7 +285,20 @@ const HolidaysPage = () => {
           </p>
         </div>
         <div className="d-flex gap-2">
-          <Button variant="outline-secondary" size="sm" onClick={() => fetchHolidays(pagination.pageIndex, pagination.pageSize)} className="d-flex align-items-center gap-2">
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            onClick={() =>
+              fetchHolidays(
+                pagination.pageIndex,
+                pagination.pageSize,
+                searchTerm,
+                selectedYear,
+                selectedType
+              )
+            }
+            className="d-flex align-items-center gap-2"
+          >
             <IconRefresh size={16} /> Sync
           </Button>
           {canEdit && (
@@ -278,21 +321,29 @@ const HolidaysPage = () => {
               <Form.Control
                 type="search"
                 placeholder="Search Holidays..."
-                value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-                onChange={(e) =>
-                  table.getColumn("name")?.setFilterValue(e.target.value)
-                }
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                }}
               />
             </div>
             <div className="col-lg-3 col-md-4">
               <Form.Select
-                onChange={(e) =>
-                  table.getColumn("date")?.setFilterValue(e.target.value)
-                }
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                }}
               >
                 <option value="">Filter by Year</option>
                 {Array.from(
-                  new Set(holidays.map((h) => new Date(h.date).getFullYear()))
+                  new Set([
+                    new Date().getFullYear() - 1,
+                    new Date().getFullYear(),
+                    new Date().getFullYear() + 1,
+                    ...holidays.map((h) => new Date(h.date).getFullYear()).filter(Boolean),
+                  ])
                 )
                   .sort((a, b) => b - a)
                   .map((year) => (
@@ -304,9 +355,11 @@ const HolidaysPage = () => {
             </div>
             <div className="col-lg-3 col-md-4">
               <Form.Select
-                onChange={(e) =>
-                  table.getColumn("type")?.setFilterValue(e.target.value)
-                }
+                value={selectedType}
+                onChange={(e) => {
+                  setSelectedType(e.target.value);
+                  setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                }}
               >
                 <option value="">Filter by Type</option>
                 <option value="Public Holiday">Public Holiday</option>
@@ -365,12 +418,14 @@ const HolidaysPage = () => {
                     )}
                   </tbody>
                 </table>
-                {table.getPageCount() > 1 && (
+                {totalPages > 1 && (
                   <div className="px-4 py-3 border-top">
                     <Pagination
-                      totalPages={table.getPageCount()}
-                      currentPage={table.getState().pagination.pageIndex + 1}
-                      onPageChange={(page) => table.setPageIndex(page - 1)}
+                      totalPages={totalPages}
+                      currentPage={pagination.pageIndex + 1}
+                      onPageChange={(page) =>
+                        setPagination((prev) => ({ ...prev, pageIndex: page - 1 }))
+                      }
                     />
                   </div>
                 )}
