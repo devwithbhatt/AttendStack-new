@@ -1,41 +1,52 @@
 "use client";
 import { Pagination as BootstrapPagination } from "react-bootstrap";
 
+interface PaginationProps {
+  totalPages: number;
+  currentPage: number;
+  onPageChange: (page: number) => void;
+}
+
 const Pagination = ({
   totalPages,
   currentPage,
   onPageChange,
-}: {
-  totalPages: number;
-  currentPage: number;
-  onPageChange: (page: number) => void;
-}) => {
+}: PaginationProps) => {
+  const safeTotalPages = Math.max(1, totalPages);
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= safeTotalPages && page !== safeCurrentPage) {
+      onPageChange(page);
+    }
+  };
+
   return (
-    <BootstrapPagination className="justify-content-end">
+    <BootstrapPagination className="justify-content-end mb-0">
       <BootstrapPagination.First
-        onClick={() => onPageChange(1)}
-        disabled={currentPage === 1}
+        onClick={() => handlePageChange(1)}
+        disabled={safeCurrentPage === 1}
       />
       <BootstrapPagination.Prev
-        onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-        disabled={currentPage === 1}
+        onClick={() => handlePageChange(safeCurrentPage - 1)}
+        disabled={safeCurrentPage === 1}
       />
-      {[...Array(totalPages).keys()].map((number) => (
+      {Array.from({ length: safeTotalPages }, (_, i) => i + 1).map((number) => (
         <BootstrapPagination.Item
-          key={number + 1}
-          active={number + 1 === currentPage}
-          onClick={() => onPageChange(number + 1)}
+          key={number}
+          active={number === safeCurrentPage}
+          onClick={() => handlePageChange(number)}
         >
-          {number + 1}
+          {number}
         </BootstrapPagination.Item>
       ))}
       <BootstrapPagination.Next
-        onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
-        disabled={currentPage === totalPages}
+        onClick={() => handlePageChange(safeCurrentPage + 1)}
+        disabled={safeCurrentPage === safeTotalPages}
       />
       <BootstrapPagination.Last
-        onClick={() => onPageChange(totalPages)}
-        disabled={currentPage === totalPages}
+        onClick={() => handlePageChange(safeTotalPages)}
+        disabled={safeCurrentPage === safeTotalPages}
       />
     </BootstrapPagination>
   );
