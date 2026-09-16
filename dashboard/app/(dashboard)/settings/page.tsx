@@ -349,12 +349,14 @@ const SettingsPage = () => {
     setIsLoadingEmployees(true);
     setAssignSearch("");
     try {
-      const res = await fetch(`${apiRoot}/api/v1/employees/?page_size=500`, {
+      const res = await fetch(`${apiRoot}/api/v1/employees/?status=ACTIVE&page_size=500`, {
         headers: authHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : data.results || [];
+        const list = (Array.isArray(data) ? data : data.results || []).filter(
+          (emp: any) => !emp.status || emp.status === "ACTIVE"
+        );
         setEmployeeDirectory(list);
         const assignedIds = list
           .filter((emp: any) => emp.shift === shift.id)
@@ -2058,85 +2060,87 @@ const SettingsPage = () => {
                           </div>
                         ) : (
                           <div className="table-responsive">
-                            <Table hover className="align-middle mb-0">
+                            <Table hover className="align-middle mb-0 table-sm">
                               <thead className="table-light">
-                                <tr style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                  <th className="ps-3">Shift Name &amp; Code</th>
-                                  <th>Working Hours</th>
-                                  <th>Grace Periods</th>
-                                  <th>Early Checkout Policy</th>
-                                  <th>Min Work Hours</th>
-                                  <th>Assigned Staff</th>
-                                  <th className="text-end pe-3">Actions</th>
+                                <tr style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px", color: "#64748b" }}>
+                                  <th className="ps-3 py-2 text-nowrap">Shift Name &amp; Code</th>
+                                  <th className="py-2 text-nowrap">Working Hours</th>
+                                  <th className="py-2 text-nowrap">Grace Periods</th>
+                                  <th className="py-2 text-nowrap">Early Checkout Policy</th>
+                                  <th className="py-2 text-nowrap">Min Work Hours</th>
+                                  <th className="py-2 text-nowrap">Assigned Staff</th>
+                                  <th className="text-end pe-3 py-2 text-nowrap">Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {shifts.map((s) => (
                                   <tr key={s.id}>
-                                    <td className="ps-3">
-                                      <div className="d-flex align-items-center gap-2">
+                                    <td className="ps-3 py-2 text-nowrap">
+                                      <div className="d-flex align-items-center gap-1.5">
                                         <span className="fw-semibold text-dark">{s.name}</span>
                                         {s.code && (
-                                          <Badge bg="light" className="text-secondary border font-monospace" style={{ fontSize: "11px" }}>
+                                          <Badge bg="light" className="text-secondary border font-monospace px-1.5 py-0.5" style={{ fontSize: "10.5px" }}>
                                             {s.code}
                                           </Badge>
                                         )}
                                         {s.is_default && (
-                                          <Badge bg="success-subtle" className="text-success border border-success-subtle" style={{ fontSize: "11px" }}>
+                                          <Badge bg="success-subtle" className="text-success border border-success-subtle px-1.5 py-0.5" style={{ fontSize: "10.5px" }}>
                                             Default Shift
                                           </Badge>
                                         )}
                                       </div>
                                     </td>
-                                    <td>
-                                      <span className="fw-medium text-dark">
+                                    <td className="py-2 text-nowrap">
+                                      <span className="fw-medium text-dark small">
                                         {s.start_time_display || s.start_time.slice(0, 5)} - {s.end_time_display || s.end_time.slice(0, 5)}
                                       </span>
                                     </td>
-                                    <td>
-                                      <small className="d-block text-muted">
-                                        Late Grace: <strong>{s.late_grace_minutes}m</strong>
-                                      </small>
-                                      <small className="d-block text-muted">
-                                        Early Out Grace: <strong>{s.early_checkout_grace_minutes}m</strong>
-                                      </small>
+                                    <td className="py-2 text-nowrap">
+                                      <span className="text-muted small">
+                                        Late: <strong className="text-dark">{s.late_grace_minutes}m</strong>
+                                        <span className="mx-1 text-secondary opacity-50">•</span>
+                                        Early: <strong className="text-dark">{s.early_checkout_grace_minutes}m</strong>
+                                      </span>
                                     </td>
-                                    <td>
+                                    <td className="py-2 text-nowrap">
                                       {s.early_checkout_penalty === "HALF_DAY" ? (
-                                        <Badge bg="warning-subtle" className="text-warning-emphasis border border-warning-subtle">
+                                        <Badge bg="warning-subtle" className="text-warning-emphasis border border-warning-subtle py-1 px-2" style={{ fontSize: "11px" }}>
                                           Half Day (0.5d Deduct)
                                         </Badge>
                                       ) : s.early_checkout_penalty === "PRO_RATED" ? (
-                                        <Badge bg="info-subtle" className="text-info-emphasis border border-info-subtle">
+                                        <Badge bg="info-subtle" className="text-info-emphasis border border-info-subtle py-1 px-2" style={{ fontSize: "11px" }}>
                                           Pro-Rated Shortfall
                                         </Badge>
                                       ) : (
-                                        <Badge bg="secondary-subtle" className="text-secondary border">
+                                        <Badge bg="secondary-subtle" className="text-secondary border py-1 px-2" style={{ fontSize: "11px" }}>
                                           No Penalty
                                         </Badge>
                                       )}
                                     </td>
-                                    <td>
-                                      <small className="d-block text-muted">Full: {s.min_hours_full_day}h</small>
-                                      <small className="d-block text-muted">Half: {s.min_hours_half_day}h</small>
+                                    <td className="py-2 text-nowrap">
+                                      <span className="text-muted small">
+                                        Full: <strong className="text-dark">{s.min_hours_full_day}h</strong>
+                                        <span className="mx-1 text-secondary opacity-50">•</span>
+                                        Half: <strong className="text-dark">{s.min_hours_half_day}h</strong>
+                                      </span>
                                     </td>
-                                    <td>
-                                      <Badge bg="light" className="text-dark border">
+                                    <td className="py-2 text-nowrap">
+                                      <Badge bg="light" className="text-dark border py-1 px-2" style={{ fontSize: "11px" }}>
                                         <IconUsers size={12} className="me-1 text-primary" />
                                         {s.employee_count} {s.employee_count === 1 ? "Employee" : "Employees"}
                                       </Badge>
                                     </td>
-                                    <td className="text-end pe-3">
+                                    <td className="text-end pe-3 py-2 text-nowrap">
                                       <div className="d-flex align-items-center justify-content-end gap-1">
                                         <Button
                                           variant="primary"
                                           size="sm"
                                           className="py-1 px-2 d-inline-flex align-items-center gap-1"
-                                          style={{ fontSize: "12px" }}
+                                          style={{ fontSize: "11.5px" }}
                                           onClick={() => handleOpenAssignModal(s)}
                                           title="Assign employees to this shift"
                                         >
-                                          <IconUsers size={14} /> Assign Staff
+                                          <IconUsers size={13} /> Assign Staff
                                         </Button>
                                         {!s.is_default && (
                                           <Button
@@ -2157,7 +2161,7 @@ const SettingsPage = () => {
                                           onClick={() => handleOpenEditShift(s)}
                                           title="Edit Shift"
                                         >
-                                          <IconEdit size={16} />
+                                          <IconEdit size={15} />
                                         </Button>
                                         {!s.is_default && (
                                           <Button
@@ -2167,7 +2171,7 @@ const SettingsPage = () => {
                                             onClick={() => handleDeleteShift(s)}
                                             title="Delete Shift"
                                           >
-                                            <IconTrash size={16} />
+                                            <IconTrash size={15} />
                                           </Button>
                                         )}
                                       </div>
@@ -3257,7 +3261,10 @@ const SettingsPage = () => {
         <Modal.Header closeButton>
           <Modal.Title className="fw-bold d-flex align-items-center gap-2">
             <IconUsers size={20} className="text-primary" />
-            Assign Staff to {selectedShiftForAssign?.name || "Shift"}
+            <span>Assign Staff to {selectedShiftForAssign?.name || "Shift"}</span>
+            <Badge bg="success-subtle" className="text-success border border-success-subtle fw-medium" style={{ fontSize: "11px" }}>
+              Active Staff Only
+            </Badge>
           </Modal.Title>
         </Modal.Header>
         <Modal.Body className="py-3">
@@ -3279,13 +3286,14 @@ const SettingsPage = () => {
           <div className="d-flex flex-column flex-sm-row gap-2 mb-3">
             <Form.Control
               type="text"
-              placeholder="Search staff by name, email, department, or ID..."
+              placeholder="Search active staff by name, email, department, or ID..."
               value={assignSearch}
               onChange={(e) => setAssignSearch(e.target.value)}
               className="flex-grow-1"
             />
             {(() => {
               const filtered = employeeDirectory.filter((emp: any) => {
+                if (emp.status && emp.status !== "ACTIVE") return false;
                 if (!assignSearch.trim()) return true;
                 const q = assignSearch.toLowerCase();
                 return (
@@ -3328,6 +3336,7 @@ const SettingsPage = () => {
             <div style={{ maxHeight: "380px", overflowY: "auto" }} className="border rounded-3 p-2">
               {employeeDirectory
                 .filter((emp: any) => {
+                  if (emp.status && emp.status !== "ACTIVE") return false;
                   if (!assignSearch.trim()) return true;
                   const q = assignSearch.toLowerCase();
                   return (
@@ -3349,7 +3358,7 @@ const SettingsPage = () => {
                       }`}
                       style={{ cursor: "pointer", border: isChecked ? "1px solid #93c5fd" : "1px solid #f1f5f9" }}
                     >
-                      <div className="d-flex align-items-center gap-3">
+                      <div className="d-flex align-items-center gap-2.5">
                         <Form.Check
                           type="checkbox"
                           id={`emp-chk-${emp.id}`}
@@ -3358,10 +3367,15 @@ const SettingsPage = () => {
                           className="m-0 pointer-events-none"
                         />
                         <div>
-                          <span className="fw-semibold d-block text-dark" style={{ fontSize: "14px" }}>
-                            {emp.full_name}
-                          </span>
-                          <small className="text-muted">
+                          <div className="d-flex align-items-center gap-1.5">
+                            <span className="fw-semibold text-dark" style={{ fontSize: "13.5px" }}>
+                              {emp.full_name}
+                            </span>
+                            <span className="badge bg-success-subtle text-success border border-success-subtle px-1.5 py-0.5" style={{ fontSize: "10px" }}>
+                              Active
+                            </span>
+                          </div>
+                          <small className="text-muted" style={{ fontSize: "12px" }}>
                             {emp.employee_id} • {emp.department || "No Dept"} • {emp.designation || "Staff"}
                           </small>
                         </div>
