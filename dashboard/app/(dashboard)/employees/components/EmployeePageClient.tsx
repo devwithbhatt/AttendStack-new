@@ -20,8 +20,9 @@ import {
   IconAlertTriangle,
   IconCheck,
   IconBuildingSkyscraper,
+  IconClock,
 } from "@tabler/icons-react";
-import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
+import { Alert, Button, Dropdown, Form, Modal, Spinner } from "react-bootstrap";
 import Link from "next/link";
 import EmployeeFormWizard, { EmployeeFormData } from "./EmployeeFormWizard";
 
@@ -43,6 +44,8 @@ type Employee = {
   status_end_date?: string | null;
   auto_transition_status?: EmployeeStatus | null;
   auto_transition_status_label?: string | null;
+  shift?: string | null;
+  shift_name?: string | null;
 };
 
 type EmployeeListResponse = Employee[] | {
@@ -163,6 +166,11 @@ const EmployeePageClient = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [shiftFilter, setShiftFilter] = useState("");
+  const [availableShifts, setAvailableShifts] = useState<any[]>([]);
+  const [shiftEmployee, setShiftEmployee] = useState<Employee | null>(null);
+  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const [isSavingShift, setIsSavingShift] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -292,9 +300,82 @@ const EmployeePageClient = () => {
     }
   };
 
+  const loadShifts = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const apiEndpoint = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
+      const res = await fetch(`${apiEndpoint}/api/v1/attendance/shifts/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableShifts(Array.isArray(data) ? data : data.results || []);
+      }
+    } catch (err) {
+      console.error("Failed to load shifts in employees directory", err);
+    }
+  };
+
   useEffect(() => {
     loadEmployees();
+    loadShifts();
   }, []);
+
+  const openShiftModal = (employee: Employee) => {
+    setShiftEmployee(employee);
+    setSelectedShiftId(employee.shift || "");
+  };
+
+  const closeShiftModal = () => {
+    if (isSavingShift) return;
+    setShiftEmployee(null);
+    setSelectedShiftId("");
+  };
+
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shiftEmployee) return;
+
+    setIsSavingShift(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(`${API_URL}${shiftEmployee.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ shift: selectedShiftId || null }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.detail || "Failed to update employee shift.");
+      }
+
+      const updated = (await res.json()) as Employee;
+      setEmployees((prev) =>
+        prev.map((item) =>
+          item.id === shiftEmployee.id
+            ? { ...item, shift: updated.shift, shift_name: updated.shift_name }
+            : item
+        )
+      );
+
+      Swal.fire({
+        icon: "success",
+        title: "Shift Updated!",
+        text: `${shiftEmployee.full_name}'s shift changed to ${updated.shift_name || "Company Default Shift"}.`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+      closeShiftModal();
+    } catch (err: any) {
+      Swal.fire("Error", err.message || "Failed to update shift", "error");
+    } finally {
+      setIsSavingShift(false);
+    }
+  };
 
   const handleRowClick = (employeeUuid: string) => {
     router.push(`/employees/${employeeUuid}`);
@@ -619,10 +700,11 @@ const EmployeePageClient = () => {
         employee.employee_id.toLowerCase().includes(query);
       const matchesDepartment = !departmentFilter || employee.department === departmentFilter;
       const matchesStatus = !statusFilter || employee.status === statusFilter;
+      const matchesShift = !shiftFilter || (shiftFilter === "NONE" ? !employee.shift : employee.shift === shiftFilter);
 
-      return matchesSearch && matchesDepartment && matchesStatus;
+      return matchesSearch && matchesDepartment && matchesStatus && matchesShift;
     });
-  }, [employees, searchQuery, departmentFilter, statusFilter]);
+  }, [employees, searchQuery, departmentFilter, statusFilter, shiftFilter]);
 
   const uniqueDepartments = [...new Set(employees.map((employee) => employee.department).filter(Boolean))];
   return (
@@ -680,6 +762,14 @@ const EmployeePageClient = () => {
                   <Dropdown.Item onClick={() => setStatusFilter("NOTICE_PERIOD")}>Notice Period</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("INACTIVE")}>Inactive</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("TERMINATED")}>Terminated</Dropdown.Item>
+                  <Dropdown.Divider />
+                  <Dropdown.Header>Work Shift</Dropdown.Header>
+                  <Dropdown.Item onClick={() => setShiftFilter("")}>All Shifts</Dropdown.Item>
+                  {availableShifts.map((shift) => (
+                    <Dropdown.Item key={shift.id} onClick={() => setShiftFilter(shift.id)}>
+                      {shift.name} ({shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)})
+                    </Dropdown.Item>
+                  ))}
                 </Dropdown.Menu>
               </Dropdown>
             </div>
@@ -698,19 +788,20 @@ const EmployeePageClient = () => {
                   <th className="py-2.5" style={{ minWidth: "130px" }}>Department</th>
                   <th className="py-2.5" style={{ minWidth: "140px" }}>Designation</th>
                   <th className="py-2.5" style={{ minWidth: "150px" }}>Status</th>
+                  <th className="py-2.5" style={{ minWidth: "160px" }}>Work Shift</th>
                   <th className="py-2.5 text-center employee-action-column pe-3" style={{ minWidth: "90px" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-secondary">Loading employees...</td>
+                    <td colSpan={7} className="text-center py-4 text-secondary">Loading employees...</td>
                   </tr>
                 )}
 
                 {!isLoading && filteredEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-secondary">No employees found.</td>
+                    <td colSpan={7} className="text-center py-4 text-secondary">No employees found.</td>
                   </tr>
                 )}
 
@@ -763,6 +854,23 @@ const EmployeePageClient = () => {
                         </small>
                       ) : null}
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShiftModal(employee);
+                        }}
+                        className="btn btn-sm p-0 border-0 bg-transparent text-start"
+                        title="Click to change shift"
+                      >
+                        <span className="badge bg-light text-dark border d-inline-flex align-items-center gap-1.5 py-1 px-2 hover-shadow" style={{ fontSize: "12px", fontWeight: 500, cursor: "pointer" }}>
+                          <IconClock size={13} className="text-primary" />
+                          {employee.shift_name || "Default Shift"}
+                          <IconEdit size={11} className="text-muted ms-0.5" />
+                        </span>
+                      </button>
+                    </td>
                     <td className="text-center employee-action-column">
                       <Dropdown
                         align="end"
@@ -788,8 +896,8 @@ const EmployeePageClient = () => {
                               <Dropdown.Item onClick={() => handleEdit(employee)} className="d-flex align-items-center gap-2">
                                 <IconEdit size={16} /> Edit Employee
                               </Dropdown.Item>
-                              <Dropdown.Item onClick={() => router.push(`/employees/${employee.id}#leave-entitlement`)} className="d-flex align-items-center gap-2">
-                                <IconCalendarStats size={16} /> Manage Leave Entitlement
+                              <Dropdown.Item onClick={() => openShiftModal(employee)} className="d-flex align-items-center gap-2">
+                                <IconClock size={16} className="text-primary" /> Change Shift
                               </Dropdown.Item>
                               <Dropdown.Item onClick={() => openStatusModal(employee)} className="d-flex align-items-center gap-2">
                                 <IconUserCheck size={16} /> Change Status
@@ -1038,7 +1146,65 @@ const EmployeePageClient = () => {
         </Form>
       </Modal>
 
+      {/* Change Work Shift Modal */}
+      <Modal show={Boolean(shiftEmployee)} onHide={closeShiftModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="d-flex align-items-center gap-2">
+            <IconClock size={20} className="text-primary" />
+            Assign Work Shift
+          </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSaveShift}>
+          <Modal.Body>
+            <div className="d-flex align-items-center gap-3 p-3 bg-light rounded-3 mb-3 border">
+              <img
+                src={shiftEmployee?.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                alt={shiftEmployee?.full_name || "Employee"}
+                className="rounded-circle flex-shrink-0"
+                style={{ width: "42px", height: "42px", objectFit: "cover" }}
+              />
+              <div className="min-w-0">
+                <div className="fw-semibold text-dark">{shiftEmployee?.full_name}</div>
+                <div className="text-muted small">{shiftEmployee?.employee_id} • {shiftEmployee?.designation || shiftEmployee?.department || "Employee"}</div>
+              </div>
+            </div>
 
+            <Form.Group className="mb-3" controlId="employeeWorkShift">
+              <Form.Label className="fw-semibold">Select Work Shift</Form.Label>
+              <Form.Select
+                value={selectedShiftId}
+                onChange={(e) => setSelectedShiftId(e.target.value)}
+              >
+                <option value="">Default Company Shift (Standard Hours)</option>
+                {availableShifts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)})
+                    {s.is_night_shift ? " 🌙 Night Shift" : ""}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-muted small mt-1.5 d-block">
+                Assigned shift determines expected check-in/check-out times, grace period, and early departure salary deduction rules.
+              </Form.Text>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeShiftModal} disabled={isSavingShift}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={isSavingShift} className="d-flex align-items-center gap-2">
+              {isSavingShift ? (
+                <>
+                  <Spinner size="sm" />
+                  Saving...
+                </>
+              ) : (
+                "Save Shift Assignment"
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
 
       <Modal show={isEditModalOpen} onHide={() => setIsEditModalOpen(false)} centered size="lg">
         <Modal.Header closeButton>

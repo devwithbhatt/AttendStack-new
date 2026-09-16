@@ -18,7 +18,13 @@ const EmployeeProfilePage = async ({ params }: EmployeeProfilePageProps) => {
 
   return (
     <Fragment>
-      <DasherBreadcrumb />
+      <DasherBreadcrumb
+        className="d-none d-md-block"
+        items={[
+          { label: "Employees Directory", href: "/employees" },
+          { label: "Employee Profile" },
+        ]}
+      />
       <EmployeeProfileClient employeeId={employeeId} />
     </Fragment>
   );

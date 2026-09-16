@@ -1,9 +1,11 @@
+import uuid
 from datetime import timedelta, datetime
 
 from django.db import models
 from django.utils import timezone
 
 from employees.models import Employee
+from organizations.models import Organization
 from settings.models import SystemSettings
 
 
@@ -26,6 +28,102 @@ class AttendanceStatus(models.TextChoices):
     HOLIDAY = "HOLIDAY", "Holiday"
     SUNDAY_PAID = "SUNDAY_PAID", "Sunday"
     SUNDAY_UNPAID = "SUNDAY_UNPAID", "Sunday Unpaid"
+
+
+class EarlyCheckoutPolicy(models.TextChoices):
+    HALF_DAY = "HALF_DAY", "Half Day"
+    PRO_RATED = "PRO_RATED", "Pro-Rated Salary Deduction"
+    NONE = "NONE", "No Penalty"
+
+
+class Shift(models.Model):
+    """Company Shift model for multi-shift management."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="shifts",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=100, help_text="e.g. General Shift, Morning Shift, Night Shift")
+    code = models.CharField(max_length=30, blank=True, help_text="e.g. GEN, MORN, NIGHT")
+    start_time = models.TimeField(default="10:00:00")
+    end_time = models.TimeField(default="18:00:00")
+    late_grace_minutes = models.PositiveIntegerField(
+        default=15,
+        help_text="Grace period in minutes after shift start before marked late."
+    )
+    early_checkout_grace_minutes = models.PositiveIntegerField(
+        default=15,
+        help_text="Minutes before shift end allowed without early checkout penalty."
+    )
+    early_checkout_penalty = models.CharField(
+        max_length=20,
+        choices=EarlyCheckoutPolicy.choices,
+        default=EarlyCheckoutPolicy.HALF_DAY,
+        help_text="Policy applied when employee checks out before early checkout grace period."
+    )
+    min_hours_half_day = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=4.00,
+        help_text="Minimum working hours required for half day credit."
+    )
+    min_hours_full_day = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=8.00,
+        help_text="Minimum working hours required for full day credit."
+    )
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Designates this shift as the default for employees with no shift assigned."
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        s_time = self.start_time.strftime("%H:%M") if hasattr(self.start_time, "strftime") else str(self.start_time)
+        e_time = self.end_time.strftime("%H:%M") if hasattr(self.end_time, "strftime") else str(self.end_time)
+        return f"{self.name} ({s_time} - {e_time})"
+
+    @classmethod
+    def get_default_shift(cls, organization=None):
+        """Returns default shift for organization or fallback active default, creating one if none exists."""
+        qs = cls.objects.filter(is_active=True)
+        if organization:
+            org_default = qs.filter(organization=organization, is_default=True).first()
+            if org_default:
+                return org_default
+
+        system_default = qs.filter(is_default=True).first()
+        if system_default:
+            return system_default
+
+        # Auto-bootstrap default General Shift from SystemSettings if no default shift exists
+        try:
+            settings = SystemSettings.get_settings()
+            return cls.objects.create(
+                organization=organization,
+                name="General Shift",
+                code="GEN",
+                start_time=settings.shift_start_time,
+                end_time=settings.shift_end_time,
+                late_grace_minutes=15,
+                early_checkout_grace_minutes=getattr(settings, "early_checkout_grace_minutes", 15),
+                early_checkout_penalty=getattr(settings, "early_checkout_penalty", EarlyCheckoutPolicy.HALF_DAY),
+                min_hours_half_day=getattr(settings, "min_hours_half_day", 4.00),
+                min_hours_full_day=getattr(settings, "min_hours_full_day", 8.00),
+                is_default=True,
+                is_active=True,
+            )
+        except Exception:
+            return qs.first()
 
 
 class AttendanceRecord(models.Model):
@@ -78,6 +176,18 @@ class AttendanceRecord(models.Model):
         blank=True,
         related_name="attendance_records",
         help_text="Leave request that created this attendance entry, when applicable",
+    )
+    shift = models.ForeignKey(
+        "attendance.Shift",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_records",
+        help_text="Shift assigned for this attendance day",
+    )
+    early_departure_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text="Shortfall minutes if employee checked out before shift completion grace period."
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -147,24 +257,40 @@ class AttendanceRecord(models.Model):
             from datetime import time as dt_time
             return dt_time(default_h, default_m)
 
-        shift_start = to_time(settings.shift_start_time, 10, 0)
-        late_cutoff_time = to_time(settings.late_cutoff_time, 10, 15)
-        shift_end = to_time(settings.shift_end_time, 18, 0)
+        # Resolve effective shift:
+        effective_shift = self.shift
+        if not effective_shift and self.employee:
+            effective_shift = getattr(self.employee, "shift", None)
+        if not effective_shift:
+            org = getattr(self.employee, "organization", None) if self.employee else None
+            effective_shift = Shift.get_default_shift(organization=org)
 
-        late_cutoff = local_check_in.replace(
-            hour=late_cutoff_time.hour, 
-            minute=late_cutoff_time.minute, 
-            second=0, 
-            microsecond=0
-        )
-        
-        # Determine whether the employee is late or should be marked as half day.
+        if effective_shift:
+            self.shift = effective_shift
+            shift_start = to_time(effective_shift.start_time, 10, 0)
+            shift_end = to_time(effective_shift.end_time, 18, 0)
+            late_grace = effective_shift.late_grace_minutes
+            early_checkout_grace = effective_shift.early_checkout_grace_minutes
+            early_policy = effective_shift.early_checkout_penalty
+            min_half_day_hrs = float(effective_shift.min_hours_half_day or 4.0)
+            min_full_day_hrs = float(effective_shift.min_hours_full_day or 8.0)
+        else:
+            shift_start = to_time(settings.shift_start_time, 10, 0)
+            shift_end = to_time(settings.shift_end_time, 18, 0)
+            late_cutoff_raw = to_time(settings.late_cutoff_time, 10, 15)
+            late_grace = max(0, (late_cutoff_raw.hour * 60 + late_cutoff_raw.minute) - (shift_start.hour * 60 + shift_start.minute))
+            early_checkout_grace = getattr(settings, "early_checkout_grace_minutes", 15)
+            early_policy = getattr(settings, "early_checkout_penalty", "HALF_DAY")
+            min_half_day_hrs = float(getattr(settings, "min_hours_half_day", 4.0))
+            min_full_day_hrs = float(getattr(settings, "min_hours_full_day", 8.0))
+
         scheduled_shift_start = local_check_in.replace(
             hour=shift_start.hour,
             minute=shift_start.minute,
             second=getattr(shift_start, "second", 0),
             microsecond=0,
         )
+        late_cutoff = scheduled_shift_start + timedelta(minutes=late_grace)
         late_half_day_cutoff = scheduled_shift_start + timedelta(hours=3)
 
         if local_check_in >= late_half_day_cutoff:
@@ -172,6 +298,7 @@ class AttendanceRecord(models.Model):
             self.is_paid = False
         else:
             self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
+            self.is_paid = True
 
         approved_half_day_leave = (
             self.leave_request_id
@@ -184,9 +311,6 @@ class AttendanceRecord(models.Model):
         if approved_half_day_leave:
             self.status = AttendanceStatus.HALF_DAY
 
-        # An early checkout is a half day, except during the final two hours of
-        # the scheduled shift. For example, with an 18:00 shift end, a checkout
-        # at 16:00 or later remains Present/Late, while one before 16:00 is Half Day.
         elif self.check_out:
             local_check_out = timezone.localtime(self.check_out)
             scheduled_shift_end = local_check_in.replace(
@@ -195,11 +319,41 @@ class AttendanceRecord(models.Model):
                 second=getattr(shift_end, "second", 0),
                 microsecond=0,
             )
-            full_day_checkout_cutoff = scheduled_shift_end - timedelta(hours=2)
+            if shift_end < shift_start:
+                # Overnight shift support
+                scheduled_shift_end += timedelta(days=1)
 
-            if local_check_out < full_day_checkout_cutoff:
-                self.status = AttendanceStatus.HALF_DAY
-                self.is_paid = False
+            # Full day credit cutoff = shift_end - early_checkout_grace (e.g. 18:00 - 15m = 17:45)
+            full_day_checkout_cutoff = scheduled_shift_end - timedelta(minutes=early_checkout_grace)
+
+            if local_check_out >= full_day_checkout_cutoff:
+                # Checked out on time or within early grace period -> Full day!
+                self.early_departure_minutes = 0
+            else:
+                # Left before grace period cutoff
+                shortfall_seconds = (full_day_checkout_cutoff - local_check_out).total_seconds()
+                shortfall_minutes = max(0, int(shortfall_seconds // 60))
+                self.early_departure_minutes = shortfall_minutes
+
+                worked_duration = local_check_out - local_check_in
+                worked_hours = max(0.0, worked_duration.total_seconds() / 3600.0)
+
+                if early_policy == EarlyCheckoutPolicy.HALF_DAY:
+                    self.status = AttendanceStatus.HALF_DAY
+                    self.is_paid = False
+                    self.notes = f"Early checkout: Left {shortfall_minutes} min(s) early (Policy: Half Day)"
+                elif early_policy == EarlyCheckoutPolicy.PRO_RATED:
+                    if worked_hours < min_half_day_hrs:
+                        self.status = AttendanceStatus.HALF_DAY
+                        self.is_paid = False
+                        self.notes = f"Early checkout: Worked only {worked_hours:.1f}h (< {min_half_day_hrs}h) (Policy: Half Day)"
+                    else:
+                        self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
+                        self.is_paid = True
+                        self.notes = f"Early checkout: Left {shortfall_minutes} min(s) early (Policy: Pro-rated deduction)"
+                elif early_policy == EarlyCheckoutPolicy.NONE:
+                    self.early_departure_minutes = 0
+                    self.notes = f"Early checkout: Left {shortfall_minutes} min(s) early (No penalty)"
           
         # Apply Sunday Unpaid Rule if enabled
         if settings.sunday_unpaid_rule_enabled:

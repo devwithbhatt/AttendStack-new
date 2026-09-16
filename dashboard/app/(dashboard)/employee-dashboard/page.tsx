@@ -386,11 +386,13 @@ const EmployeeDashboard = () => {
 
   useEffect(() => {
     const checkTime = () => {
-      if (!settings) return;
+      const startTimeStr = today?.shift_start_time || settings?.shift_start_time;
+      const endTimeStr = today?.shift_end_time || settings?.shift_end_time;
+      if (!startTimeStr || !endTimeStr) return;
 
       const now = new Date();
-      const [startHours, startMinutes] = settings.shift_start_time.split(':').map(Number);
-      const [endHours, endMinutes] = settings.shift_end_time.split(':').map(Number);
+      const [startHours, startMinutes] = startTimeStr.split(':').map(Number);
+      const [endHours, endMinutes] = endTimeStr.split(':').map(Number);
 
       const shiftStart = new Date(now);
       shiftStart.setHours(startHours, startMinutes, 0, 0);
@@ -404,10 +406,7 @@ const EmployeeDashboard = () => {
       setCheckinActive(now >= checkinWindowStart && now <= shiftEnd);
 
       if (today?.check_in) {
-        const checkinTime = new Date(today.check_in);
-        const minCheckoutTime = new Date(checkinTime);
-        minCheckoutTime.setHours(minCheckoutTime.getHours() + 3);
-        setCheckoutActive(now >= minCheckoutTime);
+        setCheckoutActive(true);
       } else {
         setCheckoutActive(false);
       }
@@ -433,6 +432,58 @@ const EmployeeDashboard = () => {
       setPunchError("Checkout is not active at this time.");
       setActionLoading(null);
       return;
+    }
+
+    if (action === "check-out") {
+      const endTimeStr = today?.shift_end_time || settings?.shift_end_time || "18:00";
+      const graceMins = Number(today?.early_checkout_grace_minutes ?? settings?.early_checkout_grace_minutes ?? 15);
+      const penaltyPolicy = today?.early_checkout_penalty || settings?.early_checkout_penalty || "HALF_DAY";
+
+      const now = new Date();
+      const [endH, endM] = endTimeStr.split(":").map(Number);
+      const shiftEnd = new Date(now);
+      shiftEnd.setHours(endH, endM, 0, 0);
+
+      const graceCutoff = new Date(shiftEnd.getTime() - graceMins * 60000);
+
+      if (now < graceCutoff) {
+        const diffMs = shiftEnd.getTime() - now.getTime();
+        const diffMinutes = Math.max(1, Math.ceil(diffMs / 60000));
+        const diffHours = (diffMinutes / 60).toFixed(1);
+
+        let penaltyDesc = "";
+        if (penaltyPolicy === "HALF_DAY") {
+          penaltyDesc = "Company policy marks your attendance as Half-Day and deducts 0.5 day's salary for checking out before the grace window.";
+        } else if (penaltyPolicy === "PRO_RATED") {
+          penaltyDesc = `Company policy deducts pro-rated salary for the ${diffMinutes} minutes shortfall (${diffHours} hrs) based on your hourly rate.`;
+        } else {
+          penaltyDesc = "You are checking out before shift completion.";
+        }
+
+        const result = await Swal.fire({
+          title: "Early Clock-Out Warning",
+          html: `
+            <div class="text-start">
+              <p class="mb-2">Your shift ends at <strong>${endTimeStr}</strong> (Grace window cutoff is <strong>${graceCutoff.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>).</p>
+              <p class="mb-2 text-danger fw-semibold">You are clocking out <strong>${diffMinutes} minutes</strong> early.</p>
+              <div class="alert alert-warning py-2 px-3 mb-0" style="font-size: 0.88rem;">
+                <strong>Salary Impact:</strong> ${penaltyDesc}
+              </div>
+            </div>
+          `,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonColor: "#d33",
+          cancelButtonColor: "#6c757d",
+          confirmButtonText: "Yes, Clock Out Early",
+          cancelButtonText: "Stay Clocked In",
+        });
+
+        if (!result.isConfirmed) {
+          setActionLoading(null);
+          return;
+        }
+      }
     }
 
     const token = localStorage.getItem("authToken");
@@ -614,7 +665,7 @@ const EmployeeDashboard = () => {
                   <div>
                     <h4 className="fw-bold text-dark mb-1">Daily Attendance Punch</h4>
                     <p className="text-secondary small mb-0">
-                      Standard timing: <strong>{settings ? `${settings.shift_start_time} to ${settings.shift_end_time}` : "10:00 AM to 06:00 PM"}</strong>
+                      Shift: <strong className="text-primary">{today?.shift_name || "General Shift"}</strong> ({today?.shift_start_time || settings?.shift_start_time || "10:00"} – {today?.shift_end_time || settings?.shift_end_time || "18:00"})
                     </p>
                   </div>
                 </div>
@@ -688,9 +739,9 @@ const EmployeeDashboard = () => {
                           <IconLogout2 size={22} />
                           {actionLoading === "check-out" ? "Punching Out..." : "Clock Out Now"}
                         </Button>
-                        {!isCheckoutActive && (
-                          <p className="text-danger small mt-2">Checkout is available only after 3 hours of work.</p>
-                        )}
+                        <p className="text-muted small mt-2 mb-0">
+                          Full-day checkout window opens {today?.early_checkout_grace_minutes ?? settings?.early_checkout_grace_minutes ?? 15} mins before shift completion.
+                        </p>
                       </div>
                     ) : (
                       <div className="w-100 text-lg-end">

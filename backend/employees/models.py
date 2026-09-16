@@ -111,6 +111,14 @@ class Employee(models.Model):
         choices=EmploymentType.choices,
         default=EmploymentType.FULL_TIME,
     )
+    shift = models.ForeignKey(
+        "attendance.Shift",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employees",
+        help_text="Assigned shift for this employee. Blank defaults to company default shift."
+    )
     reporting_manager = models.CharField(max_length=150, blank=True)
     status = models.CharField(
         max_length=20,

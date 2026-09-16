@@ -33,6 +33,12 @@ type TodayAttendance = {
   status: string;
   status_label: string;
   live_status: string;
+  shift_name?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+  early_checkout_grace_minutes?: number;
+  early_checkout_penalty?: string;
+  early_departure_minutes?: number;
 };
 
 type SecuritySettings = {
@@ -260,6 +266,58 @@ const MyAttendanceClient = () => {
     setError(null);
     setSuccess("");
 
+    if (action === "check-out") {
+      const endTimeStr = today?.shift_end_time || "18:00";
+      const graceMins = Number(today?.early_checkout_grace_minutes ?? 15);
+      const penaltyPolicy = today?.early_checkout_penalty || "HALF_DAY";
+
+      const now = new Date();
+      const [endH, endM] = endTimeStr.split(":").map(Number);
+      const shiftEnd = new Date(now);
+      shiftEnd.setHours(endH, endM, 0, 0);
+
+      const graceCutoff = new Date(shiftEnd.getTime() - graceMins * 60000);
+
+      if (now < graceCutoff) {
+        const diffMs = shiftEnd.getTime() - now.getTime();
+        const diffMinutes = Math.max(1, Math.ceil(diffMs / 60000));
+        const diffHours = (diffMinutes / 60).toFixed(1);
+
+        let penaltyDesc = "";
+        if (penaltyPolicy === "HALF_DAY") {
+          penaltyDesc = "Company policy marks your attendance as Half-Day and deducts 0.5 day's salary for checking out before the grace window.";
+        } else if (penaltyPolicy === "PRO_RATED") {
+          penaltyDesc = `Company policy deducts pro-rated salary for the ${diffMinutes} minutes shortfall (${diffHours} hrs) based on your hourly rate.`;
+        } else {
+          penaltyDesc = "You are checking out before shift completion.";
+        }
+
+        const result = await Swal.fire({
+          title: "Early Check-Out Warning",
+          html: `
+            <div class="text-start">
+              <p class="mb-2">Your shift ends at <strong>${endTimeStr}</strong> (Grace cutoff is <strong>${graceCutoff.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>).</p>
+              <p class="mb-2 text-danger fw-semibold">You are checking out <strong>${diffMinutes} minutes</strong> early.</p>
+              <div class="alert alert-warning py-2 px-3 mb-0" style="font-size: 0.88rem;">
+                <strong>Salary Impact:</strong> ${penaltyDesc}
+              </div>
+            </div>
+          `,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonColor: "#d33",
+          cancelButtonColor: "#6c757d",
+          confirmButtonText: "Yes, Check Out Early",
+          cancelButtonText: "Stay Checked In",
+        });
+
+        if (!result.isConfirmed) {
+          setActionLoading(null);
+          return;
+        }
+      }
+    }
+
     try {
       // Fetch location for both check-in and check-out when geofencing is active
       const locationData = await getLocationIfRequired();
@@ -439,7 +497,7 @@ const MyAttendanceClient = () => {
                   : "Loading current date..."}
               </p>
               <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-2 px-3 py-1.5 rounded-pill fw-semibold">
-                Shift Timing: 10:00 AM - 06:00 PM
+                Shift: {today?.shift_name || "General Shift"} ({today?.shift_start_time || "10:00"} – {today?.shift_end_time || "18:00"})
               </span>
             </div>
             <div className="text-lg-end">
