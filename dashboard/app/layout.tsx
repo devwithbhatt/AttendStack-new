@@ -23,6 +23,9 @@ export const metadata: Metadata = {
     shortcut: "/favicon.png",
     apple: "/favicon.png",
   },
+  verification: {
+    google: "WXgpCm7smrPbuCEaiWjSUBw0P5-NHi7MG_IilJc86t4",
+  },
 };
 
 export default function RootLayout({
@@ -33,6 +36,9 @@ export default function RootLayout({
   return (
     <ClientWrapper>
       <html lang="en" className="expanded" data-scroll-behavior="smooth">
+        <head>
+          <meta name="google-site-verification" content="WXgpCm7smrPbuCEaiWjSUBw0P5-NHi7MG_IilJc86t4" />
+        </head>
         <body className={`${publicSans.variable}`}>
           {children}
           <ToastContainer />
