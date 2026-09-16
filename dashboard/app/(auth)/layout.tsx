@@ -1,18 +1,12 @@
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Authentication | AttendStack",
-  description: "Sign in or register your organization on AttendStack workforce management system.",
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+"use client";
 
 interface AuthLayoutProps {
   children: React.ReactNode;
 }
 
-export default function AuthLayout({ children }: AuthLayoutProps) {
+const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   return <div>{children}</div>;
-}
+};
+
+export default AuthLayout;
+
