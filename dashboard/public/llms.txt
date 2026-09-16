@@ -1,0 +1,44 @@
+# AttendStack
+
+> AttendStack is an enterprise-grade cloud Workforce Management (WFM) and Human Resource Management System (HRMS) platform developed by Bhatt Square Pvt. Ltd. It unifies biometric and GPS geofenced attendance, multi-shift scheduling, leave entitlements, payroll processing, and employee self-service (ESS) into a single operational workspace.
+
+## Core Capabilities & Features
+
+### 1. Attendance & Geofenced Time Tracking
+- Real-time punch-in and punch-out with geofencing radius validation and IP restriction.
+- Automated absent marking on working days with protection for Sundays and configured company holidays.
+- Auto-checkout support for employees who forget to clock out at the end of their shift.
+
+### 2. Multi-Shift Management & Grace Periods
+- Multi-shift scheduling supporting standard day shifts, split shifts, and rotational night shifts.
+- Granular grace periods: configurable late arrival grace (e.g. 15 minutes) and early departure cutoff grace.
+- Automated deduction policies: Pro-rated hourly deduction or Half-Day salary deduction for early checkouts.
+- Minimum working hours thresholds for half-day credit (e.g., 4 hours) and full-day credit (e.g., 8 hours).
+
+### 3. Employee Directory & Profile Lifecycle
+- Full employee lifecycle records from onboarding to offboarding.
+- Department, designation, and reporting manager supervisory hierarchy.
+- Document repository supporting verified identity proofs (PAN card, Aadhaar card, CV, and profile photos).
+- Employment standing status tracking: Active, Provision, On Leave, Notice Period, Inactive, and Terminated.
+
+### 4. Leave Policy & Entitlement Engine
+- Paid leave categories: Casual / Privilege Leave (PL), Sick Leave (SL), Maternity Leave, Paternity Leave, Bereavement Leave, and Marriage Leave.
+- Prorated leave balance calculations based on joining month for first-year employees.
+- Annual entitlement override capabilities for specialized contract employees.
+- Sandwich rule and burger rule automated leave deductions for unapproved absences around weekends or public holidays.
+
+### 5. Payroll, Statutory Compliance & Payslips
+- CTC salary structuring and automated monthly gross calculations.
+- Direct bank deposit records with IFSC and bank account validation.
+- Indian statutory registration tracking: Tax ID / PAN Number, Provident Fund (PF), Universal Account Number (UAN), and ESIC Number.
+- PDF payslip generation and employee compensation breakdown.
+
+### 6. Company Rulebooks & Holidays
+- Organization-wide holiday calendars.
+- Public rulebooks ensuring transparent company attendance and leave guidelines.
+
+## Publisher & Company Information
+- Product Name: AttendStack
+- Developer / Owner: Bhatt Square Pvt. Ltd. (https://bhattsquare.com)
+- Web Platform: https://attendance.nextgenapplication.com
+- Target Audience: Small businesses, high-growth startups, manufacturing units, IT services, and enterprise workforces.

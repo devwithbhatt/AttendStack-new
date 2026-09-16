@@ -15,9 +15,20 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "../marketing-pages.module.css";
 
 export const metadata: Metadata = {
-  title: "About AttendStack | A Product of Bhatt Square Pvt. Ltd.",
+  title: "About AttendStack | Workforce Management by Bhatt Square Pvt. Ltd.",
   description:
-    "Discover AttendStack, a Bhatt Square Pvt. Ltd. workforce management project created to bring clarity to everyday people operations.",
+    "Learn about AttendStack, an enterprise HRMS & workforce platform developed by Bhatt Square Pvt. Ltd. Engineered for automated attendance, shift intelligence, and compliant payroll.",
+  alternates: {
+    canonical: "https://attendance.nextgenapplication.com/about",
+  },
+  openGraph: {
+    title: "About AttendStack | Workforce Management by Bhatt Square Pvt. Ltd.",
+    description:
+      "Enterprise HRMS platform built for modern organizations. Attendance tracking, shift management, and automated Indian payroll.",
+    url: "https://attendance.nextgenapplication.com/about",
+    siteName: "AttendStack",
+    type: "website",
+  },
 };
 
 const principles = [
