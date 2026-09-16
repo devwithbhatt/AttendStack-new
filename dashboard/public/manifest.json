@@ -1,0 +1,25 @@
+{
+  "name": "AttendStack - Modern Workforce Management & HRMS",
+  "short_name": "AttendStack",
+  "description": "Enterprise workforce management, attendance tracking, shift scheduling, and Indian payroll system by Bhatt Square Pvt. Ltd.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -19,9 +19,59 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "AttendStack | Modern Workforce Management",
+  title: "AttendStack | AI-Ready Workforce Management, Attendance & Payroll HRMS",
   description:
-    "Manage attendance, employees, leave, holidays, payroll, and workforce reporting from one clear workspace.",
+    "AttendStack by Bhatt Square Pvt. Ltd. is an all-in-one workforce management system offering smart biometric & GPS attendance, multi-shift scheduling, automated Indian payroll, leave tracking, and employee self-service.",
+  alternates: {
+    canonical: "https://attendance.nextgenapplication.com",
+  },
+  openGraph: {
+    title: "AttendStack | AI-Ready Workforce Management & Automated Payroll",
+    description:
+      "Enterprise attendance tracking, shift grace rules, automated Indian payroll with PF/ESIC deductions, and leave management.",
+    url: "https://attendance.nextgenapplication.com",
+    siteName: "AttendStack",
+    type: "website",
+  },
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is AttendStack?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "AttendStack is a cloud-based workforce management and HRMS software engineered by Bhatt Square Pvt. Ltd. It automates employee attendance tracking, multi-shift scheduling, leave entitlements, and statutory Indian payroll."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does AttendStack support shift grace periods and early checkout penalties?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, AttendStack features customizable work shifts with automated late grace thresholds, half-day calculation, auto-checkout options, and pro-rated salary deductions."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does GPS geofencing and biometric attendance work in AttendStack?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "AttendStack enables verified punch-ins using GPS geofencing coordinates with radius verification, IP whitelisting, and biometric hardware sync to eliminate buddy punching."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is AttendStack payroll compliant with Indian labor laws?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, AttendStack automatically calculates monthly payouts with Indian statutory compliance, including Provident Fund (PF), ESIC, Professional Tax, UAN tracking, and auto-generated digital payslips."
+      }
+    }
+  ]
 };
 
 const capabilities = [
@@ -87,6 +137,10 @@ const workflow = [
 export default function Home() {
   return (
     <main className={styles.home}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <MarketingHeader />
 
       <section className={styles.hero} id="platform">
