@@ -161,6 +161,7 @@ class EarlyCheckoutStatusTests(TestCase):
         settings = SystemSettings.get_settings()
         settings.shift_end_time = "18:00:00"
         settings.late_cutoff_time = "10:15:00"
+        settings.early_checkout_grace_minutes = 120
         settings.sunday_unpaid_rule_enabled = False
         settings.save()
 

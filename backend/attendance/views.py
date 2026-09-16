@@ -26,9 +26,9 @@ from employees.models import (
 )
 from settings.models import SystemSettings
 from .eligibility import attendance_eligible_records
-from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType
+from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType, Shift, EarlyCheckoutPolicy
 from .permissions import IsAdminOrReadOnly
-from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
+from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer, ShiftSerializer
 from .services import (
     auto_mark_absent_employees,
     auto_mark_calendar_days,
@@ -192,7 +192,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def _avatar_url(self, employee):
         if not employee.profile_photo:
             return None
-        return self.request.build_absolute_uri(employee.profile_photo.url)
+        try:
+            return self.request.build_absolute_uri(employee.profile_photo.url)
+        except Exception:
+            return employee.profile_photo.url
 
     def _today_payload(self, employee, record=None):
         today = timezone.localdate()
@@ -202,7 +205,36 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             if employment_status == EmployeeStatus.ON_LEAVE
             else AttendanceStatus.ABSENT
         )
-        default_status_label = "Leave" if default_status == AttendanceStatus.LEAVE else "Absent"
+        effective_shift = (record.shift if record and record.shift else None) or getattr(employee, "shift", None)
+        if not effective_shift:
+            from .models import Shift
+            effective_shift = Shift.get_default_shift(employee.organization)
+
+        SystemSettings = apps.get_model('settings', 'SystemSettings')
+        settings = SystemSettings.get_settings()
+
+        shift_name = effective_shift.name if effective_shift else "General Shift"
+        shift_start_time = (
+            effective_shift.start_time.strftime("%H:%M")
+            if (effective_shift and effective_shift.start_time)
+            else (settings.shift_start_time.strftime("%H:%M") if hasattr(settings.shift_start_time, "strftime") else str(settings.shift_start_time)[:5])
+        )
+        shift_end_time = (
+            effective_shift.end_time.strftime("%H:%M")
+            if (effective_shift and effective_shift.end_time)
+            else (settings.shift_end_time.strftime("%H:%M") if hasattr(settings.shift_end_time, "strftime") else str(settings.shift_end_time)[:5])
+        )
+        early_checkout_grace = (
+            effective_shift.early_checkout_grace_minutes
+            if effective_shift
+            else getattr(settings, "early_checkout_grace_minutes", 15)
+        )
+        early_penalty = (
+            effective_shift.early_checkout_penalty
+            if effective_shift
+            else getattr(settings, "early_checkout_penalty", "HALF_DAY")
+        )
+        early_mins = record.early_departure_minutes if record else 0
         return {
             "employee_uuid": employee.id,
             "employee_id": employee.employee_id,
@@ -216,6 +248,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             "check_in": record.check_in if record else None,
             "check_out": record.check_out if record else None,
             "total_hours": record.total_hours if record else None,
+            "early_departure_minutes": early_mins,
+            "shift_name": shift_name,
+            "shift_start_time": shift_start_time,
+            "shift_end_time": shift_end_time,
+            "early_checkout_grace_minutes": early_checkout_grace,
+            "early_checkout_penalty": early_penalty,
             "status": record.status if record else default_status,
             "status_label": record.get_status_display() if record else default_status_label,
             "live_status": record.live_status if record else default_status_label,
@@ -460,6 +498,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         record.check_in_ip = location_data.get("ip")
         record.check_in_latitude = location_data.get("latitude")
         record.check_in_longitude = location_data.get("longitude")
+        if not record.shift:
+            record.shift = getattr(employee, "shift", None) or Shift.get_default_shift(organization=employee.organization)
         record.refresh_status()
         record.save(auto_refresh_status=False)
 
@@ -485,6 +525,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         record.check_out_ip = location_data.get("ip")
         record.check_out_latitude = location_data.get("latitude")
         record.check_out_longitude = location_data.get("longitude")
+        if not record.shift:
+            record.shift = getattr(employee, "shift", None) or Shift.get_default_shift(organization=employee.organization)
         record.refresh_status()
         record.save(auto_refresh_status=False)
 
@@ -958,3 +1000,54 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance.status = LeaveStatus.REJECTED
             sync_leave_request_attendance(instance)
             instance.delete()
+
+
+class ShiftViewSet(viewsets.ModelViewSet):
+    serializer_class = ShiftSerializer
+    permission_classes = [IsAuthenticated]
+
+    def _organization(self):
+        user = self.request.user
+        emp = getattr(user, "employee_profile", None)
+        if emp and emp.organization:
+            return emp.organization
+        return None
+
+    def get_queryset(self):
+        org = self._organization()
+        qs = Shift.objects.all()
+        if org:
+            qs = qs.filter(organization=org)
+        elif not (self.request.user.is_superuser or getattr(self.request.user, "role", "") == "SUPER_ADMIN"):
+            qs = qs.none()
+        return qs.order_by("-is_default", "name")
+
+    def perform_create(self, serializer):
+        org = self._organization()
+        if serializer.validated_data.get("is_default"):
+            Shift.objects.filter(organization=org, is_default=True).update(is_default=False)
+        serializer.save(organization=org)
+
+    def perform_update(self, serializer):
+        org = self._organization()
+        if serializer.validated_data.get("is_default"):
+            Shift.objects.filter(organization=org, is_default=True).exclude(pk=self.get_object().pk).update(is_default=False)
+        serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="set-default")
+    def set_default(self, request, pk=None):
+        shift = self.get_object()
+        org = shift.organization or self._organization()
+        Shift.objects.filter(organization=org, is_default=True).update(is_default=False)
+        shift.is_default = True
+        shift.save(update_fields=["is_default"])
+        return Response({"status": "success", "message": f"{shift.name} set as default shift."})
+
+    @action(detail=True, methods=["post"], url_path="assign-employees")
+    def assign_employees(self, request, pk=None):
+        shift = self.get_object()
+        employee_ids = request.data.get("employee_ids", [])
+        if not isinstance(employee_ids, list):
+            return Response({"detail": "employee_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+        updated = Employee.objects.filter(id__in=employee_ids).update(shift=shift)
+        return Response({"status": "success", "message": f"Assigned {updated} employees to {shift.name}."})

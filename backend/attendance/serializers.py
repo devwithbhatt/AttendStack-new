@@ -3,8 +3,60 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from employees.models import Employee
-from .models import AttendanceRecord, LeaveRequest, LeaveStatus
+from .models import AttendanceRecord, LeaveRequest, LeaveStatus, Shift, EarlyCheckoutPolicy
 from .services import monthly_leave_limit_error, monthly_leave_limit_snapshot
+
+
+class ShiftSerializer(serializers.ModelSerializer):
+    employee_count = serializers.SerializerMethodField()
+    start_time_display = serializers.SerializerMethodField()
+    end_time_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Shift
+        fields = [
+            "id",
+            "organization",
+            "name",
+            "code",
+            "start_time",
+            "end_time",
+            "start_time_display",
+            "end_time_display",
+            "late_grace_minutes",
+            "early_checkout_grace_minutes",
+            "early_checkout_penalty",
+            "min_hours_half_day",
+            "min_hours_full_day",
+            "is_default",
+            "is_active",
+            "employee_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "employee_count", "created_at", "updated_at"]
+
+    def get_employee_count(self, obj):
+        return obj.employees.count()
+
+    def get_start_time_display(self, obj):
+        if not obj.start_time:
+            return ""
+        if hasattr(obj.start_time, "strftime"):
+            return obj.start_time.strftime("%I:%M %p")
+        return str(obj.start_time)[:5]
+
+    def get_end_time_display(self, obj):
+        if not obj.end_time:
+            return ""
+        if hasattr(obj.end_time, "strftime"):
+            return obj.end_time.strftime("%I:%M %p")
+        return str(obj.end_time)[:5]
+
+    def validate(self, attrs):
+        if "code" in attrs and attrs["code"]:
+            attrs["code"] = attrs["code"].strip().upper()
+        return attrs
 
 
 def parse_time_or_datetime(value, date_val):
@@ -55,6 +107,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     employee_department = serializers.CharField(source="employee.department", read_only=True)
     employee_designation = serializers.CharField(source="employee.designation", read_only=True)
     employee_avatar_url = serializers.SerializerMethodField()
+    shift_name = serializers.CharField(source="shift.name", read_only=True, allow_null=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     live_status = serializers.CharField(read_only=True)
     total_hours = serializers.CharField(read_only=True)
@@ -71,10 +124,13 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "employee_department",
             "employee_designation",
             "employee_avatar_url",
+            "shift",
+            "shift_name",
             "date",
             "check_in",
             "check_out",
             "total_hours",
+            "early_departure_minutes",
             "status",
             "status_label",
             "live_status",
@@ -198,6 +254,12 @@ class TodayAttendanceSerializer(serializers.Serializer):
     status = serializers.CharField()
     status_label = serializers.CharField()
     live_status = serializers.CharField()
+    shift_name = serializers.CharField(allow_null=True, required=False)
+    shift_start_time = serializers.CharField(allow_null=True, required=False)
+    shift_end_time = serializers.CharField(allow_null=True, required=False)
+    early_checkout_grace_minutes = serializers.IntegerField(default=15, required=False)
+    early_checkout_penalty = serializers.CharField(allow_null=True, required=False)
+    early_departure_minutes = serializers.IntegerField(default=0, required=False)
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):

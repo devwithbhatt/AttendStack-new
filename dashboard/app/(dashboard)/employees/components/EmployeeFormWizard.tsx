@@ -38,6 +38,7 @@ export type EmployeeFormData = {
   bankAccountNumber: string;
   ifscCode: string;
   taxId: string;
+  shift?: string;
   overrideIncrementPolicy?: boolean;
   customIncrementMonths?: string;
   customIncrementType?: string;
@@ -73,6 +74,7 @@ export const initialEmployeeFormData: EmployeeFormData = {
   bankAccountNumber: "",
   ifscCode: "",
   taxId: "",
+  shift: "",
   overrideIncrementPolicy: false,
   customIncrementMonths: "12",
   customIncrementType: "PERCENTAGE",
@@ -238,6 +240,7 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
       bank_name: safeTrim(formData.bankName),
       bank_account_number: safeTrim(formData.bankAccountNumber),
       tax_id: safeTrim(formData.taxId).toUpperCase(),
+      shift: safeTrim(formData.shift),
       override_increment_policy: String(Boolean(formData.overrideIncrementPolicy)),
       custom_increment_months: safeTrim(formData.customIncrementMonths),
       custom_increment_type: safeTrim(formData.customIncrementType),

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { EmployeeFormData, EmployeeFormErrors } from "../EmployeeFormWizard";
 
 type StepProps = {
@@ -8,7 +9,40 @@ type StepProps = {
   onChange: <TKey extends keyof EmployeeFormData>(field: TKey, value: EmployeeFormData[TKey]) => void;
 };
 
+type ShiftOption = {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  is_default: boolean;
+};
+
 const Step2_EmploymentDetails = ({ data, errors, onChange }: StepProps) => {
+  const [shifts, setShifts] = useState<ShiftOption[]>([]);
+  const [loadingShifts, setLoadingShifts] = useState(false);
+
+  useEffect(() => {
+    const fetchShifts = async () => {
+      setLoadingShifts(true);
+      try {
+        const token = localStorage.getItem("authToken");
+        const apiEndpoint = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
+        const res = await fetch(`${apiEndpoint}/api/v1/attendance/shifts/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (res.ok) {
+          const list = await res.json();
+          setShifts(Array.isArray(list) ? list : list.results || []);
+        }
+      } catch (e) {
+        console.error("Failed to load shifts in employee wizard", e);
+      } finally {
+        setLoadingShifts(false);
+      }
+    };
+    fetchShifts();
+  }, []);
+
   return (
     <div>
       <div className="row g-3">
@@ -52,6 +86,25 @@ const Step2_EmploymentDetails = ({ data, errors, onChange }: StepProps) => {
         <div className="col-md-6">
           <label htmlFor="reportingManager" className="form-label">Reporting Manager</label>
           <input type="text" className="form-control" id="reportingManager" placeholder="Enter manager's name" value={data.reportingManager} onChange={(event) => onChange("reportingManager", event.target.value)} />
+        </div>
+        <div className="col-md-12">
+          <label htmlFor="shift" className="form-label fw-semibold">Assigned Work Shift</label>
+          <select
+            className="form-select"
+            id="shift"
+            value={data.shift || ""}
+            onChange={(event) => onChange("shift", event.target.value)}
+          >
+            <option value="">Default Company Shift (Auto-assigned)</option>
+            {shifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)}){s.is_default ? " [Company Default]" : ""}
+              </option>
+            ))}
+          </select>
+          <div className="form-text">
+            Choose a custom shift for this employee, or leave as Default to use company standard working hours.
+          </div>
         </div>
       </div>
     </div>

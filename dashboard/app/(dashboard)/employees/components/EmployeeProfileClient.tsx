@@ -24,6 +24,7 @@ import {
   IconCamera,
   IconUpload,
   IconCheck,
+  IconClock,
 } from "@tabler/icons-react";
 
 type Employee = {
@@ -48,6 +49,22 @@ type Employee = {
   designation: string;
   employment_type: string;
   employment_type_label: string;
+  shift?: string | null;
+  shift_name?: string | null;
+  shift_details?: {
+    id?: string | null;
+    is_assigned: boolean;
+    name: string;
+    code: string;
+    start_time: string;
+    end_time: string;
+    late_grace_minutes: number;
+    early_checkout_grace_minutes: number;
+    early_checkout_penalty: string;
+    early_checkout_penalty_label: string;
+    min_hours_half_day: number;
+    min_hours_full_day: number;
+  } | null;
   reporting_manager: string;
   status: "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "NOTICE_PERIOD" | "TERMINATED";
   status_label: string;
@@ -67,6 +84,15 @@ type Employee = {
   esic_number?: string;
   created_at: string;
   updated_at: string;
+};
+
+type ShiftOption = {
+  id: string;
+  name: string;
+  code: string;
+  start_time: string;
+  end_time: string;
+  is_night_shift?: boolean;
 };
 
 type SectionItem = {
@@ -212,6 +238,82 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
+
+  const [availableShifts, setAvailableShifts] = useState<ShiftOption[]>([]);
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const [isSavingShift, setIsSavingShift] = useState(false);
+  const [shiftSuccessMessage, setShiftSuccessMessage] = useState("");
+  const [shiftErrorMessage, setShiftErrorMessage] = useState("");
+
+  useEffect(() => {
+    const loadShifts = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/shifts/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableShifts(Array.isArray(data) ? data : data.results || []);
+        }
+      } catch (err) {
+        console.error("Failed to load shifts:", err);
+      }
+    };
+    loadShifts();
+  }, []);
+
+  const openShiftModal = () => {
+    if (!employee) return;
+    setSelectedShiftId(employee.shift || "");
+    setShiftSuccessMessage("");
+    setShiftErrorMessage("");
+    setIsShiftModalOpen(true);
+  };
+
+  const closeShiftModal = () => {
+    if (isSavingShift) return;
+    setIsShiftModalOpen(false);
+    setShiftSuccessMessage("");
+    setShiftErrorMessage("");
+  };
+
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee) return;
+    setIsSavingShift(true);
+    setShiftSuccessMessage("");
+    setShiftErrorMessage("");
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(`${API_URL}${employee.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ shift: selectedShiftId || null }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.message || "Failed to update work shift.");
+      }
+
+      const updated = (await res.json()) as Employee;
+      setEmployee(updated);
+      setShiftSuccessMessage("Work shift updated successfully!");
+      setTimeout(() => {
+        setIsShiftModalOpen(false);
+      }, 700);
+    } catch (err) {
+      setShiftErrorMessage(err instanceof Error ? err.message : "Unable to update work shift.");
+    } finally {
+      setIsSavingShift(false);
+    }
+  };
 
   useEffect(() => {
     const loadEmployee = async () => {
@@ -456,6 +558,13 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
           { label: "Designation", value: employee.designation, icon: <IconBriefcase size={18} /> },
           { label: "Company", value: "Bhatt Square Pvt Ltd", icon: <IconBriefcase size={18} /> },
           { label: "Employment Type", value: employee.employment_type_label || employee.employment_type, icon: <IconUsers size={18} /> },
+          {
+            label: "Work Shift",
+            value: employee.shift_details?.name
+              ? `${employee.shift_details.name} (${employee.shift ? "Custom Assigned" : "Company Default"})`
+              : (employee.shift_name ? `${employee.shift_name} (Custom Assigned)` : "Default Company Shift"),
+            icon: <IconClock size={18} />
+          },
           { label: "Reporting Manager", value: employee.reporting_manager, icon: <IconUser size={18} /> },
           { label: "Login Account", value: employee.account_exists ? "Created" : "Not created", icon: <IconShieldCheck size={18} /> },
           ...(employee.status_end_date ? [
@@ -546,6 +655,10 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                 <span className={`badge ${statusBadgeClass[employee.status] || "bg-secondary-subtle text-secondary"}`}>
                   {employee.status_label}
                 </span>
+                <span className="badge bg-light text-dark border d-inline-flex align-items-center gap-1.5 py-1.5 px-2.5" style={{ fontSize: "13px", fontWeight: 500 }}>
+                  <IconClock size={14} className="text-primary" />
+                  {employee.shift_details?.name || employee.shift_name || "Default Shift"}
+                </span>
               </div>
               <p className="text-secondary mb-2">{employee.designation} - {employee.department}</p>
               <div className="d-flex flex-wrap gap-3 text-secondary small">
@@ -555,13 +668,24 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-outline-primary d-inline-flex align-items-center gap-2 align-self-start align-self-md-center mt-2 mt-md-0"
-            onClick={openEditModal}
-          >
-            <IconEdit size={16} /> Edit Profile
-          </button>
+          <div className="d-flex align-items-center gap-2 align-self-start align-self-md-center mt-2 mt-md-0">
+            {!isMe && (
+              <button
+                type="button"
+                className="btn btn-primary d-inline-flex align-items-center gap-2"
+                onClick={openShiftModal}
+              >
+                <IconClock size={16} /> Change Shift
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-outline-primary d-inline-flex align-items-center gap-2"
+              onClick={openEditModal}
+            >
+              <IconEdit size={16} /> Edit Profile
+            </button>
+          </div>
         </div>
       </div>
 
@@ -626,9 +750,110 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
         </div>
       </section>
 
-      {sections.map((section) => (
-        <InfoSection key={section.title} {...section} />
-      ))}
+      {sections.map((section) => {
+        if (section.title === "Salary & Bank") {
+          return (
+            <div key="work-shift-and-salary">
+              {/* Work Shift & Schedule Card */}
+              <section className="employee-profile-section mb-4">
+                <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+                  <div>
+                    <div className="d-flex align-items-center gap-2">
+                      <h5 className="mb-0">Work Shift & Schedule</h5>
+                      <span className={`badge ${employee.shift ? "bg-primary-subtle text-primary" : "bg-secondary-subtle text-secondary"}`}>
+                        {employee.shift ? "Custom Assigned Shift" : "Company Default Shift"}
+                      </span>
+                    </div>
+                    <p className="text-secondary small mb-0 mt-1">
+                      Configured work hours, late arrival grace period, and early departure salary deduction policies.
+                    </p>
+                  </div>
+                  {!isMe && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2"
+                      onClick={openShiftModal}
+                    >
+                      <IconClock size={16} /> Change Shift
+                    </button>
+                  )}
+                </div>
+
+                <div className="row g-3">
+                  <div className="col-md-6 col-xl-4">
+                    <div className="employee-info-item">
+                      <div className="employee-info-icon"><IconClock size={18} className="text-primary" /></div>
+                      <div>
+                        <div className="employee-info-label">Assigned Shift</div>
+                        <div className="employee-info-value">
+                          {employee.shift_details?.name || employee.shift_name || "General Shift"}
+                          {employee.shift_details?.code ? ` (${employee.shift_details.code})` : ""}
+                        </div>
+                        <div className="small text-muted">{employee.shift ? "Custom shift assigned" : "Company default shift"}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-xl-4">
+                    <div className="employee-info-item">
+                      <div className="employee-info-icon"><IconCalendar size={18} className="text-primary" /></div>
+                      <div>
+                        <div className="employee-info-label">Working Hours</div>
+                        <div className="employee-info-value">
+                          {employee.shift_details?.start_time || "10:00"} - {employee.shift_details?.end_time || "18:00"}
+                        </div>
+                        <div className="small text-muted">Daily expected operating hours</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-xl-4">
+                    <div className="employee-info-item">
+                      <div className="employee-info-icon"><IconClock size={18} className="text-primary" /></div>
+                      <div>
+                        <div className="employee-info-label">Late Arrival Grace</div>
+                        <div className="employee-info-value">
+                          {employee.shift_details?.late_grace_minutes ?? 15} Minutes
+                        </div>
+                        <div className="small text-muted">Permitted grace before late entry mark</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-xl-4">
+                    <div className="employee-info-item">
+                      <div className="employee-info-icon"><IconAlertCircle size={18} className="text-warning" /></div>
+                      <div>
+                        <div className="employee-info-label">Early Checkout Rule</div>
+                        <div className="employee-info-value">
+                          {employee.shift_details?.early_checkout_grace_minutes ?? 15} Mins Grace
+                        </div>
+                        <div className="small text-muted">Penalty: {employee.shift_details?.early_checkout_penalty_label || (employee.shift_details?.early_checkout_penalty === "PRO_RATED" ? "Pro-Rated Salary Deduction" : "Half Day Deduction")}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-xl-4">
+                    <div className="employee-info-item">
+                      <div className="employee-info-icon"><IconFileText size={18} className="text-primary" /></div>
+                      <div>
+                        <div className="employee-info-label">Minimum Daily Hours</div>
+                        <div className="employee-info-value">
+                          Half: {employee.shift_details?.min_hours_half_day ?? 4}h • Full: {employee.shift_details?.min_hours_full_day ?? 8}h
+                        </div>
+                        <div className="small text-muted">Required working time for attendance credit</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <InfoSection key={section.title} {...section} />
+            </div>
+          );
+        }
+        return <InfoSection key={section.title} {...section} />;
+      })}
 
       {leavePolicy && (
         <section className="employee-profile-section" id="leave-entitlement">
@@ -932,6 +1157,73 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                   <IconCheck size={18} />
                   <span>Save Changes</span>
                 </>
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* Assign Work Shift Modal */}
+      <Modal show={isShiftModalOpen} onHide={closeShiftModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="d-flex align-items-center gap-2">
+            <IconClock size={20} className="text-primary" />
+            Assign Work Shift
+          </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSaveShift}>
+          <Modal.Body>
+            {shiftErrorMessage && (
+              <div className="alert alert-danger mb-3 py-2 small">{shiftErrorMessage}</div>
+            )}
+            {shiftSuccessMessage && (
+              <div className="alert alert-success mb-3 py-2 small">{shiftSuccessMessage}</div>
+            )}
+
+            <div className="d-flex align-items-center gap-3 p-3 bg-light rounded-3 mb-3 border">
+              <img
+                src={employee?.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                alt={employee?.full_name || "Employee"}
+                className="rounded-circle flex-shrink-0"
+                style={{ width: "42px", height: "42px", objectFit: "cover" }}
+              />
+              <div className="min-w-0">
+                <div className="fw-semibold text-dark">{employee?.full_name}</div>
+                <div className="text-muted small">{employee?.employee_id} • {employee?.designation || employee?.department || "Employee"}</div>
+              </div>
+            </div>
+
+            <Form.Group className="mb-3" controlId="profileWorkShiftSelect">
+              <Form.Label className="fw-semibold">Select Work Shift</Form.Label>
+              <Form.Select
+                value={selectedShiftId}
+                onChange={(e) => setSelectedShiftId(e.target.value)}
+              >
+                <option value="">Default Company Shift (Standard Hours)</option>
+                {availableShifts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)})
+                    {s.is_night_shift ? " 🌙 Night Shift" : ""}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-muted small mt-1.5 d-block">
+                Assigned shift determines expected check-in/check-out times, grace period, and early departure salary deduction rules.
+              </Form.Text>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeShiftModal} disabled={isSavingShift}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={isSavingShift} className="d-flex align-items-center gap-2">
+              {isSavingShift ? (
+                <>
+                  <Spinner size="sm" />
+                  Saving...
+                </>
+              ) : (
+                "Save Shift Assignment"
               )}
             </Button>
           </Modal.Footer>
