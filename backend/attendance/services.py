@@ -41,6 +41,31 @@ MONTHLY_LEAVE_LIMIT_FIELDS = {
     LeaveType.SICK: "sick_leave_monthly_limit",
 }
 
+def get_first_eligible_leave_month(joining_date: date | None, year: int) -> int:
+    """Return the 1-based index of the first month in `year` that the employee is eligible for leave.
+
+    - Prior years: eligible from month 1 (January).
+    - Future years: not eligible in this year (returns 13).
+    - Joining year:
+        * If joining on or before the 15th of the month, that month counts as eligible.
+        * If joining after the 15th of the month, eligibility begins the following month.
+    """
+    if not joining_date or joining_date.year < year:
+        return 1
+    if joining_date.year > year:
+        return 13
+    return joining_date.month if joining_date.day <= 15 else joining_date.month + 1
+
+
+def get_eligible_leave_months(joining_date: date | None, year: int) -> int:
+    """Return the number of eligible leave months in `year` (0 to 12)."""
+    if not joining_date or joining_date.year < year:
+        return 12
+    if joining_date.year > year:
+        return 0
+    first_month = get_first_eligible_leave_month(joining_date, year)
+    return max(0, 13 - first_month)
+
 
 def leave_allocation(
     settings: SystemSettings,
@@ -58,14 +83,21 @@ def leave_allocation(
         LeaveType.SICK: "sick_leave_days_override",
     }.get(leave_type)
     override = getattr(employee, override_field, None) if employee and override_field else None
-    annual = Decimal(str(override if override is not None else max(getattr(settings, field_name, 0), 0)))
 
-    if not employee or year is None or employee.joining_date.year < year:
+    # If admin explicitly set custom leaves for this employee, use that exact number
+    if override is not None:
+        return Decimal(str(override))
+
+    annual = Decimal(str(max(getattr(settings, field_name, 0), 0)))
+
+    if not employee or year is None or not employee.joining_date:
+        return annual
+    if employee.joining_date.year < year:
         return annual
     if employee.joining_date.year > year:
         return Decimal("0")
 
-    eligible_months = 13 - employee.joining_date.month
+    eligible_months = get_eligible_leave_months(employee.joining_date, year)
     # Leave is consumed in half-day units, so keep prorated entitlements usable and deterministic.
     return (annual * Decimal(eligible_months) / Decimal("12") * Decimal("2")).quantize(
         Decimal("1"), rounding=ROUND_DOWN
@@ -78,32 +110,35 @@ def earned_leave_allocation(
     employee: Employee,
     as_of_date: date,
 ) -> Decimal:
-    """Return leave earned by a date; Casual and Sick Leave accrue monthly.
+    """Return leave earned by a date.
 
-    The joining month is the first credited month. This prevents employees from
-    spending future months' entitlement while allowing unused credits to build
-    up through the calendar year.
+    If an admin has entered a custom leave override for this employee, that exact
+    number of days is assigned and available directly. Otherwise, Casual and Sick
+    Leave accrue monthly based on company policy.
     """
+    override_field = {
+        LeaveType.CASUAL: "casual_leave_days_override",
+        LeaveType.SICK: "sick_leave_days_override",
+    }.get(leave_type)
+    override = getattr(employee, override_field, None) if override_field else None
+    if override is not None:
+        return Decimal(str(override))
+
     annual_entitlement = leave_allocation(settings, leave_type, employee, as_of_date.year)
     if leave_type not in {LeaveType.CASUAL, LeaveType.SICK}:
         return annual_entitlement
-    if as_of_date < employee.joining_date:
+    if not employee.joining_date or as_of_date < employee.joining_date:
         return Decimal("0")
 
-    first_eligible_month = employee.joining_date.month if employee.joining_date.year == as_of_date.year else 1
+    first_eligible_month = get_first_eligible_leave_month(employee.joining_date, as_of_date.year)
     credited_months = as_of_date.month - first_eligible_month + 1
     if credited_months <= 0:
         return Decimal("0")
 
     # Accrue from the underlying annual policy so a 12-day policy earns one
-    # day per month and employee overrides follow the same schedule.
+    # day per month.
     field_name = LEAVE_ALLOCATION_FIELDS[leave_type]
-    override_field = {
-        LeaveType.CASUAL: "casual_leave_days_override",
-        LeaveType.SICK: "sick_leave_days_override",
-    }[leave_type]
-    override = getattr(employee, override_field, None)
-    annual_policy = Decimal(str(override if override is not None else max(getattr(settings, field_name, 0), 0)))
+    annual_policy = Decimal(str(max(getattr(settings, field_name, 0), 0)))
     earned = annual_policy * Decimal(credited_months) / Decimal("12")
     earned = (earned * Decimal("2")).quantize(Decimal("1"), rounding=ROUND_DOWN) / Decimal("2")
     return min(earned, annual_entitlement)
@@ -208,7 +243,16 @@ def monthly_leave_limit_error(snapshot: dict, leave_type_label: str) -> str | No
 
 def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
     """Apply each annual leave allocation independently and chronologically."""
+    """Apply each annual leave allocation independently and chronologically.
+
+    Each leave-attendance record is evaluated against the accrual earned *as of
+    today*, not as of the record's own date.  This means a day that was unpaid
+    because the employee had not yet accrued enough leave will be retroactively
+    flipped to paid once sufficient months have elapsed and this function is
+    called again (either by a leave action or by the monthly Celery Beat task).
+    """
     settings = SystemSettings.get_settings()
+    today = timezone.localdate()
 
     for leave_type in LEAVE_ALLOCATION_FIELDS:
         paid_used = Decimal("0")
@@ -223,6 +267,10 @@ def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
             request = record.leave_request
             units = leave_units(request)
             paid_allowance = earned_leave_allocation(settings, leave_type, employee, record.date)
+            # Use today's accrual (not record.date) so that past days which were
+            # unpaid due to insufficient balance become paid once the employee
+            # earns more leave in subsequent months.
+            paid_allowance = earned_leave_allocation(settings, leave_type, employee, today)
             should_be_paid = paid_used + units <= paid_allowance
             if should_be_paid:
                 paid_used += units

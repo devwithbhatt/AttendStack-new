@@ -1302,8 +1302,9 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                 <div>
                   <h5 className="mb-1 fw-bold">Paid Leave Entitlement ({leavePolicy.year})</h5>
                   <p className="text-secondary mb-0 small">
-                    Balances based on company policy
-                    {leavePolicy.is_prorated ? `, prorated across ${leavePolicy.eligible_months} eligible months from the joining month.` : "."}
+                    {leavePolicy.casual_leave_days_override !== null || leavePolicy.sick_leave_days_override !== null
+                      ? "Custom leave allocation assigned for this employee."
+                      : `Balances based on company policy${leavePolicy.is_prorated ? `, prorated across ${leavePolicy.eligible_months} eligible months from joining.` : "."}`}
                   </p>
                 </div>
                 {!isMe && (
@@ -1311,18 +1312,21 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                     className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1.5 fw-semibold"
                     onClick={() => setIsEditingLeavePolicy(!isEditingLeavePolicy)}
                   >
-                    <IconEdit size={16} /> {isEditingLeavePolicy ? "Cancel" : "Edit Entitlement Overrides"}
+                    <IconEdit size={16} /> {isEditingLeavePolicy ? "Cancel" : "Edit Leaves"}
                   </button>
                 )}
               </div>
 
               {isEditingLeavePolicy && (
-                <div className="p-3 bg-light rounded-3 border mb-4">
-                  <h6 className="fw-bold mb-2">Override Annual Entitlement Days</h6>
+                <div className="p-4 bg-light rounded-3 border mb-4">
+                  <h6 className="fw-bold mb-1">Edit Employee Leave Days</h6>
+                  <p className="text-muted small mb-3">
+                    Enter the total number of leave days to grant this employee. Leave blank to follow company default policy.
+                  </p>
                   {leavePolicyError && <div className="alert alert-danger py-2 small mb-3">{leavePolicyError}</div>}
                   <div className="row g-3 align-items-end">
                     <div className="col-md-5">
-                      <label className="form-label small fw-semibold">Annual Casual / PL Override</label>
+                      <label className="form-label small fw-semibold">Casual Leave (Days)</label>
                       <input
                         type="number"
                         min="0"
@@ -1333,10 +1337,10 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                         onChange={(e) => setCasualOverride(e.target.value)}
                         placeholder={`Company default: ${leavePolicy.company_casual_leave_days}`}
                       />
-                      <div className="form-text small">Leave blank to follow default policy.</div>
+                      <div className="form-text small">Enter new leave days or leave blank for default.</div>
                     </div>
                     <div className="col-md-5">
-                      <label className="form-label small fw-semibold">Annual Sick Leave Override</label>
+                      <label className="form-label small fw-semibold">Sick Leave (Days)</label>
                       <input
                         type="number"
                         min="0"
@@ -1347,11 +1351,11 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                         onChange={(e) => setSickOverride(e.target.value)}
                         placeholder={`Company default: ${leavePolicy.company_sick_leave_days}`}
                       />
-                      <div className="form-text small">Leave blank to follow default policy.</div>
+                      <div className="form-text small">Enter new leave days or leave blank for default.</div>
                     </div>
                     <div className="col-md-2">
-                      <button className="btn btn-primary w-100" onClick={saveLeavePolicy} disabled={isSavingLeavePolicy}>
-                        {isSavingLeavePolicy ? "Saving..." : "Save Override"}
+                      <button className="btn btn-primary w-100 fw-semibold" onClick={saveLeavePolicy} disabled={isSavingLeavePolicy}>
+                        {isSavingLeavePolicy ? "Saving..." : "Save Leaves"}
                       </button>
                     </div>
                   </div>

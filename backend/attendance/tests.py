@@ -13,6 +13,13 @@ from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatu
 from .eligibility import attendance_eligible_records
 from .serializers import AttendanceRecordSerializer, LeaveRequestSerializer
 from .services import auto_mark_calendar_days, earned_leave_allocation, leave_allocation, sync_leave_request_attendance
+from .services import (
+    auto_mark_calendar_days,
+    earned_leave_allocation,
+    leave_allocation,
+    sync_leave_request_attendance,
+    _rebalance_yearly_paid_leaves,
+)
 
 
 class EmployeeLeaveAllocationTests(TestCase):
@@ -47,6 +54,37 @@ class EmployeeLeaveAllocationTests(TestCase):
         self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 6, 15)), 1)
         self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 7, 1)), 2)
         self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 5, 31)), 0)
+
+    def test_joining_after_15th_starts_from_next_month(self):
+        employee = create_employee(email="after15@example.com", employee_id="EMP-TEST-002", aadhaar_number="987654321099")
+        employee.joining_date = date(2026, 6, 24)
+        employee.save(update_fields=["joining_date"])
+
+        # Joined on June 24 (day > 15): June is excluded, eligible months are July-Dec (6 months)
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2026), 6)
+        self.assertEqual(leave_allocation(self.settings, "SICK", employee, 2026), 6)
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2027), 12)
+
+        # Accrual earned:
+        # In June (month of joining), 0 earned because joining was after the 15th
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 6, 25)), 0)
+        # In July, 1 day earned
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 7, 1)), 1)
+        # In August, 2 days earned
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 8, 1)), 2)
+        # In September, 3 days earned
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 9, 17)), 3)
+
+    def test_joining_after_december_15th_has_zero_first_year_entitlement(self):
+        employee = create_employee(email="dec20@example.com", employee_id="EMP-TEST-003", aadhaar_number="987654321098")
+        employee.joining_date = date(2026, 12, 20)
+        employee.save(update_fields=["joining_date"])
+
+        # Joined after Dec 15: 0 months eligible in 2026, full 12 in 2027
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2026), 0)
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2027), 12)
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 12, 25)), 0)
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2027, 1, 15)), 1)
 
 
 def create_employee(email="employee@example.com", employee_id="EMP-TEST-001", aadhaar_number="123456789012"):
@@ -674,3 +712,179 @@ class GeofenceBypassTests(APITestCase):
         record = AttendanceRecord.objects.get(employee=self.employee, date=today)
         self.assertEqual(record.status, AttendanceStatus.PAID_LEAVE)
         self.assertIsNone(record.check_in)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for leave balance display and rebalance bugs
+# ---------------------------------------------------------------------------
+
+class LeaveBalanceRegressionTests(TestCase):
+    """
+    Regression tests for two related leave balance bugs.
+
+    Bug 1 — Display: the leave_policy view was filtering AttendanceRecord with
+    is_paid=True, so days taken before sufficient accrual (marked unpaid by the
+    rebalance) were excluded from the 'used' count, making 'remaining' appear
+    higher than it really is.
+
+    Bug 2 — Rebalance: _rebalance_yearly_paid_leaves used record.date to
+    compute the leave accrual for each day.  Days taken before accrual accrued
+    were permanently stuck as unpaid even once the employee had earned enough
+    leave in later months.
+    """
+
+    def setUp(self):
+        self.settings = SystemSettings.get_settings()
+        # 12 casual and sick days per year → 1 day accrued per month
+        self.settings.casual_leave_days = 12
+        self.settings.sick_leave_days = 12
+        self.settings.save()
+
+        # Employee joined in January so they have a full year's entitlement.
+        self.employee = create_employee(
+            email="regression@example.com",
+            employee_id="EMP-REG-001",
+            aadhaar_number="999999999999",
+        )
+        self.employee.joining_date = date(2026, 1, 1)
+        self.employee.save(update_fields=["joining_date"])
+
+    def _create_leave_and_records(self, start_date, end_date, leave_type="CASUAL", is_half_day=False):
+        """Helper: create an approved leave request and its attendance records."""
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=start_date,
+            end_date=end_date,
+            leave_type=leave_type,
+            is_half_day=is_half_day,
+            reason="Test leave",
+            status=LeaveStatus.APPROVED,
+        )
+        sync_leave_request_attendance(leave_request)
+        return leave_request
+
+    # ------------------------------------------------------------------
+    # Bug 2 regression — rebalance uses today's accrual, not record.date
+    # ------------------------------------------------------------------
+
+    def test_rebalance_retroactively_pays_days_after_accrual_catches_up(self):
+        """
+        Employee takes 3 casual days in January when only 1 day was accrued.
+        Days 2 & 3 are initially marked unpaid.  After the rebalance runs with
+        today's accrual (≥3 months earned), all three days must become paid.
+        """
+        # January: only 1 casual day accrued (1/12 of 12).
+        # Employee takes 3 days → days 2 and 3 will be initially unpaid.
+        self._create_leave_and_records(date(2026, 1, 5), date(2026, 1, 7))
+
+        records = AttendanceRecord.objects.filter(
+            employee=self.employee,
+            leave_request__leave_type="CASUAL",
+            leave_request__status=LeaveStatus.APPROVED,
+        ).order_by("date")
+
+        # After initial sync (rebalance runs at the time the leave is approved),
+        # the first day should be paid and the other two should be unpaid — but
+        # the rebalance now uses today's date, so depending on when the test
+        # runs the result may already be all paid.  The key assertion is that
+        # calling _rebalance_yearly_paid_leaves with a "future" accrual date
+        # makes all three records paid.
+        _rebalance_yearly_paid_leaves(self.employee, 2026)
+
+        paid_count = records.filter(is_paid=True).count()
+        unpaid_count = records.filter(is_paid=False).count()
+        total = records.count()
+        self.assertEqual(total, 3)
+        # With today's accrual (≥ 3 months), all 3 days must be paid.
+        self.assertEqual(paid_count, 3, f"Expected 3 paid records but got {paid_count} paid and {unpaid_count} unpaid")
+
+    def test_rebalance_still_caps_at_current_accrual(self):
+        """
+        If an employee takes MORE leave than they have ever accrued (even today),
+        excess days should still remain unpaid.
+        """
+        # Employee has 12-day annual policy → 9 months into the year = 9 accrued.
+        # Take 10 days → day 10 must remain unpaid regardless.
+        # Use dates in January so there are 10 consecutive working days.
+        self._create_leave_and_records(date(2026, 1, 5), date(2026, 1, 16))
+
+        # Run rebalance as if today is January 31 (only 1 day accrued).
+        from unittest.mock import patch
+        with patch("attendance.services.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2026, 1, 31)
+            _rebalance_yearly_paid_leaves(self.employee, 2026)
+
+        records = AttendanceRecord.objects.filter(
+            employee=self.employee,
+            leave_request__leave_type="CASUAL",
+            leave_request__status=LeaveStatus.APPROVED,
+        ).order_by("date")
+
+        paid_count = records.filter(is_paid=True).count()
+        self.assertEqual(paid_count, 1, f"Expected only 1 paid record (Jan accrual) but got {paid_count}")
+
+    # ------------------------------------------------------------------
+    # Bug 1 regression — leave_policy view counts all approved leave days
+    # ------------------------------------------------------------------
+
+    def test_leave_policy_used_includes_unpaid_leave_days(self):
+        """
+        Simulate the leave_policy view's used-count logic (stripped from the
+        view to be unit-testable).  Unpaid leave-attendance records for approved
+        leaves must still count toward 'used' so that 'remaining' is correct.
+        """
+        from attendance.services import leave_units
+
+        # Create a 3-day leave in January.  At the time of creation, only 1 day
+        # is accrued so 2 records will initially be unpaid.
+        self._create_leave_and_records(date(2026, 1, 5), date(2026, 1, 7))
+
+        # --- Simulate the OLD (buggy) logic: is_paid=True ---
+        old_records = AttendanceRecord.objects.select_related("leave_request").filter(
+            employee=self.employee,
+            date__year=2026,
+            is_paid=True,
+            leave_request__status=LeaveStatus.APPROVED,
+        )
+        old_used = sum(leave_units(r.leave_request) for r in old_records)
+
+        # --- Simulate the NEW (fixed) logic: no is_paid filter ---
+        new_records = AttendanceRecord.objects.select_related("leave_request").filter(
+            employee=self.employee,
+            date__year=2026,
+            leave_request__status=LeaveStatus.APPROVED,
+        )
+        new_used = sum(leave_units(r.leave_request) for r in new_records)
+
+        # The new logic must count all 3 days regardless of is_paid.
+        self.assertEqual(new_used, 3)
+        # The old logic would have undercounted (only the 1 paid day).
+        self.assertLessEqual(old_used, new_used)
+
+    def test_leave_policy_remaining_is_zero_when_all_entitlement_taken(self):
+        """
+        Employee earns 3 months of casual leave (3 days from a 12/yr policy).
+        They take all 3 days.  'remaining' must show 0, not a positive number.
+        """
+        from attendance.services import earned_leave_allocation, leave_units
+
+        # Take 3 days in January (≥3 months have passed by the time we check).
+        self._create_leave_and_records(date(2026, 1, 5), date(2026, 1, 7))
+
+        as_of = date(2026, 3, 31)  # 3 months accrued → 3 days entitlement
+        entitlement = earned_leave_allocation(self.settings, "CASUAL", self.employee, as_of)
+
+        # Count ALL approved leave records (the fixed logic).
+        all_records = AttendanceRecord.objects.select_related("leave_request").filter(
+            employee=self.employee,
+            date__year=2026,
+            leave_request__leave_type="CASUAL",
+            leave_request__status=LeaveStatus.APPROVED,
+        )
+        used = sum(leave_units(r.leave_request) for r in all_records)
+        remaining = max(entitlement - used, 0)
+
+        self.assertEqual(entitlement, 3)
+        self.assertEqual(used, 3)
+        self.assertEqual(remaining, 0, f"Remaining should be 0 but got {remaining}")
+

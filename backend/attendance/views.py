@@ -33,6 +33,7 @@ from .services import (
     auto_mark_absent_employees,
     auto_mark_calendar_days,
     earned_leave_allocation,
+    get_eligible_leave_months,
     leave_allocation,
     leave_units,
     monthly_leave_limit_error,
@@ -677,10 +678,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 "entitlement": float(entitlement), "used": float(used),
                 "remaining": float(max(entitlement - used, Decimal("0"))),
             })
+        eligible_months = get_eligible_leave_months(employee.joining_date, year)
         return Response({
             "year": year,
-            "is_prorated": employee.joining_date.year == year,
-            "eligible_months": 13 - employee.joining_date.month if employee.joining_date.year == year else 12,
+            "is_prorated": employee.joining_date.year == year and eligible_months < 12,
+            "eligible_months": eligible_months,
             "balances": balances,
         })
 

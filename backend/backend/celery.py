@@ -20,6 +20,13 @@ app.conf.beat_schedule = {
         'task': 'attendance.tasks.mark_absent_employees_task',
         'schedule': crontab(hour=7, minute=0),  # Every day at 7 AM
     },
+    # Re-evaluate paid/unpaid leave status for all employees on the 1st of each
+    # month.  As monthly accrual ticks over, days that were previously unpaid
+    # (taken before sufficient balance was earned) should become paid.
+    'monthly-rebalance-paid-leave': {
+        'task': 'attendance.tasks.monthly_rebalance_leave_task',
+        'schedule': crontab(hour=2, minute=0, day_of_month=1),  # 1st of each month at 2 AM
+    },
 }
 
 @app.task(bind=True)

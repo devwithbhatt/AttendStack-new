@@ -182,21 +182,28 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         from attendance.models import AttendanceRecord, LeaveRequest, LeaveStatus, LeaveType
         from attendance.serializers import LeaveRequestSerializer
-        from attendance.services import earned_leave_allocation, leave_units
+        from attendance.services import (
+            earned_leave_allocation,
+            get_eligible_leave_months,
+            leave_units,
+        )
         from settings.models import SystemSettings
 
         year = timezone.localdate().year
         settings = SystemSettings.get_settings()
+        # Count ALL approved leave-attendance records (paid and unpaid) as consumed
+        # entitlement. Days taken before they were accrued are marked is_paid=False
+        # by the rebalance, but the employee already spent those leave days — they
+        # must not appear as "remaining" on the balance card.
         records = AttendanceRecord.objects.select_related("leave_request").filter(
             employee=employee,
             date__year=year,
-            is_paid=True,
             leave_request__status=LeaveStatus.APPROVED,
         )
         used_by_type = {}
         for record in records:
-            leave_type = record.leave_request.leave_type
-            used_by_type[leave_type] = used_by_type.get(leave_type, 0) + leave_units(record.leave_request)
+            lt = record.leave_request.leave_type
+            used_by_type[lt] = used_by_type.get(lt, 0) + leave_units(record.leave_request)
 
         balances = []
         for leave_type, label in LeaveType.choices:
@@ -210,12 +217,18 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 "remaining": float(max(entitlement - used, 0)),
             })
 
+        eligible_months = get_eligible_leave_months(employee.joining_date, year)
         requests = LeaveRequest.objects.filter(employee=employee).order_by("-created_at")
         return Response({
             "year": year,
             "joining_date": employee.joining_date,
-            "is_prorated": employee.joining_date.year == year,
-            "eligible_months": 13 - employee.joining_date.month if employee.joining_date.year == year else 12,
+            "is_prorated": (
+                employee.joining_date.year == year
+                and eligible_months < 12
+                and employee.casual_leave_days_override is None
+                and employee.sick_leave_days_override is None
+            ),
+            "eligible_months": eligible_months,
             "casual_leave_days_override": employee.casual_leave_days_override,
             "sick_leave_days_override": employee.sick_leave_days_override,
             "company_casual_leave_days": settings.casual_leave_days,
