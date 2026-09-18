@@ -125,8 +125,28 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
 
         if record.status == AttendanceStatus.PRESENT:
             summary["present"] += 1
+            if record.early_departure_minutes > 0:
+                shift_hours = Decimal("8.0")
+                if record.shift and record.shift.min_hours_full_day:
+                    shift_hours = Decimal(str(record.shift.min_hours_full_day))
+                hourly_rate = per_day_salary / shift_hours if shift_hours > 0 else Decimal("0")
+                shortfall_hours = Decimal(str(record.early_departure_minutes)) / Decimal("60")
+                early_deduction = money(shortfall_hours * hourly_rate)
+                if early_deduction > 0:
+                    attendance_deductions += early_deduction
+                    deduction_details["Early Departure"] = deduction_details.get("Early Departure", Decimal("0")) + early_deduction
         elif record.status == AttendanceStatus.LATE:
             summary["late"] += 1
+            if record.early_departure_minutes > 0:
+                shift_hours = Decimal("8.0")
+                if record.shift and record.shift.min_hours_full_day:
+                    shift_hours = Decimal(str(record.shift.min_hours_full_day))
+                hourly_rate = per_day_salary / shift_hours if shift_hours > 0 else Decimal("0")
+                shortfall_hours = Decimal(str(record.early_departure_minutes)) / Decimal("60")
+                early_deduction = money(shortfall_hours * hourly_rate)
+                if early_deduction > 0:
+                    attendance_deductions += early_deduction
+                    deduction_details["Early Departure"] = deduction_details.get("Early Departure", Decimal("0")) + early_deduction
         elif record.status == AttendanceStatus.ABSENT:
             summary["absent"] += 1
             unpaid_days += Decimal("1")

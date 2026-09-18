@@ -11,6 +11,32 @@ class SystemSettings(models.Model):
     shift_end_time = models.TimeField(default="18:00:00")
     auto_checkout_enabled = models.BooleanField(default=True)
     auto_checkout_time = models.TimeField(default="20:00:00")
+    early_checkout_grace_minutes = models.PositiveIntegerField(
+        default=15,
+        help_text="Minutes before shift end allowed without early checkout penalty."
+    )
+    early_checkout_penalty = models.CharField(
+        max_length=20,
+        default="HALF_DAY",
+        choices=[
+            ("HALF_DAY", "Half Day"),
+            ("PRO_RATED", "Pro-rated Hourly Deduction"),
+            ("NONE", "No Penalty"),
+        ],
+        help_text="Policy for early checkout before grace period."
+    )
+    min_hours_half_day = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=4.00,
+        help_text="Minimum working hours required for half-day."
+    )
+    min_hours_full_day = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=8.00,
+        help_text="Minimum working hours required for full-day."
+    )
     
     # Security Settings
     ip_restriction_enabled = models.BooleanField(default=False)
@@ -145,7 +171,7 @@ class SystemSettings(models.Model):
         super().save(*args, **kwargs)
 
     @classmethod
-    def get_settings(cls):
+    def get_settings(cls, organization=None):
         """Get the singleton instance, create if it doesn't exist"""
         settings, created = cls.objects.get_or_create(pk=1)
         return settings

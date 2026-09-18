@@ -105,6 +105,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
     account_exists = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     status_effective_date = serializers.SerializerMethodField()
+    shift_name = serializers.CharField(source="shift.name", read_only=True, allow_null=True)
     auto_transition_status_label = serializers.CharField(
         source="get_auto_transition_status_display", read_only=True, allow_null=True
     )
@@ -128,6 +129,8 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             "auto_transition_status",
             "auto_transition_status_label",
             "annual_salary",
+            "shift",
+            "shift_name",
         ]
 
     def get_profile_photo_url(self, obj):
@@ -214,6 +217,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     )
     employment_type_label = serializers.CharField(source="get_employment_type_display", read_only=True)
     pay_frequency_label = serializers.CharField(source="get_pay_frequency_display", read_only=True)
+    shift_name = serializers.CharField(source="shift.name", read_only=True, allow_null=True)
+    shift_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -243,6 +248,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "designation",
             "employment_type",
             "employment_type_label",
+            "shift",
+            "shift_name",
+            "shift_details",
             "reporting_manager",
             "status",
             "status_label",
@@ -333,6 +341,35 @@ class EmployeeSerializer(serializers.ModelSerializer):
         if annotated_value is not None:
             return bool(annotated_value)
         return User.objects.filter(email__iexact=obj.email, role=UserRole.EMPLOYEE).exists()
+
+    def get_shift_details(self, obj):
+        shift = obj.shift
+        is_assigned = True
+        if not shift:
+            is_assigned = False
+            from attendance.models import Shift
+            shift = Shift.get_default_shift(getattr(obj, "organization", None))
+
+        if not shift:
+            return None
+
+        s_time = shift.start_time.strftime("%H:%M") if hasattr(shift.start_time, "strftime") else str(shift.start_time)[:5]
+        e_time = shift.end_time.strftime("%H:%M") if hasattr(shift.end_time, "strftime") else str(shift.end_time)[:5]
+
+        return {
+            "id": str(shift.id) if shift else None,
+            "is_assigned": is_assigned,
+            "name": shift.name,
+            "code": shift.code,
+            "start_time": s_time,
+            "end_time": e_time,
+            "late_grace_minutes": shift.late_grace_minutes,
+            "early_checkout_grace_minutes": shift.early_checkout_grace_minutes,
+            "early_checkout_penalty": shift.early_checkout_penalty,
+            "early_checkout_penalty_label": shift.get_early_checkout_penalty_display() if hasattr(shift, "get_early_checkout_penalty_display") else shift.early_checkout_penalty,
+            "min_hours_half_day": float(shift.min_hours_half_day) if shift.min_hours_half_day else 4.0,
+            "min_hours_full_day": float(shift.min_hours_full_day) if shift.min_hours_full_day else 8.0,
+        }
 
     def _absolute_file_url(self, file_field):
         if not file_field:

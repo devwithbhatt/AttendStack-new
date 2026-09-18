@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from django.test import TestCase
 from django.utils import timezone
 
@@ -82,7 +82,7 @@ class AbsentMarkingTests(TestCase):
         existing = AttendanceRecord.objects.create(
             employee=self.employee,
             date=target_date,
-            check_in=timezone.now(),
+            check_in=timezone.make_aware(datetime.combine(target_date, time(10, 5))),
             status=AttendanceStatus.PRESENT,
             is_paid=True,
         )

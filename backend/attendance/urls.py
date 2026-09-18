@@ -1,11 +1,12 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import AttendanceRecordViewSet, LeaveRequestViewSet
+from .views import AttendanceRecordViewSet, LeaveRequestViewSet, ShiftViewSet
 
 app_name = "attendance"
 
 router = DefaultRouter()
+router.register("shifts", ShiftViewSet, basename="shifts")
 router.register("leaves", LeaveRequestViewSet, basename="leaves")
 router.register("", AttendanceRecordViewSet, basename="attendance")
 

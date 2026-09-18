@@ -20,9 +20,20 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "../marketing-pages.module.css";
 
 export const metadata: Metadata = {
-  title: "AttendStack Capabilities | Workforce Management Platform",
+  title: "AttendStack Capabilities | Biometric Attendance, Multi-Shift & Payroll HRMS",
   description:
-    "Explore AttendStack capabilities for attendance, employees, leave, holidays, payroll visibility, reporting, and role-based workforce access.",
+    "Explore AttendStack capabilities: GPS geofenced attendance, biometric device integration, multi-shift scheduling with grace thresholds, leave management, and Indian statutory payroll with PF/ESIC.",
+  alternates: {
+    canonical: "https://attendance.nextgenapplication.com/capabilities",
+  },
+  openGraph: {
+    title: "AttendStack Capabilities | Attendance, Shift Rostering & Payroll",
+    description:
+      "GPS geofencing, shift grace rules, leave entitlement balances, and one-click Indian payroll processing.",
+    url: "https://attendance.nextgenapplication.com/capabilities",
+    siteName: "AttendStack",
+    type: "website",
+  },
 };
 
 const capabilityCards = [
