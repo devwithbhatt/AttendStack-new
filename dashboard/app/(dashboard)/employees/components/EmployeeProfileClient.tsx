@@ -332,7 +332,8 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
         const data = (await response.json()) as Employee;
         setEmployee(data);
 
-        const leaveResponse = await fetch(`${API_URL}${resolvedEmployeeId}/leave-policy/`, {
+        const targetLeaveId = resolvedEmployeeId === "me" ? "me" : (data?.id || resolvedEmployeeId);
+        const leaveResponse = await fetch(`${API_URL}${targetLeaveId}/leave-policy/`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         if (leaveResponse.ok) {

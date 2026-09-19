@@ -3,10 +3,10 @@ from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework import serializers
 
-from accounts.permissions import IsAdminOrHR
+from accounts.permissions import IsAdminOrHR, check_user_module_permission
 from accounts.models import UserRole
 from django.contrib.auth import get_user_model
 from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
@@ -42,7 +42,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     ordering = ["status_sort", "full_name"]
 
     def get_permissions(self):
-        if self.action in ("list", "me"):
+        if self.action in ("list", "me", "leave_policy"):
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -163,10 +163,40 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "patch"], url_path="leave-policy")
     def leave_policy(self, request, pk=None):
-        """Admin view of an employee's entitlement, balances, overrides, and leave history."""
-        employee = self.get_object()
+        """View of an employee's entitlement, balances, overrides, and leave history."""
+        user = request.user
+        is_admin_or_hr = (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or getattr(user, "role", "") in (UserRole.SUPER_ADMIN, UserRole.HR)
+                or (getattr(user, "role", "") == UserRole.SUB_ADMIN and check_user_module_permission(user, "employees", "view"))
+            )
+        )
+
+        if pk == "me":
+            employee = self.get_current_employee()
+            if employee is None:
+                raise NotFound("No employee profile is linked to this login account.")
+        else:
+            employee = self.get_object()
+            if not is_admin_or_hr:
+                current_emp = self.get_current_employee()
+                if not current_emp or current_emp.pk != employee.pk:
+                    raise PermissionDenied("You are not authorized to view another employee's leave policy.")
 
         if request.method == "PATCH":
+            is_admin_or_hr_edit = (
+                user.is_authenticated
+                and (
+                    user.is_superuser
+                    or getattr(user, "role", "") in (UserRole.SUPER_ADMIN, UserRole.HR)
+                    or (getattr(user, "role", "") == UserRole.SUB_ADMIN and check_user_module_permission(user, "employees", "edit"))
+                )
+            )
+            if not is_admin_or_hr_edit:
+                raise PermissionDenied("Only Admin or HR can modify leave policy overrides.")
+
             class LeaveOverrideSerializer(serializers.ModelSerializer):
                 class Meta:
                     model = Employee
@@ -211,11 +241,15 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             })
 
         requests = LeaveRequest.objects.filter(employee=employee).order_by("-created_at")
+        joining_date = employee.joining_date
+        is_prorated = bool(joining_date and joining_date.year == year)
+        eligible_months = (13 - joining_date.month) if is_prorated else 12
+
         return Response({
             "year": year,
-            "joining_date": employee.joining_date,
-            "is_prorated": employee.joining_date.year == year,
-            "eligible_months": 13 - employee.joining_date.month if employee.joining_date.year == year else 12,
+            "joining_date": joining_date,
+            "is_prorated": is_prorated,
+            "eligible_months": eligible_months,
             "casual_leave_days_override": employee.casual_leave_days_override,
             "sick_leave_days_override": employee.sick_leave_days_override,
             "company_casual_leave_days": settings.casual_leave_days,
