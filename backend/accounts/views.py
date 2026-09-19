@@ -18,8 +18,9 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import UserRole, SubAdminPermission
+from .models import UserRole, SubAdminPermission, UserTwoFactor, TwoFactorOTP
 from .permissions import IsSuperAdmin, IsAdminOrHR, IsHR
 from .serializers import (
     ChangePasswordSerializer,
@@ -35,10 +36,30 @@ from .serializers import (
     UpdateSubAdminSerializer,
     UserProfileSerializer,
     UserUpdateSerializer,
+    TwoFactorVerifySerializer,
+    TwoFactorSendOTPSerializer,
+    TwoFactorSetupConfirmSerializer,
+    TwoFactorDisableSerializer,
+    TwoFactorAdminResetSerializer,
 )
-from .services import request_password_reset_otp, reset_password_with_otp
+from .services import (
+    request_password_reset_otp,
+    reset_password_with_otp,
+    decode_2fa_preauth_token,
+    generate_2fa_secret,
+    generate_backup_codes,
+    generate_totp_qr_data_uri,
+    verify_totp_code,
+    verify_and_burn_backup_code,
+    send_2fa_email_otp,
+    verify_2fa_email_otp,
+    mask_email,
+)
 from employees.services import sync_employee_from_simplyjob
 
+import logging
+
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -708,5 +729,305 @@ class SubAdminViewSet(viewsets.ModelViewSet):
             "detail": f"Sub-admin access for {user.email} has been {state_label}.",
             "is_active": user.is_active,
             "sub_admin": SubAdminPermissionSerializer(sub_perm).data,
+        }, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Two-Factor Authentication (2FA) API Views
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TwoFactorVerifyView(APIView):
+    """
+    Verify 2FA login challenge with:
+    - authenticator (6-digit RFC 6238 TOTP code)
+    - email_otp (6-digit OTP dispatched to registered email)
+    - backup_code (one-time emergency recovery code)
+    Upon success, returns the access/refresh JWT tokens and full user profile.
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = TwoFactorVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        temp_token = data["temp_token"]
+        code = data["code"].strip()
+        method = data["method"]
+
+        user = decode_2fa_preauth_token(temp_token)
+        two_factor = getattr(user, "two_factor", None)
+        if not two_factor or not two_factor.is_enabled:
+            return Response(
+                {"detail": "Two-factor authentication is not active for this account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_valid = False
+        if method == "authenticator":
+            is_valid = verify_totp_code(two_factor.secret_key, code)
+            if not is_valid:
+                return Response(
+                    {"detail": "Invalid authenticator code. Check that your device time is accurate and try again."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif method == "email_otp":
+            is_valid = verify_2fa_email_otp(user, code)
+            if not is_valid:
+                return Response(
+                    {"detail": "Invalid or expired email verification code. Please request a new code."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif method == "backup_code":
+            is_valid = verify_and_burn_backup_code(two_factor, code)
+            if not is_valid:
+                return Response(
+                    {"detail": "Invalid or previously used backup recovery code."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            return Response(
+                {"detail": f"Unsupported verification method '{method}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update last login and 2FA last used timestamp
+        two_factor.last_used_at = timezone.now()
+        two_factor.save(update_fields=["last_used_at"])
+        user.last_login = timezone.now()
+        user.save(update_fields=["last_login"])
+
+        # Issue full JWT token pair
+        refresh = CustomTokenObtainPairSerializer.get_token(user)
+        user_profile = UserProfileSerializer(user, context={"request": request}).data
+
+        org_data = None
+        try:
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(user)
+            if org:
+                org_data = {
+                    "id": org.id,
+                    "name": org.name,
+                    "invite_code": org.invite_code,
+                }
+        except Exception:
+            org_data = None
+
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": user_profile,
+            "organization": org_data,
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorSendOTPView(APIView):
+    """
+    Send an email OTP during the 2FA login challenge.
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = TwoFactorSendOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = decode_2fa_preauth_token(serializer.validated_data["temp_token"])
+        msg = send_2fa_email_otp(user, requested_ip=request.META.get("REMOTE_ADDR"))
+
+        return Response({
+            "detail": msg,
+            "email_masked": mask_email(user.email),
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorSetupStartView(APIView):
+    """
+    Initialize 2FA setup for the authenticated user.
+    Generates a unique Base32 TOTP secret, QR code, and 10 one-time recovery codes.
+    2FA remains unconfirmed until TwoFactorSetupConfirmView is called.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        two_factor, _ = UserTwoFactor.objects.get_or_create(user=user)
+
+        secret = generate_2fa_secret()
+        plain_codes, hashed_records = generate_backup_codes(count=10)
+
+        # Store secret & backup codes, keep is_enabled=False until user confirms with a valid code
+        two_factor.secret_key = secret
+        two_factor.backup_codes = hashed_records
+        two_factor.save(update_fields=["secret_key", "backup_codes", "updated_at"])
+
+        qr_data_uri = generate_totp_qr_data_uri(user, secret)
+
+        return Response({
+            "secret": secret,
+            "qr_code_data_uri": qr_data_uri,
+            "backup_codes": plain_codes,
+            "detail": "Scan the QR code with Google Authenticator or Microsoft Authenticator, save backup codes, and verify.",
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorSetupConfirmView(APIView):
+    """
+    Confirm 2FA setup by providing the first 6-digit TOTP code.
+    Activates 2FA upon verification.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = TwoFactorSetupConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        code = serializer.validated_data["code"]
+        two_factor = getattr(request.user, "two_factor", None)
+        if not two_factor or not two_factor.secret_key:
+            return Response(
+                {"detail": "2FA setup has not been initiated. Please start setup first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not verify_totp_code(two_factor.secret_key, code):
+            return Response(
+                {"detail": "Invalid 6-digit code. Please ensure your authenticator app clock is synchronized."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        two_factor.is_enabled = True
+        two_factor.last_used_at = timezone.now()
+        two_factor.save(update_fields=["is_enabled", "last_used_at", "updated_at"])
+
+        return Response({
+            "detail": "Two-Factor Authentication is now enabled for your account.",
+            "is_enabled": True,
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorStatusView(APIView):
+    """
+    Get current 2FA status, remaining backup code count, and last used timestamp.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        two_factor = getattr(request.user, "two_factor", None)
+        return Response({
+            "is_enabled": bool(two_factor and two_factor.is_enabled),
+            "remaining_backup_codes": two_factor.remaining_backup_codes_count if two_factor else 0,
+            "last_used_at": two_factor.last_used_at if two_factor else None,
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorDisableView(APIView):
+    """
+    Disable 2FA. Requires user's current password for confirmation.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = TwoFactorDisableSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        password = serializer.validated_data["password"]
+        if not request.user.check_password(password):
+            return Response(
+                {"detail": "Incorrect account password."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        two_factor = getattr(request.user, "two_factor", None)
+        if two_factor:
+            two_factor.is_enabled = False
+            two_factor.secret_key = ""
+            two_factor.backup_codes = []
+            two_factor.save(update_fields=["is_enabled", "secret_key", "backup_codes", "updated_at"])
+
+        return Response({
+            "detail": "Two-Factor Authentication has been disabled.",
+            "is_enabled": False,
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorRegenerateBackupCodesView(APIView):
+    """
+    Generate 10 fresh one-time backup recovery codes.
+    Requires account password confirmation.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = TwoFactorDisableSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        password = serializer.validated_data["password"]
+        if not request.user.check_password(password):
+            return Response(
+                {"detail": "Incorrect account password."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        two_factor = getattr(request.user, "two_factor", None)
+        if not two_factor or not two_factor.is_enabled:
+            return Response(
+                {"detail": "2FA must be active to regenerate backup codes."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        plain_codes, hashed_records = generate_backup_codes(count=10)
+        two_factor.backup_codes = hashed_records
+        two_factor.save(update_fields=["backup_codes", "updated_at"])
+
+        return Response({
+            "backup_codes": plain_codes,
+            "remaining_backup_codes": len(plain_codes),
+            "detail": "10 new backup recovery codes generated. Store them safely.",
+        }, status=status.HTTP_200_OK)
+
+
+class TwoFactorAdminResetView(APIView):
+    """
+    Super Admin emergency reset:
+    Revokes 2FA configuration for a locked-out HR manager, admin, or user.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
+
+    def post(self, request):
+        serializer = TwoFactorAdminResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user_id = serializer.validated_data["user_id"]
+        reason = serializer.validated_data.get("reason") or "Super Admin Emergency Reset"
+
+        target_user = User.objects.filter(id=user_id).first()
+        if not target_user:
+            return Response(
+                {"detail": "Target user not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        two_factor = getattr(target_user, "two_factor", None)
+        if two_factor:
+            two_factor.is_enabled = False
+            two_factor.secret_key = ""
+            two_factor.backup_codes = []
+            two_factor.save(update_fields=["is_enabled", "secret_key", "backup_codes", "updated_at"])
+
+        logger.warning(
+            "Super Admin %s performed emergency 2FA reset on user %s (%s). Reason: %s",
+            request.user.email,
+            target_user.email,
+            str(target_user.id),
+            reason,
+        )
+
+        return Response({
+            "detail": f"Two-Factor Authentication for {target_user.get_full_name() or target_user.email} has been reset.",
+            "user_id": str(target_user.id),
+            "email": target_user.email,
         }, status=status.HTTP_200_OK)
 

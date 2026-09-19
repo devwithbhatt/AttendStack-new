@@ -116,6 +116,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_employee(self):
         return self.role == UserRole.EMPLOYEE
 
+    @property
+    def has_2fa_enabled(self):
+        two_factor = getattr(self, "two_factor", None)
+        return bool(two_factor and two_factor.is_enabled)
+
 
 class SubAdminPermission(models.Model):
     """
@@ -202,6 +207,80 @@ class PasswordResetOTP(models.Model):
 
     def __str__(self):
         return f"Password reset request for {self.user.email}"
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+
+class UserTwoFactor(models.Model):
+    """
+    Two-Factor Authentication settings per user.
+    Each user (Super Admin, HR, Sub-Admin) has their own unique cryptographic secret,
+    QR code, and one-time backup recovery codes.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="two_factor",
+    )
+    is_enabled = models.BooleanField(default=False, db_index=True)
+    secret_key = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Base32 TOTP secret key unique to this user.",
+    )
+    backup_codes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of dicts containing SHA-256 hashed one-time backup codes and used status.",
+    )
+    last_used_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Two-Factor Configuration"
+        verbose_name_plural = "User Two-Factor Configurations"
+
+    def __str__(self):
+        status_str = "Enabled" if self.is_enabled else "Disabled"
+        return f"2FA for {self.user.email} [{status_str}]"
+
+    @property
+    def remaining_backup_codes_count(self):
+        if not isinstance(self.backup_codes, list):
+            return 0
+        return sum(1 for code in self.backup_codes if not code.get("used", False))
+
+
+class TwoFactorOTP(models.Model):
+    """
+    Short-lived Email OTP for 2FA fallback challenge.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="two_factor_otps",
+    )
+    otp_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False, db_index=True)
+    requested_ip = models.GenericIPAddressField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    used_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_used", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"2FA Email OTP for {self.user.email}"
 
     @property
     def is_expired(self):

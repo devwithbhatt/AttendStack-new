@@ -1,3 +1,62 @@
+
+class ShiftSerializer(serializers.ModelSerializer):
+    employee_count = serializers.SerializerMethodField()
+    start_time_display = serializers.SerializerMethodField()
+    end_time_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Shift
+        fields = [
+            "id",
+            "organization",
+            "name",
+            "code",
+            "start_time",
+            "end_time",
+            "start_time_display",
+            "end_time_display",
+            "late_grace_minutes",
+            "early_checkout_grace_minutes",
+            "early_checkout_penalty",
+            "min_hours_half_day",
+            "min_hours_full_day",
+            "is_default",
+            "is_active",
+            "employee_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "employee_count", "created_at", "updated_at"]
+
+    def get_employee_count(self, obj):
+        return obj.employees.count()
+
+    def get_start_time_display(self, obj):
+        if not obj.start_time:
+            return ""
+        if hasattr(obj.start_time, "strftime"):
+            return obj.start_time.strftime("%I:%M %p")
+        return str(obj.start_time)[:5]
+
+    def get_end_time_display(self, obj):
+        if not obj.end_time:
+            return ""
+        if hasattr(obj.end_time, "strftime"):
+            return obj.end_time.strftime("%I:%M %p")
+        return str(obj.end_time)[:5]
+
+    def validate(self, attrs):
+        if "code" in attrs and attrs["code"]:
+            attrs["code"] = attrs["code"].strip().upper()
+        return attrs
+
+
+
+
+
+
+
+
 python3 -m venv venv
 source venv/bin/activate
 .\venv\Scripts\Activate.ps1

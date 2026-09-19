@@ -11,6 +11,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import re
 
 from accounts.models import UserRole
+from accounts.services import generate_2fa_preauth_token, mask_email
 User = get_user_model()
 
 MB = 1024 * 1024
@@ -41,6 +42,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
+
+        # Intercept if user has 2FA enabled: return 2FA challenge response
+        if self.user.has_2fa_enabled:
+            return {
+                "requires_2fa": True,
+                "temp_token": generate_2fa_preauth_token(self.user),
+                "user_id": str(self.user.id),
+                "email_masked": mask_email(self.user.email),
+                "role": self.user.role,
+                "methods": ["authenticator", "email_otp", "backup_code"],
+            }
+
         # Append full user profile with granular RBAC permissions to the response body
         user_profile = UserProfileSerializer(self.user, context=self.context).data
         data["user"] = user_profile
@@ -86,6 +99,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField()
     custom_role_title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
+    has_2fa_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
@@ -93,9 +107,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "id", "email", "first_name", "last_name", "full_name",
             "role", "phone", "avatar", "employee_id",
             "permissions", "custom_role_title", "organization",
+            "has_2fa_enabled",
             "is_active", "date_joined", "last_login",
         ]
         read_only_fields = ["id", "email", "role", "employee_id", "date_joined", "last_login"]
+
+    def get_has_2fa_enabled(self, obj):
+        return obj.has_2fa_enabled
 
     def get_full_name(self, obj):
         return obj.get_full_name()
@@ -584,3 +602,47 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
                 employee_id=employee.employee_id,
             )
         return employee
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 2FA Serializers
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TwoFactorVerifySerializer(serializers.Serializer):
+    """Payload for completing 2FA login challenge."""
+    temp_token = serializers.CharField(
+        required=True,
+        help_text="Interim pre-auth JWT issued during password authentication."
+    )
+    code = serializers.CharField(
+        required=True,
+        trim_whitespace=True,
+        help_text="6-digit TOTP code, 6-digit Email OTP, or 8-char backup recovery code."
+    )
+    method = serializers.ChoiceField(
+        choices=["authenticator", "email_otp", "backup_code"],
+        default="authenticator",
+        help_text="Method used for verification."
+    )
+
+
+class TwoFactorSendOTPSerializer(serializers.Serializer):
+    """Payload to trigger email OTP during 2FA login challenge."""
+    temp_token = serializers.CharField(required=True)
+
+
+class TwoFactorSetupConfirmSerializer(serializers.Serializer):
+    """Payload for confirming initial TOTP enrollment."""
+    code = serializers.CharField(required=True, min_length=6, max_length=6, trim_whitespace=True)
+
+
+class TwoFactorDisableSerializer(serializers.Serializer):
+    """Payload for turning off 2FA."""
+    password = serializers.CharField(required=True, write_only=True)
+    code = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+
+
+class TwoFactorAdminResetSerializer(serializers.Serializer):
+    """Super Admin emergency 2FA reset payload."""
+    user_id = serializers.UUIDField(required=True)
+    reason = serializers.CharField(required=False, allow_blank=True, default="Super Admin Emergency Recovery")

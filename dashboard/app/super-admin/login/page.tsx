@@ -23,6 +23,7 @@ import {
 } from "@tabler/icons-react";
 import axios from "axios";
 import Link from "next/link";
+import TwoFactorChallenge from "components/auth/TwoFactorChallenge";
 
 export default function SuperAdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -30,7 +31,28 @@ export default function SuperAdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [twoFactorState, setTwoFactorState] = useState<{
+    required: boolean;
+    tempToken: string;
+    emailMasked?: string;
+  }>({
+    required: false,
+    tempToken: "",
+    emailMasked: "",
+  });
   const router = useRouter();
+
+  const handleSuperAdminAuthSuccess = (data: any) => {
+    const user = data.user;
+    if (user && (user.role === "SUPER_ADMIN" || user.is_superuser)) {
+      localStorage.setItem("authToken", data.access);
+      localStorage.setItem("refreshToken", data.refresh);
+      localStorage.setItem("user", JSON.stringify(user));
+      router.push("/super-admin/dashboard");
+    } else {
+      setError("Access denied. This account does not have Super Admin privileges.");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,16 +74,17 @@ export default function SuperAdminLoginPage() {
         }
       );
 
+      if (response.data && response.data.requires_2fa) {
+        setTwoFactorState({
+          required: true,
+          tempToken: response.data.temp_token,
+          emailMasked: response.data.email_masked,
+        });
+        return;
+      }
+
       if (response.data && response.data.access) {
-        const user = response.data.user;
-        if (user && (user.role === "SUPER_ADMIN" || user.is_superuser)) {
-          localStorage.setItem("authToken", response.data.access);
-          localStorage.setItem("refreshToken", response.data.refresh);
-          localStorage.setItem("user", JSON.stringify(user));
-          router.push("/super-admin/dashboard");
-        } else {
-          setError("Access denied. This account does not have Super Admin privileges.");
-        }
+        handleSuperAdminAuthSuccess(response.data);
       } else {
         setError("Login failed. Please check your Super Admin credentials.");
       }
@@ -126,67 +149,83 @@ export default function SuperAdminLoginPage() {
                   </Alert>
                 )}
 
-                <Form onSubmit={handleSubmit}>
-                  <Form.Group className="mb-3" controlId="superAdminEmail">
-                    <Form.Label className="small fw-semibold text-secondary">Super Admin Email</Form.Label>
-                    <Form.Control
-                      type="email"
-                      placeholder="superadmin@attendstack.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      autoComplete="email"
-                      className="py-2"
-                    />
-                  </Form.Group>
-
-                  <Form.Group className="mb-4" controlId="superAdminPassword">
-                    <Form.Label className="small fw-semibold text-secondary">Password</Form.Label>
-                    <InputGroup>
+                {twoFactorState.required ? (
+                  <TwoFactorChallenge
+                    tempToken={twoFactorState.tempToken}
+                    emailMasked={twoFactorState.emailMasked}
+                    portalType="super-admin"
+                    onSuccess={handleSuperAdminAuthSuccess}
+                    onCancel={() =>
+                      setTwoFactorState({
+                        required: false,
+                        tempToken: "",
+                        emailMasked: "",
+                      })
+                    }
+                  />
+                ) : (
+                  <Form onSubmit={handleSubmit}>
+                    <Form.Group className="mb-3" controlId="superAdminEmail">
+                      <Form.Label className="small fw-semibold text-secondary">Super Admin Email</Form.Label>
                       <Form.Control
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        type="email"
+                        placeholder="superadmin@attendstack.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
-                        autoComplete="current-password"
+                        autoComplete="email"
                         className="py-2"
                       />
-                      <Button
-                        type="button"
-                        variant="outline-secondary"
-                        onClick={() => setShowPassword((visible) => !visible)}
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
-                      </Button>
-                    </InputGroup>
-                  </Form.Group>
+                    </Form.Group>
 
-                  <Button
-                    variant="warning"
-                    type="submit"
-                    className="w-100 fw-bold text-dark py-2.5 shadow-sm rounded-3 mb-3 d-flex align-items-center justify-content-center gap-2"
-                    disabled={loading}
-                    style={{
-                      background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-                      border: "none",
-                      color: "#ffffff",
-                    }}
-                  >
-                    {loading ? (
-                      <>
-                        <Spinner animation="border" size="sm" className="me-2 text-white" />
-                        <span className="text-white">Signing In...</span>
-                      </>
-                    ) : (
-                      <>
-                        <IconShieldCheck size={20} className="text-white" />
-                        <span className="text-white">Sign In to Super Admin Panel</span>
-                      </>
-                    )}
-                  </Button>
-                </Form>
+                    <Form.Group className="mb-4" controlId="superAdminPassword">
+                      <Form.Label className="small fw-semibold text-secondary">Password</Form.Label>
+                      <InputGroup>
+                        <Form.Control
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          autoComplete="current-password"
+                          className="py-2"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline-secondary"
+                          onClick={() => setShowPassword((visible) => !visible)}
+                          title={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                        </Button>
+                      </InputGroup>
+                    </Form.Group>
+
+                    <Button
+                      variant="warning"
+                      type="submit"
+                      className="w-100 fw-bold text-dark py-2.5 shadow-sm rounded-3 mb-3 d-flex align-items-center justify-content-center gap-2"
+                      disabled={loading}
+                      style={{
+                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                        border: "none",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {loading ? (
+                        <>
+                          <Spinner animation="border" size="sm" className="me-2 text-white" />
+                          <span className="text-white">Signing In...</span>
+                        </>
+                      ) : (
+                        <>
+                          <IconShieldCheck size={20} className="text-white" />
+                          <span className="text-white">Sign In to Super Admin Panel</span>
+                        </>
+                      )}
+                    </Button>
+                  </Form>
+                )}
 
                 <div className="text-center mt-4">
                   <Link href="/sign-in" className="text-secondary small text-decoration-none d-inline-flex align-items-center gap-1">
