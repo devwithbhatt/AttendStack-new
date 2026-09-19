@@ -39,6 +39,7 @@ import {
   IconEdit,
 } from "@tabler/icons-react";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
+import TwoFactorSettingsSection from "components/settings/TwoFactorSettingsSection";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
 
@@ -3059,6 +3060,19 @@ const SettingsPage = () => {
                       </Col>
                     </Row>
                   </div>
+                </Tab>
+
+                {/* 10. Security & 2FA Tab */}
+                <Tab
+                  eventKey="security"
+                  title={
+                    <span className="d-flex align-items-center gap-2 py-2">
+                      <IconShieldLock size={18} />
+                      Security & 2FA
+                    </span>
+                  }
+                >
+                  <TwoFactorSettingsSection />
                 </Tab>
               </Tabs>
             </Card.Body>

@@ -17,6 +17,14 @@ from .views import (
     SubAdminViewSet,
     UserProfileView,
     VerifyRegistrationTokenView,
+    TwoFactorVerifyView,
+    TwoFactorSendOTPView,
+    TwoFactorSetupStartView,
+    TwoFactorSetupConfirmView,
+    TwoFactorStatusView,
+    TwoFactorDisableView,
+    TwoFactorRegenerateBackupCodesView,
+    TwoFactorAdminResetView,
 )
 
 app_name = "accounts"
@@ -44,6 +52,16 @@ urlpatterns = [
         ResetPasswordWithOTPView.as_view(),
         name="password_reset_confirm",
     ),
+
+    # Two-Factor Authentication (2FA)
+    path("2fa/verify/", TwoFactorVerifyView.as_view(), name="2fa_verify"),
+    path("2fa/send-otp/", TwoFactorSendOTPView.as_view(), name="2fa_send_otp"),
+    path("2fa/setup/start/", TwoFactorSetupStartView.as_view(), name="2fa_setup_start"),
+    path("2fa/setup/confirm/", TwoFactorSetupConfirmView.as_view(), name="2fa_setup_confirm"),
+    path("2fa/status/", TwoFactorStatusView.as_view(), name="2fa_status"),
+    path("2fa/disable/", TwoFactorDisableView.as_view(), name="2fa_disable"),
+    path("2fa/regenerate-backup-codes/", TwoFactorRegenerateBackupCodesView.as_view(), name="2fa_regenerate_backup_codes"),
+    path("2fa/admin-reset/", TwoFactorAdminResetView.as_view(), name="2fa_admin_reset"),
 
     # Profile
     path("profile/", UserProfileView.as_view(), name="profile"),

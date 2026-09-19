@@ -148,10 +148,14 @@ class AdministratorSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     organization_name = serializers.SerializerMethodField()
     custom_role_title = serializers.SerializerMethodField()
+    has_2fa_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'full_name', 'email', 'role', 'custom_role_title', 'organization_name', 'is_active', 'date_joined')
+        fields = ('id', 'full_name', 'email', 'role', 'custom_role_title', 'organization_name', 'is_active', 'date_joined', 'has_2fa_enabled')
+
+    def get_has_2fa_enabled(self, obj):
+        return obj.has_2fa_enabled
 
     def get_full_name(self, obj):
         name = obj.get_full_name()

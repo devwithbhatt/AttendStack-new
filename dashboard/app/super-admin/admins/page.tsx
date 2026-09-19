@@ -18,6 +18,7 @@ import {
 } from "react-bootstrap";
 import {
   IconShieldCheck,
+  IconShieldX,
   IconPlus,
   IconSearch,
   IconRefresh,
@@ -65,6 +66,7 @@ type Administrator = {
   organization_name?: string;
   is_active?: boolean;
   date_joined?: string;
+  has_2fa_enabled?: boolean;
 };
 
 type Organization = {
@@ -88,6 +90,11 @@ export default function SuperAdminAdminsPage() {
   const [copiedId, setCopiedId] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
 
+  // Emergency 2FA Reset Modal State
+  const [adminFor2FAReset, setAdminFor2FAReset] = useState<Administrator | null>(null);
+  const [resetReason, setResetReason] = useState("");
+  const [isResetting2FA, setIsResetting2FA] = useState(false);
+
   // Create form
   const [createForm, setCreateForm] = useState({
     email: "",
@@ -96,6 +103,28 @@ export default function SuperAdminAdminsPage() {
     organization_id: "",
   });
   const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm2FAReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminFor2FAReset) return;
+    setIsResetting2FA(true);
+    try {
+      await apiClient.post("/api/v1/accounts/2fa/admin-reset/", {
+        user_id: adminFor2FAReset.id,
+        reason: resetReason || "Super Admin Emergency Reset via Console",
+      });
+      setNotice(`Two-factor authentication for ${adminFor2FAReset.full_name} (${adminFor2FAReset.email}) has been successfully reset.`);
+      setAdministrators((prev) =>
+        prev.map((a) => (a.id === adminFor2FAReset.id ? { ...a, has_2fa_enabled: false } : a))
+      );
+      setAdminFor2FAReset(null);
+      setResetReason("");
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to reset 2FA.");
+    } finally {
+      setIsResetting2FA(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -281,6 +310,7 @@ export default function SuperAdminAdminsPage() {
                   <th>Email Address</th>
                   <th>Assigned Workspace</th>
                   <th>Role & Access</th>
+                  <th>2FA Security</th>
                   <th>Status</th>
                   <th className="text-end pe-4">Actions</th>
                 </tr>
@@ -329,6 +359,37 @@ export default function SuperAdminAdminsPage() {
                       </Badge>
                     </td>
                     <td>
+                      {admin.has_2fa_enabled ? (
+                        <span
+                          className="badge border px-2.5 py-1 d-inline-flex align-items-center gap-1 font-monospace"
+                          style={{
+                            backgroundColor: "#ecfdf5",
+                            color: "#047857",
+                            borderColor: "#a7f3d0",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <IconShieldCheck size={14} style={{ color: "#059669" }} />
+                          <span>2FA Active</span>
+                        </span>
+                      ) : (
+                        <span
+                          className="badge border px-2.5 py-1 d-inline-flex align-items-center gap-1 font-monospace"
+                          style={{
+                            backgroundColor: "#f8fafc",
+                            color: "#475569",
+                            borderColor: "#cbd5e1",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <IconShieldX size={14} style={{ color: "#94a3b8" }} />
+                          <span>2FA Inactive</span>
+                        </span>
+                      )}
+                    </td>
+                    <td>
                       <Badge bg="success-subtle" text="success" className="border border-success-subtle px-2.5 py-1">
                         Active
                       </Badge>
@@ -342,6 +403,18 @@ export default function SuperAdminAdminsPage() {
                           <Dropdown.Item onClick={() => setSelectedAdminForView(admin)}>
                             <IconShieldCheck size={15} className="me-2 text-warning" /> View Admin Details
                           </Dropdown.Item>
+
+                          {admin.has_2fa_enabled && (
+                            <Dropdown.Item
+                              className="text-danger"
+                              onClick={() => {
+                                setAdminFor2FAReset(admin);
+                                setResetReason("");
+                              }}
+                            >
+                              <IconShieldX size={15} className="me-2 text-danger" /> Emergency Reset 2FA
+                            </Dropdown.Item>
+                          )}
                         </Dropdown.Menu>
                       </Dropdown>
                     </td>
@@ -581,6 +654,52 @@ export default function SuperAdminAdminsPage() {
             </Button>
             <Button variant="warning" type="submit" disabled={submitting} className="fw-bold text-dark">
               {submitting ? <Spinner size="sm" /> : "Create HR Account"}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* Modal: Emergency Reset 2FA */}
+      <Modal show={!!adminFor2FAReset} onHide={() => setAdminFor2FAReset(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fw-bold text-danger d-flex align-items-center gap-2">
+            <IconShieldX size={20} />
+            <span>Emergency 2FA Reset</span>
+          </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleConfirm2FAReset}>
+          <Modal.Body className="p-4">
+            <Alert variant="danger" className="small py-2 mb-3">
+              <strong>Caution:</strong> This will revoke the user's registered authenticator app and invalidate all unused backup recovery codes.
+            </Alert>
+            <p className="text-dark small mb-2">
+              Are you sure you want to reset Two-Factor Authentication for:
+            </p>
+            <div className="p-2.5 bg-light rounded border mb-3">
+              <strong className="d-block text-dark">{adminFor2FAReset?.full_name}</strong>
+              <small className="text-muted">{adminFor2FAReset?.email}</small>
+            </div>
+            <p className="text-secondary small mb-3">
+              After reset, the user will be able to sign in using their primary password and re-enroll 2FA on their new device.
+            </p>
+            <Form.Group className="mb-0">
+              <Form.Label className="small fw-semibold text-secondary">
+                Audit Reason (Optional)
+              </Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="e.g. Employee lost phone, requested emergency recovery"
+                value={resetReason}
+                onChange={(e) => setResetReason(e.target.value)}
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" size="sm" onClick={() => setAdminFor2FAReset(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="sm" type="submit" disabled={isResetting2FA}>
+              {isResetting2FA ? "Resetting 2FA..." : "Confirm Emergency Reset"}
             </Button>
           </Modal.Footer>
         </Form>
