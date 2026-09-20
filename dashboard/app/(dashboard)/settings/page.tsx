@@ -39,6 +39,7 @@ import {
   IconEdit,
 } from "@tabler/icons-react";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
+import RolesPermissionsTab from "./RolesPermissionsTab";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
 
@@ -145,6 +146,22 @@ interface OrganizationAccess {
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState("company");
   const { companyLogo, setCompanyLogo, refreshBranding } = useBranding();
+
+  // Whether the signed-in user can edit the Settings module — drives whether
+  // the form fields below are interactive or shown read-only.
+  const [canEditSettings, setCanEditSettings] = useState(true);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const editFlag = parsed?.permissions?.settings?.edit;
+        setCanEditSettings(editFlag === undefined ? true : Boolean(editFlag));
+      }
+    } catch {
+      setCanEditSettings(true);
+    }
+  }, []);
   const [logo, setLogo] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -994,6 +1011,9 @@ const SettingsPage = () => {
       });
 
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error("ACCESS_DENIED");
+        }
         throw new Error("Failed to upload logo");
       }
 
@@ -1008,6 +1028,14 @@ const SettingsPage = () => {
         showConfirmButton: false
       });
     } catch (error) {
+      if (error instanceof Error && error.message === "ACCESS_DENIED") {
+        Swal.fire({
+          icon: 'error',
+          title: 'Access Denied',
+          text: "Your role doesn't have edit permission for Settings. Ask an Admin to update your access.",
+        });
+        return;
+      }
       Swal.fire({
         icon: 'error',
         title: 'Oops...',
@@ -1109,9 +1137,12 @@ const SettingsPage = () => {
       });
 
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error("ACCESS_DENIED");
+        }
         throw new Error("Failed to update settings");
       }
-      
+
       if (refreshBranding) {
         await refreshBranding();
       }
@@ -1124,11 +1155,19 @@ const SettingsPage = () => {
         showConfirmButton: false
       });
     } catch (error) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Oops...',
-        text: 'Failed to save settings. Please try again.',
-      });
+      if (error instanceof Error && error.message === "ACCESS_DENIED") {
+        Swal.fire({
+          icon: 'error',
+          title: 'Access Denied',
+          text: "Your role doesn't have edit permission for Settings. Ask an Admin to update your access.",
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Oops...',
+          text: 'Failed to save settings. Please try again.',
+        });
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1271,10 +1310,15 @@ const SettingsPage = () => {
                                       </div>
                                     )}
                                     <div className="flex-grow-1">
-                                      <Form.Control type="file" accept="image/*" size="sm" onChange={handleLogoChange} />
+                                      <Form.Control type="file" accept="image/*" size="sm" onChange={handleLogoChange} disabled={!canEditSettings} />
                                       <Form.Text className="text-muted">Recommended: Square PNG, JPG, or SVG (Max 2MB)</Form.Text>
                                     </div>
-                                    <Button variant="primary" size="sm" onClick={handleSaveLogo} disabled={!logo.file}>
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={handleSaveLogo}
+                                      disabled={!logo.file || !canEditSettings}
+                                    >
                                       Save Logo
                                     </Button>
                                   </div>
@@ -1573,6 +1617,19 @@ const SettingsPage = () => {
                       </Col>
                     </Row>
                   </div>
+                </Tab>
+
+                {/* 1.5 Roles & Permissions Tab */}
+                <Tab
+                  eventKey="roles"
+                  title={
+                    <span className="d-flex align-items-center gap-2 py-2">
+                      <IconShieldLock size={18} />
+                      Assign Role
+                    </span>
+                  }
+                >
+                  <RolesPermissionsTab />
                 </Tab>
 
                 {/* 2. Attendance Rules Tab */}
@@ -3064,13 +3121,30 @@ const SettingsPage = () => {
             </Card.Body>
           </Card>
 
+          {!canEditSettings && (
+            <Alert variant="secondary" className="d-flex align-items-center gap-2 mt-4 mb-0 py-2">
+              <IconShieldLock size={16} />
+              <span className="small">
+                You have <strong>view-only</strong> access to Settings. Changes are disabled — ask an
+                Admin for edit permission if you need to make updates.
+              </span>
+            </Alert>
+          )}
+
           {/* Action Buttons */}
           <div className="d-flex justify-content-end gap-3 mt-4">
-            <Button variant="secondary" onClick={handleResetDefaults} disabled={isSaving}>
+            <Button variant="secondary" onClick={handleResetDefaults} disabled={isSaving || !canEditSettings}>
               <IconRefresh size={18} className="me-2" />
               Reset to Defaults
             </Button>
-            <Button variant="primary" onClick={handleSaveSettings} disabled={isSaving}>
+            <Button
+              variant="primary"
+              onClick={canEditSettings ? handleSaveSettings : () => {
+                Swal.fire({ icon: "error", title: "Access Denied", text: "Your role doesn't have edit permission for Settings." });
+              }}
+              disabled={isSaving}
+              className={!canEditSettings ? "opacity-50" : undefined}
+            >
               {isSaving ? (
                 <>
                   <Spinner size="sm" className="me-2" />

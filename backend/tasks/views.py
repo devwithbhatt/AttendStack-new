@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import UserRole
+from accounts.permissions import IsAdminOrEmployeeSelfService
 from employees.models import ATTENDANCE_ELIGIBLE_STATUSES, Employee
 from organizations.models import Organization
 from .models import Project, Task, TaskStatus
@@ -108,7 +109,7 @@ class WorkspaceAccessMixin:
 
 class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrEmployeeSelfService]
     permission_module = "tasks"
     pagination_class = TaskPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -191,7 +192,7 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
 
 class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
     serializer_class = TaskSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrEmployeeSelfService]
     permission_module = "tasks"
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     pagination_class = TaskPagination

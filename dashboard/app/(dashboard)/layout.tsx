@@ -97,7 +97,15 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
     }
   }, [pathname]);
 
-  const isEmployeeSidebar = userRole === "EMPLOYEE" || pathname.startsWith("/employee-dashboard");
+  // Only a true Admin (Super Admin, or a Role explicitly flagged Full Access)
+  // lands on the Admin Dashboard overview page. Plain Employees always get
+  // the fixed self-service sidebar. A restricted HR/Sub-Admin role (granted
+  // specific module permissions but not Full Access) is NOT a plain Employee
+  // sidebar-wise — they get the same admin-style sidebar as a full Admin,
+  // just filtered down to only the modules their Role grants View access to
+  // (see the moduleKey-based filtering in Sidebar.tsx).
+  const isAdminUser = user?.is_admin === true;
+  const isEmployeeSidebar = user?.role === "EMPLOYEE";
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -126,21 +134,38 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
     try {
       const parsedUser = JSON.parse(storedUser);
       const isSharedRoute = pathname.startsWith("/chat");
-      if (parsedUser?.role === "EMPLOYEE" && !pathname.startsWith("/employee-dashboard") && !isSharedRoute) {
+      const parsedIsAdmin = parsedUser?.is_admin === true;
+      const isPlainEmployee = parsedUser?.role === "EMPLOYEE";
+      const isRestrictedManager = parsedUser?.role === "SUB_ADMIN" && !parsedIsAdmin;
+
+      // Plain Employees always stay within the Employee Dashboard.
+      if (isPlainEmployee && !pathname.startsWith("/employee-dashboard") && !isSharedRoute) {
         router.replace("/employee-dashboard");
         return;
       }
-      if (parsedUser?.role !== "EMPLOYEE" && pathname.startsWith("/employee-dashboard")) {
-        router.replace("/");
+      // A restricted HR/Sub-Admin role (granted specific module permissions,
+      // but not flagged Full Access) lands on the Employee Dashboard by
+      // default, same as a plain Employee — but unlike a plain Employee, they
+      // may still visit whichever admin-side module pages their Role grants
+      // View access to (checked below), instead of only /employee-dashboard.
+      if (isRestrictedManager && (pathname === "/dashboard" || pathname === HOME_ROUTE)) {
+        router.replace("/employee-dashboard");
+        return;
+      }
+      if (parsedIsAdmin && pathname.startsWith("/employee-dashboard")) {
+        router.replace("/dashboard");
         return;
       }
 
-      // Check Sub-Admin route permissions
-      if (parsedUser?.role === "SUB_ADMIN") {
+      // Restricted HR/Sub-Admin roles may only visit a specific admin-side
+      // module page (e.g. /employees) if their assigned Role grants at least
+      // View access to that module — otherwise they're sent back to their
+      // Employee Dashboard, never the full Admin Dashboard overview.
+      if (isRestrictedManager) {
         const routeInfo = getRouteModuleInfo(pathname);
         if (routeInfo) {
           if (routeInfo.adminOnly) {
-            router.replace("/dashboard");
+            router.replace("/employee-dashboard");
             return;
           }
           if (routeInfo.moduleKey) {
@@ -155,7 +180,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
               hasView = typeof modPerm === "object" && modPerm !== null ? Boolean(modPerm.view) : Boolean(modPerm);
             }
             if (!hasView) {
-              router.replace("/dashboard");
+              router.replace("/employee-dashboard");
               return;
             }
           }

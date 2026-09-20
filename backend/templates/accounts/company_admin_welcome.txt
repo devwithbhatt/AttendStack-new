@@ -1,0 +1,28 @@
+Hello {{ name }},
+
+Your AttendStack workspace for "{{ organization_name }}" has been created, and
+you have been set up as the Company Admin with full authority over it.
+
+Your sign-in email address:
+
+    {{ email }}
+
+For security, we do not send passwords by email. To sign in for the first
+time, set your own password using "Forgot password" on the Company Admin
+sign-in page:
+
+    {{ login_url }}
+
+Every sign-in to the Company Admin dashboard requires a one-time verification
+code sent to this email address — no separate app or setup is needed.
+
+Once signed in, you can invite employees, assign roles, and configure
+permissions for your organization from Settings.
+
+If you were not expecting this email, please contact {{ support_email }} —
+someone may have entered your email address by mistake.
+
+Regards,
+AttendStack Team
+
+This is an automated notification. Please do not reply to this email.

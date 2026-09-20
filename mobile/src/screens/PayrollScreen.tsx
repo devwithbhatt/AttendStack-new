@@ -8,7 +8,7 @@ import { colors, fonts, radii, shadow } from "../theme";
 import { StatusBadge } from "../components/Badge";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Card } from "../components/Card";
-import { isAdminRole, type EmployeeIncrement, type PayrollRecord } from "../types";
+import { hasModulePermission, type EmployeeIncrement, type PayrollRecord } from "../types";
 
 function formatCurrency(value: string | number) {
   const num = Number(value || 0);
@@ -17,7 +17,7 @@ function formatCurrency(value: string | number) {
 
 export default function PayrollScreen() {
   const { user } = useAuth();
-  const admin = isAdminRole(user?.role);
+  const admin = hasModulePermission(user, "payroll", "view");
   const [records, setRecords] = useState<PayrollRecord[]>([]);
   const [increment, setIncrement] = useState<EmployeeIncrement | null>(null);
   const [search, setSearch] = useState("");

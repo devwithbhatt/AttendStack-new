@@ -9,7 +9,7 @@ import { useBranding } from "../context/BrandingContext";
 import { colors, fonts, radii, shadow } from "../theme";
 import { Badge } from "../components/Badge";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { isAdminRole } from "../types";
+import { hasModulePermission, isFullAdmin } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"];
@@ -34,7 +34,10 @@ export default function MoreScreen() {
   const navigation = useNavigation<Nav>();
   const { user, logout } = useAuth();
   const { companyName, logoUrl } = useBranding();
-  const admin = isAdminRole(user?.role);
+  const admin = isFullAdmin(user);
+  const canViewEmployees = hasModulePermission(user, "employees", "view");
+  const canViewTasks = hasModulePermission(user, "tasks", "view");
+  const showCompanySection = admin || canViewEmployees || canViewTasks;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
@@ -67,7 +70,7 @@ export default function MoreScreen() {
           <Text style={styles.name}>{user?.full_name}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           <View style={{ marginTop: 6, alignSelf: "flex-start" }}>
-            <Badge label={user?.role || ""} tone="primary" />
+            <Badge label={user?.custom_role_title || user?.role || ""} tone="primary" />
           </View>
         </View>
       </LinearGradient>
@@ -81,15 +84,25 @@ export default function MoreScreen() {
         <MenuRow icon="gift" label="Holidays" onPress={() => navigation.navigate("Holidays")} />
       </View>
 
-      {admin && (
+      {showCompanySection && (
         <>
           <Text style={styles.sectionTitle}>Company</Text>
           <View style={styles.card}>
-            <MenuRow icon="users" label="Employees" sub="Browse by role" onPress={() => navigation.navigate("EmployeeCategories")} />
-            <View style={styles.divider} />
-            <MenuRow icon="briefcase" label="Projects" sub="View all projects & progress" onPress={() => navigation.navigate("Projects")} />
-            <View style={styles.divider} />
-            <MenuRow icon="credit-card" label="Plans & Billing" onPress={() => navigation.navigate("PlansBilling")} />
+            {canViewEmployees && (
+              <>
+                <MenuRow icon="users" label="Employees" sub="Browse by role" onPress={() => navigation.navigate("EmployeeCategories")} />
+                {(canViewTasks || admin) && <View style={styles.divider} />}
+              </>
+            )}
+            {canViewTasks && (
+              <>
+                <MenuRow icon="briefcase" label="Projects" sub="View all projects & progress" onPress={() => navigation.navigate("Projects")} />
+                {admin && <View style={styles.divider} />}
+              </>
+            )}
+            {admin && (
+              <MenuRow icon="credit-card" label="Plans & Billing" onPress={() => navigation.navigate("PlansBilling")} />
+            )}
           </View>
         </>
       )}

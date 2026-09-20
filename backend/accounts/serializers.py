@@ -86,13 +86,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField()
     custom_role_title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
         fields = [
             "id", "email", "first_name", "last_name", "full_name",
             "role", "phone", "avatar", "employee_id",
-            "permissions", "custom_role_title", "organization",
+            "permissions", "custom_role_title", "organization", "is_admin",
             "is_active", "date_joined", "last_login",
         ]
         read_only_fields = ["id", "email", "role", "employee_id", "date_joined", "last_login"]
@@ -100,9 +101,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return obj.get_full_name()
 
+    def get_is_admin(self, obj):
+        """
+        Whether this account should see the Admin Dashboard at all. Only a
+        true Super Admin or a Role explicitly flagged Full Access qualifies —
+        every other account (including HR/Sub-Admin/custom roles with only
+        partial permissions) lands on the Employee Dashboard instead.
+        """
+        return obj.is_admin_account
+
     def get_custom_role_title(self, obj):
         if obj.role == UserRole.SUPER_ADMIN:
             return "Super Administrator"
+        if obj.custom_role_id:
+            return obj.custom_role.name
+        # ---- Legacy fallback (pre-dynamic-RBAC accounts only) ----
         if obj.role == UserRole.HR:
             return "Company Administrator (HR)"
         if obj.role == UserRole.SUB_ADMIN:
@@ -110,14 +123,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
             if not sub:
                 from accounts.models import SubAdminPermission
                 sub = SubAdminPermission.objects.filter(user=obj).first()
-            return sub.custom_role_title if sub else "HR Sub-Admin"
+            return sub.custom_role_title if sub else "Sub-Admin"
         return "Employee"
 
     def get_permissions(self, obj):
-        if obj.role in (UserRole.SUPER_ADMIN, UserRole.HR):
-            # Full unrestricted access for Super Admins and Primary HR
-            all_modules = ["dashboard", "employees", "attendance", "leaves", "holidays", "payroll", "tasks", "chat", "settings", "subadmins"]
-            return {mod: {"view": True, "edit": True, "delete": True} for mod in all_modules}
+        from roles.registry import default_permission_matrix
+        if obj.role == UserRole.SUPER_ADMIN:
+            return default_permission_matrix(all_true=True)
+        if obj.custom_role_id:
+            return obj.custom_role.permissions_dict()
+        # ---- Legacy fallback (pre-dynamic-RBAC accounts only) ----
+        if obj.role == UserRole.HR:
+            return default_permission_matrix(all_true=True)
         if obj.role == UserRole.SUB_ADMIN:
             sub = getattr(obj, "subadmin_profile", None)
             if not sub:

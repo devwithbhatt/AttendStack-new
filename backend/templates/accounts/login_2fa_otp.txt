@@ -1,0 +1,26 @@
+Hello {{ name }},
+
+A sign-in to your AttendStack account is awaiting verification.
+
+Your sign-in verification code is:
+
+    {{ otp }}
+
+This code expires in {{ expiry_minutes }} minutes and can only be used once.
+For your security, never share this code with anyone. AttendStack staff will
+never ask you for your password or verification code.
+
+Sign-in attempt details
+------------------------
+Requested at: {{ requested_at }}
+IP address:   {{ requested_ip }}
+
+If you did not attempt to sign in, please secure your account immediately by
+changing your password — someone else may know it.
+
+Need help? Contact {{ support_email }}.
+
+Regards,
+AttendStack Security Team
+
+This is an automated security notification. Please do not reply to this email.

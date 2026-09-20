@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/v1/tasks/", include("tasks.urls", namespace="tasks")),
     path("api/v1/chat/", include("chat.urls")),
     path("api/v1/", include("settings.urls")),
+    path("api/v1/roles/", include("roles.urls", namespace="roles")),
 ]
 
 if settings.DEBUG:

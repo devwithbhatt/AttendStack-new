@@ -77,6 +77,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Employee gets an auto-generated employee_id (set by employees app signal)
     employee_id = models.CharField(max_length=20, unique=True, blank=True, null=True)
 
+    # Dynamic RBAC: when set, this Role's permission matrix governs what this
+    # user can view/edit/delete per module, instead of any hardcoded role check.
+    custom_role = models.ForeignKey(
+        "roles.Role",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_users",
+        help_text="Dynamic role granting module-level View/Edit/Delete permissions.",
+    )
+
     objects = UserManager()
 
     USERNAME_FIELD  = "email"
@@ -111,6 +122,20 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_sub_admin(self):
         return self.role == UserRole.SUB_ADMIN
+
+    @property
+    def is_admin_account(self):
+        """
+        Whether this account counts as "Admin Dashboard" access — Super Admin,
+        or a Role explicitly flagged Full Access. Single source of truth used
+        both to gate the Admin Dashboard UI and to decide who needs email 2FA.
+        """
+        if self.is_superuser or self.role == UserRole.SUPER_ADMIN:
+            return True
+        if self.custom_role_id:
+            return bool(self.custom_role.is_admin)
+        # ---- Legacy fallback (pre-dynamic-RBAC accounts only) ----
+        return self.role == UserRole.HR
 
     @property
     def is_employee(self):
@@ -202,6 +227,40 @@ class PasswordResetOTP(models.Model):
 
     def __str__(self):
         return f"Password reset request for {self.user.email}"
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+
+class LoginTwoFactorOTP(models.Model):
+    """
+    Email-based 2FA challenge issued after a correct password, for accounts
+    where `User.is_admin_account` is True (Super Admin / Full-Access Role).
+    Mirrors PasswordResetOTP's shape and lifecycle.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="login_2fa_otps",
+    )
+    otp_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False, db_index=True)
+    requested_ip = models.GenericIPAddressField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    used_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_used", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Login 2FA code for {self.user.email}"
 
     @property
     def is_expired(self):

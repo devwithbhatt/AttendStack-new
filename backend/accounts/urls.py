@@ -11,11 +11,13 @@ from .views import (
     OrganizationCodeLookupView,
     OrganizationRegistrationView,
     RequestPasswordResetOTPView,
+    ResendLoginOTPView,
     ResetPasswordWithOTPView,
     SimplyJobEmployeeOnboardingView,
     SSOLoginView,
     SubAdminViewSet,
     UserProfileView,
+    VerifyLoginOTPView,
     VerifyRegistrationTokenView,
 )
 
@@ -27,6 +29,8 @@ router.register(r"sub-admins", SubAdminViewSet, basename="sub_admins")
 urlpatterns = [
     # Auth
     path("login/", LoginView.as_view(), name="login"),
+    path("login/verify-otp/", VerifyLoginOTPView.as_view(), name="login_verify_otp"),
+    path("login/resend-otp/", ResendLoginOTPView.as_view(), name="login_resend_otp"),
     path("sso-login/", SSOLoginView.as_view(), name="sso_login"),
     path("verify-registration-token/", VerifyRegistrationTokenView.as_view(), name="verify_registration_token"),
     path("register-organization/", OrganizationRegistrationView.as_view(), name="register_organization"),

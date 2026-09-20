@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Alert,
   Button,
@@ -37,7 +38,12 @@ const getApiError = (error: unknown) => {
     : "Please check the entered details and try again.";
 };
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
+  const searchParams = useSearchParams();
+  const isAdminPortal = searchParams.get("portal") === "admin";
+  const signInHref = isAdminPortal ? "/admin/sign-in" : "/sign-in";
+  const signInLabel = isAdminPortal ? "Company Admin sign in" : "Employee sign in";
+
   const [step, setStep] = useState<RecoveryStep>("request");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -248,12 +254,26 @@ export default function ForgotPasswordPage() {
               )}
 
               <div className="text-center mt-4">
-                <Link href="/sign-in">Employee sign in</Link>
+                <Link href={signInHref}>{signInLabel}</Link>
               </div>
             </Card.Body>
           </Card>
         </Col>
       </Row>
     </Container>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <Container className="min-vh-100 d-flex align-items-center justify-content-center">
+          <Spinner animation="border" variant="primary" />
+        </Container>
+      }
+    >
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }

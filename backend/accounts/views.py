@@ -14,7 +14,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import generics, status, permissions
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -36,7 +36,7 @@ from .serializers import (
     UserProfileSerializer,
     UserUpdateSerializer,
 )
-from .services import request_password_reset_otp, reset_password_with_otp
+from .services import request_password_reset_otp, reset_password_with_otp, request_login_otp, verify_login_otp
 from employees.services import sync_employee_from_simplyjob
 
 User = get_user_model()
@@ -48,9 +48,85 @@ User = get_user_model()
 class LoginView(TokenObtainPairView):
     """
     Login with email and password.
-    Returns access/refresh token pair + user profile.
+
+    For a Super Admin or a Full-Access Admin account, a correct password does
+    NOT issue tokens — a one-time email verification code is sent instead,
+    and the response signals `requires_2fa`. Tokens are only ever issued by
+    VerifyLoginOTPView after that code is confirmed. Every other role's login
+    is unchanged: password success returns tokens immediately, same as before.
     """
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # wrong password -> raises here, same as before
+        user = serializer.user
+
+        if user.is_admin_account:
+            request_login_otp(user, requested_ip=request.META.get("REMOTE_ADDR"))
+            return Response(
+                {
+                    "requires_2fa": True,
+                    "email": user.email,
+                    "detail": "A verification code has been sent to your email address.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class VerifyLoginOTPView(APIView):
+    """Complete a Super Admin / Full-Access Admin login by confirming the
+    emailed verification code. Only this endpoint issues tokens for such
+    accounts — there is no other path to an authenticated session for them."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = str(request.data.get("email", "")).strip()
+        otp = str(request.data.get("otp", "")).strip()
+        if not email or not otp:
+            raise ValidationError({"detail": "Email and verification code are required."})
+
+        user = verify_login_otp(email, otp)
+
+        token = CustomTokenObtainPairSerializer.get_token(user)
+        data = {
+            "refresh": str(token),
+            "access": str(token.access_token),
+            "user": UserProfileSerializer(user, context={"request": request}).data,
+        }
+        try:
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(user)
+            data["organization"] = (
+                {"id": org.id, "name": org.name, "invite_code": org.invite_code} if org else None
+            )
+        except Exception:
+            data["organization"] = None
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class ResendLoginOTPView(APIView):
+    """Resend the login 2FA code. Never reveals whether the account exists or
+    requires 2FA — always returns the same generic response."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = str(request.data.get("email", "")).strip()
+        if email:
+            user = User.objects.filter(email__iexact=email, is_active=True).first()
+            if user is not None and user.is_admin_account:
+                request_login_otp(user, requested_ip=request.META.get("REMOTE_ADDR"), enforce_resend_cooldown=True)
+        return Response(
+            {"detail": "If a verification code is required for this account, it has been resent."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class VerifyRegistrationTokenView(APIView):

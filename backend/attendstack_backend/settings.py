@@ -58,6 +58,7 @@ LOCAL_APPS = [
     "settings",
     "tasks",
     "chat",
+    "roles",
 ]
 
 INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -170,13 +171,20 @@ EMAIL_HOST = config("EMAIL_HOST", default="")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+# Gmail (and most providers) use either STARTTLS on 587 (EMAIL_USE_TLS) or
+# implicit TLS/SSL on 465 (EMAIL_USE_SSL) — never both at once.
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=not EMAIL_USE_SSL, cast=bool)
 EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="AttendStack <no-reply@attendstack.com>")
 PASSWORD_RESET_SUPPORT_EMAIL = config(
     "PASSWORD_RESET_SUPPORT_EMAIL",
     default=EMAIL_HOST_USER or "support@attendstack.com",
 )
+
+# Public URL of the dashboard frontend, used to build links inside outbound
+# emails (e.g. the Company Admin welcome email's sign-in link).
+FRONTEND_BASE_URL = config("FRONTEND_BASE_URL", default="http://localhost:3000").rstrip("/")
 
 PASSWORD_RESET_OTP_TTL_MINUTES = config(
     "PASSWORD_RESET_OTP_TTL_MINUTES", default=10, cast=int

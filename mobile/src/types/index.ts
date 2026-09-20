@@ -1,5 +1,24 @@
 export type UserRole = "SUPER_ADMIN" | "HR" | "SUB_ADMIN" | "EMPLOYEE";
 
+export type ModuleKey =
+  | "dashboard"
+  | "employees"
+  | "attendance"
+  | "leaves"
+  | "holidays"
+  | "payroll"
+  | "tasks"
+  | "settings"
+  | "subadmins";
+
+export interface ModulePermission {
+  view: boolean;
+  edit: boolean;
+  delete: boolean;
+}
+
+export type ModulePermissions = Partial<Record<ModuleKey, ModulePermission>>;
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -8,16 +27,48 @@ export interface AuthUser {
   full_name: string;
   role: UserRole;
   employee_id: string | null;
+  /** Only a true Super Admin or a Role explicitly flagged Full Access — the
+   * same "who sees the Admin Dashboard" test the web app uses. Everyone else
+   * (including Sub-Admins with only partial module permissions) is treated
+   * as a regular employee for navigation purposes, even though they may
+   * still reach specific admin screens via `hasModulePermission`. */
+  is_admin?: boolean;
+  /** {module: {view, edit, delete}} — absent/undefined for plain employees. */
+  permissions?: ModulePermissions;
+  /** Human-readable role label (e.g. "Admin", "Floor Manager", "Employee") —
+   * always prefer this over the raw `role` field for display. */
+  custom_role_title?: string;
 }
 
-export function isAdminRole(role: UserRole | undefined): boolean {
-  return role === "SUPER_ADMIN" || role === "HR" || role === "SUB_ADMIN";
+/** True only for a full-access account (Super Admin or a Role flagged Full
+ * Access) — mirrors the web app's `user.is_admin`. Chat is deliberately not
+ * gated by this or by any module permission. */
+export function isFullAdmin(user: AuthUser | undefined | null): boolean {
+  return user?.is_admin === true;
+}
+
+/** Per-module View/Edit/Delete check, for managers with partial permissions
+ * who aren't a full admin but should still reach specific admin screens. */
+export function hasModulePermission(
+  user: AuthUser | undefined | null,
+  module: ModuleKey,
+  action: keyof ModulePermission = "view"
+): boolean {
+  if (!user) return false;
+  if (user.is_admin) return true;
+  return user.permissions?.[module]?.[action] === true;
 }
 
 export interface LoginResponse {
   access: string;
   refresh: string;
   user: AuthUser;
+}
+
+export interface TwoFactorChallengeResponse {
+  requires_2fa: true;
+  email: string;
+  detail: string;
 }
 
 export interface TodayAttendance {

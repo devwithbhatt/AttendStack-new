@@ -48,16 +48,20 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         user = self.request.user
-        is_admin_or_hr = (
+        from accounts.permissions import check_user_module_permission
+        can_view_employees_module = (
             user.is_authenticated
             and (
                 user.is_superuser
-                or getattr(user, "role", "") in (UserRole.SUPER_ADMIN, UserRole.HR, UserRole.SUB_ADMIN)
-                or user.is_staff
+                or getattr(user, "role", "") == UserRole.SUPER_ADMIN
+                or (
+                    getattr(user, "role", "") in (UserRole.HR, UserRole.SUB_ADMIN)
+                    and check_user_module_permission(user, "employees", "view")
+                )
             )
         )
         if self.action == "list":
-            return EmployeeListSerializer if is_admin_or_hr else EmployeeDirectorySerializer
+            return EmployeeListSerializer if can_view_employees_module else EmployeeDirectorySerializer
         if self.action == "me":
             return EmployeeProfileSerializer
         return EmployeeSerializer
@@ -257,6 +261,49 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 "temporary_password": employee_password,
             }
         )
+
+    @action(detail=True, methods=["get", "post"], url_path="assign-role")
+    def assign_role(self, request, pk=None):
+        """
+        GET: the employee's current role assignment (or null if plain Employee).
+        POST {role_id}: assign a dynamic Role to this employee's login account.
+                         POST {role_id: null} reverts them to a plain Employee.
+        """
+        employee = self.get_object()
+        user = User.objects.filter(email__iexact=employee.email).first()
+
+        if request.method == "GET":
+            if not user:
+                return Response({"role": None, "has_account": False})
+            from roles.serializers import RoleSerializer
+            return Response({
+                "role": RoleSerializer(user.custom_role).data if user.custom_role_id else None,
+                "user_role": user.role,
+                "has_account": True,
+            })
+
+        if not user:
+            raise serializers.ValidationError({
+                "detail": "This employee doesn't have a login account yet. Create one first (Create Password action) before assigning a role."
+            })
+
+        from roles.models import Role
+        from roles.services import assign_role_to_user, unassign_role_from_user
+
+        role_id = request.data.get("role_id")
+        if not role_id:
+            unassign_role_from_user(user)
+            return Response({"detail": f"{employee.full_name} is now a plain Employee with no custom role."})
+
+        role = Role.objects.filter(id=role_id).first()
+        if not role:
+            raise NotFound("Role not found.")
+        assign_role_to_user(request.user, user, role)
+        from roles.serializers import RoleSerializer
+        return Response({
+            "detail": f"{employee.full_name} has been assigned the '{role.name}' role.",
+            "role": RoleSerializer(role).data,
+        })
 
     @action(detail=True, methods=["post"], url_path="reset-password")
     def reset_password(self, request, pk=None):

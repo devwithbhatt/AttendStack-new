@@ -8,7 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { colors, fonts, radii, shadow, softTone } from "../theme";
 import { StatusBadge, Badge } from "../components/Badge";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { isAdminRole, type Task, type TaskSummary } from "../types";
+import { hasModulePermission, type Task, type TaskSummary } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
 type FilterKey = "ALL" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "OVERDUE" | "HIGH_PRIORITY" | "COMPLETED";
@@ -42,7 +42,8 @@ function tileDefs(summary: TaskSummary | null, highPriorityCount: number): Array
 export default function TasksScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
-  const admin = isAdminRole(user?.role);
+  const canViewAll = hasModulePermission(user, "tasks", "view");
+  const canCreate = hasModulePermission(user, "tasks", "edit");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [summary, setSummary] = useState<TaskSummary | null>(null);
   const [filter, setFilter] = useState<FilterKey>("ALL");
@@ -129,7 +130,7 @@ export default function TasksScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: admin ? 100 : 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: canCreate ? 100 : 16 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -153,8 +154,8 @@ export default function TasksScreen() {
               <Badge label={item.priority_label} tone={PRIORITY_TONE[item.priority] || "muted"} />
             </View>
             {item.project_name ? (
-              <Text style={styles.project}>{item.project_name}{admin ? ` · ${item.assignee_name}` : ""}</Text>
-            ) : admin ? (
+              <Text style={styles.project}>{item.project_name}{canViewAll ? ` · ${item.assignee_name}` : ""}</Text>
+            ) : canViewAll ? (
               <Text style={styles.project}>{item.assignee_name}</Text>
             ) : null}
             <View style={styles.rowFooter}>
@@ -169,7 +170,7 @@ export default function TasksScreen() {
         )}
       />
 
-      {admin && (
+      {canCreate && (
         <View style={styles.fabWrap}>
           <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate("NewTask")}>
             <Feather name="plus" size={18} color="#fff" />

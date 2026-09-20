@@ -22,7 +22,7 @@ import { Avatar } from "components/common/Avatar";
 import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 
 // import required routes
-import { IconBuildingSkyscraper, IconLock } from "@tabler/icons-react";
+import { IconBuildingSkyscraper, IconLock, IconLayoutDashboard } from "@tabler/icons-react";
 import { getAssetPath } from "helper/assetPath";
 import { DashboardMenu } from "routes/DashboardRoute";
 import { EmployeeDashboardMenu } from "routes/EmployeeDashboardRoute";
@@ -72,6 +72,8 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
     const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
     const isPrimaryHR = currentUser?.role === "HR";
     const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+    const isFullAccess = currentUser?.is_admin === true;
+    const isRestrictedManager = isSubAdmin && !isFullAccess;
     const userPermissions = currentUser?.permissions || {};
 
     const filtered = DashboardMenu.filter((item) => {
@@ -80,7 +82,10 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
         return isSuperAdmin || isPrimaryHR;
       }
       if (isSubAdmin) {
-        if (item.link === "/dashboard" || item.logout) return true;
+        if (item.logout) return true;
+        // A restricted manager has no Admin Dashboard overview — their "home"
+        // is the Employee Dashboard, added back in separately below.
+        if (item.link === "/dashboard") return !isRestrictedManager;
         if (item.moduleKey) {
           if (item.moduleKey === "dashboard") return true;
           if (item.moduleKey === "payroll") {
@@ -124,6 +129,16 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
         result.push(current);
       }
     }
+
+    if (isRestrictedManager) {
+      result.unshift({
+        id: "restricted-manager-home",
+        title: "My Dashboard",
+        link: "/employee-dashboard",
+        icon: <IconLayoutDashboard size={20} strokeWidth={1.5} />,
+      });
+    }
+
     return result;
   }, [isMounted, isEmployee, currentUser]);
 
@@ -467,7 +482,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                 <div className='my-3'>
                   <h5 className='mb-1 fs-6'>{isMounted ? (companyName || 'AttendStack') : 'AttendStack'}</h5>
                   <span className='d-block text-secondary'>{isMounted && currentUser ? (currentUser.full_name || currentUser.name || currentUser.username) : 'HR Administrator'}</span>
-                  <span className='text-secondary'>{isMounted && currentUser ? (currentUser.designation || currentUser.role_display || currentUser.role) : 'Administrator'}</span>
+                  <span className='text-secondary'>{isMounted && currentUser ? (currentUser.designation || currentUser.custom_role_title || currentUser.role) : 'Administrator'}</span>
                 </div>
               </div>
             </div>

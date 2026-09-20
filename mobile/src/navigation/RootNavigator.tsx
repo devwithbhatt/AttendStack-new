@@ -24,7 +24,7 @@ import NewGroupScreen from "../screens/chat/NewGroupScreen";
 import Tabs from "./Tabs";
 import AdminTabs from "./AdminTabs";
 import { colors, fonts } from "../theme";
-import { isAdminRole } from "../types";
+import { isFullAdmin } from "../types";
 import type { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,7 +40,7 @@ export default function RootNavigator() {
     );
   }
 
-  const admin = isAdminRole(user?.role);
+  const admin = isFullAdmin(user);
 
   return (
     <NavigationContainer>

@@ -23,7 +23,7 @@ CustomToggle.displayName = "CustomToggle";
 
 const UserMenu = () => {
   const { companyLogo } = useBranding();
-  const [user, setUser] = useState<{ full_name: string; email: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ full_name: string; email: string; role: string; custom_role_title?: string } | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -207,7 +207,7 @@ const UserMenu = () => {
               {user ? user.email : "user@attendstack.com"}
             </p>
             <span className="badge bg-success-subtle text-success border border-success-subtle mt-1.5 font-monospace rounded-pill text-uppercase px-2 py-1" style={{ fontSize: "0.65rem", fontWeight: 600 }}>
-              {user ? (user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "EMPLOYEE" ? "Employee" : user.role) : "Staff"}
+              {user ? (user.custom_role_title || (user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "EMPLOYEE" ? "Employee" : user.role)) : "Staff"}
             </span>
           </div>
         </div>

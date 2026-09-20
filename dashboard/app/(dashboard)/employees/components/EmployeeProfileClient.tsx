@@ -28,6 +28,7 @@ import {
   IconCopy,
   IconBuilding,
   IconPhoneCall,
+  IconShieldLock,
 } from "@tabler/icons-react";
 
 type Employee = {
@@ -96,6 +97,15 @@ type ShiftOption = {
   start_time: string;
   end_time: string;
   is_night_shift?: boolean;
+};
+
+type RoleOption = {
+  id: string;
+  name: string;
+  description: string;
+  is_admin: boolean;
+  is_system: boolean;
+  employee_count?: number;
 };
 
 type EmployeeProfileClientProps = {
@@ -272,6 +282,16 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
   const [shiftSuccessMessage, setShiftSuccessMessage] = useState("");
   const [shiftErrorMessage, setShiftErrorMessage] = useState("");
 
+  // Role & Access Management State
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
+  const [currentRole, setCurrentRole] = useState<RoleOption | null>(null);
+  const [hasLoginAccount, setHasLoginAccount] = useState(true);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [isSavingRole, setIsSavingRole] = useState(false);
+  const [roleSuccessMessage, setRoleSuccessMessage] = useState("");
+  const [roleErrorMessage, setRoleErrorMessage] = useState("");
+
   // Hash change detection (for URL routing to #leave-entitlement)
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -303,6 +323,44 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
     };
     loadShifts();
   }, []);
+
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/roles/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableRoles(Array.isArray(data) ? data : data.results || []);
+        }
+      } catch (err) {
+        console.error("Failed to load roles:", err);
+      }
+    };
+    loadRoles();
+  }, []);
+
+  useEffect(() => {
+    if (!resolvedEmployeeId || resolvedEmployeeId === "me") return;
+    const loadCurrentRole = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        const res = await fetch(`${API_URL}${resolvedEmployeeId}/assign-role/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentRole(data.role || null);
+          setHasLoginAccount(Boolean(data.has_account ?? true));
+        }
+      } catch (err) {
+        console.error("Failed to load current role assignment:", err);
+      }
+    };
+    loadCurrentRole();
+  }, [resolvedEmployeeId]);
 
   useEffect(() => {
     const loadEmployee = async () => {
@@ -409,6 +467,56 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
       setShiftErrorMessage(err instanceof Error ? err.message : "Unable to update work shift.");
     } finally {
       setIsSavingShift(false);
+    }
+  };
+
+  const openRoleModal = () => {
+    if (!employee) return;
+    setSelectedRoleId(currentRole?.id || "");
+    setRoleSuccessMessage("");
+    setRoleErrorMessage("");
+    setIsRoleModalOpen(true);
+  };
+
+  const closeRoleModal = () => {
+    if (isSavingRole) return;
+    setIsRoleModalOpen(false);
+    setRoleSuccessMessage("");
+    setRoleErrorMessage("");
+  };
+
+  const handleSaveRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee) return;
+    setIsSavingRole(true);
+    setRoleSuccessMessage("");
+    setRoleErrorMessage("");
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(`${API_URL}${employee.id}/assign-role/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ role_id: selectedRoleId || null }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to update role assignment.");
+      }
+
+      setCurrentRole(data.role || null);
+      setRoleSuccessMessage(data.detail || "Role updated successfully!");
+      setTimeout(() => {
+        setIsRoleModalOpen(false);
+      }, 700);
+    } catch (err) {
+      setRoleErrorMessage(err instanceof Error ? err.message : "Unable to update role assignment.");
+    } finally {
+      setIsSavingRole(false);
     }
   };
 
@@ -991,6 +1099,46 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                   </div>
                 </div>
 
+                {/* Role & Access Card */}
+                <div className="profile-section-card">
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="icon-box-purple">
+                        <IconShieldLock size={18} />
+                      </div>
+                      <div>
+                        <h6 className="mb-0 fw-bold">Role & Access</h6>
+                        <small className="text-muted">Dashboard permissions</small>
+                      </div>
+                    </div>
+                    {!isMe && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm fw-semibold"
+                        onClick={openRoleModal}
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-3 bg-light rounded-3 border">
+                    {!hasLoginAccount ? (
+                      <span className="text-muted small">No login account yet — create one first to assign a role.</span>
+                    ) : currentRole ? (
+                      <>
+                        <div className="d-flex align-items-center justify-content-between mb-1">
+                          <span className="fw-semibold text-dark fs-6">{currentRole.name}</span>
+                          {currentRole.is_admin && <span className="badge bg-primary-subtle text-primary border">Full Access</span>}
+                        </div>
+                        {currentRole.description && (
+                          <small className="text-muted d-block mt-0.5">{currentRole.description}</small>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-muted small">Plain Employee — no elevated dashboard access.</span>
+                    )}
+                  </div>
+                </div>
 
               </div>
             </div>
@@ -1717,6 +1865,72 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
                 </>
               ) : (
                 "Save Shift Assignment"
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      <Modal show={isRoleModalOpen} onHide={closeRoleModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="d-flex align-items-center gap-2">
+            <IconShieldLock size={20} className="text-primary" />
+            Assign Role
+          </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSaveRole}>
+          <Modal.Body>
+            {roleErrorMessage && (
+              <div className="alert alert-danger mb-3 py-2 small">{roleErrorMessage}</div>
+            )}
+            {roleSuccessMessage && (
+              <div className="alert alert-success mb-3 py-2 small">{roleSuccessMessage}</div>
+            )}
+
+            <div className="d-flex align-items-center gap-3 p-3 bg-light rounded-3 mb-3 border">
+              <img
+                src={employee?.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                alt={employee?.full_name || "Employee"}
+                className="rounded-circle flex-shrink-0"
+                style={{ width: "42px", height: "42px", objectFit: "cover" }}
+              />
+              <div className="min-w-0">
+                <div className="fw-semibold text-dark">{employee?.full_name}</div>
+                <div className="text-muted small">{employee?.employee_id} • {employee?.designation || employee?.department || "Employee"}</div>
+              </div>
+            </div>
+
+            <Form.Group className="mb-3" controlId="profileRoleSelect">
+              <Form.Label className="fw-semibold">Select Role</Form.Label>
+              <Form.Select
+                value={selectedRoleId}
+                onChange={(e) => setSelectedRoleId(e.target.value)}
+              >
+                <option value="">Plain Employee (no elevated access)</option>
+                {availableRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}{r.is_admin ? " — Full Access" : ""}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-muted small mt-1.5 d-block">
+                The selected role's permissions decide what this employee can view, edit, or delete
+                across the dashboard. Manage role permissions from Settings → Roles & Permissions.
+              </Form.Text>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeRoleModal} disabled={isSavingRole}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={isSavingRole} className="d-flex align-items-center gap-2 fw-semibold">
+              {isSavingRole ? (
+                <>
+                  <Spinner size="sm" />
+                  Saving...
+                </>
+              ) : (
+                "Save Role Assignment"
               )}
             </Button>
           </Modal.Footer>

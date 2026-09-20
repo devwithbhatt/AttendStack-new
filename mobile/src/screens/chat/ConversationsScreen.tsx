@@ -8,13 +8,13 @@ import { useAuth } from "../../context/AuthContext";
 import { colors, fonts, radii, shadow } from "../../theme";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import { ActionSheet, type ActionSheetOption } from "../../components/ActionSheet";
-import { isAdminRole, type Conversation } from "../../types";
+import { isFullAdmin, type Conversation } from "../../types";
 import type { RootStackParamList } from "../../navigation/types";
 
 export default function ConversationsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
-  const admin = isAdminRole(user?.role);
+  const admin = isFullAdmin(user);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

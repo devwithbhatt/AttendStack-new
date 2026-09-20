@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import viewsets, permissions, status
@@ -15,6 +17,7 @@ from .models import Organization
 from .serializers import OrganizationSerializer, AdministratorSerializer
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class OrganizationVerifyCodeView(APIView):
@@ -318,21 +321,82 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             )
         return Response(OrganizationSerializer(org, context={"request": request}).data)
 
+    def create(self, request, *args, **kwargs):
+        self._welcome_email_warning = None
+        self._company_admin_notice = None
+        response = super().create(request, *args, **kwargs)
+        if self._welcome_email_warning:
+            response.data["warning"] = self._welcome_email_warning
+        if self._company_admin_notice:
+            response.data["company_admin_notice"] = self._company_admin_notice
+        return response
+
     def perform_create(self, serializer):
         owner = self.request.user
         owner_email = self.request.data.get("owner_email")
+        newly_created_owner = False
         if owner_email and (self.request.user.is_superuser or self.request.user.role == UserRole.SUPER_ADMIN):
             target_user = User.objects.filter(email__iexact=owner_email.strip()).first()
             if target_user:
                 owner = target_user
+                # Reusing an existing account as owner is a legitimate but
+                # unusual case (e.g. re-running a test with the same email).
+                # No new account is created and no welcome email is sent —
+                # say so plainly instead of letting the generic success
+                # message imply an email went out when it didn't.
+                if target_user.is_superuser or target_user.role == UserRole.SUPER_ADMIN:
+                    self._company_admin_notice = (
+                        f"{owner_email.strip()} is a Super Admin account. It was linked as this "
+                        "company's owner, but no new Company Admin account or welcome email was "
+                        "created — Super Admin accounts shouldn't normally also be a tenant's "
+                        "Company Admin. Use a dedicated email if you want a separate admin for this company."
+                    )
+                else:
+                    self._company_admin_notice = (
+                        f"{owner_email.strip()} already has an account and was linked as this "
+                        "company's owner. No new account or welcome email was created, since the "
+                        "account already exists and already knows how to sign in."
+                    )
             else:
+                from accounts.services import generate_secure_temp_password
+
                 owner = User.objects.create_hr(
                     email=owner_email.strip(),
-                    password="OrgOwner@123",
-                    first_name=self.request.data.get("owner_first_name", "HR"),
-                    last_name=self.request.data.get("owner_last_name", "Manager"),
+                    password=generate_secure_temp_password(),
+                    first_name=self.request.data.get("owner_first_name", "Company"),
+                    last_name=self.request.data.get("owner_last_name", "Admin"),
                 )
-        serializer.save(owner=owner)
+                newly_created_owner = True
+
+        organization = serializer.save(owner=owner)
+
+        if newly_created_owner:
+            # A freshly onboarded tenant's owner is the Company Admin: give
+            # them the org's full-access Admin role immediately so they can
+            # sign in and start allocating authority/permissions to others
+            # right away, instead of landing with no role assignment.
+            from roles.services import ensure_admin_role
+
+            admin_role = ensure_admin_role(organization)
+            owner.custom_role = admin_role
+            owner.save(update_fields=["custom_role"])
+
+            # The account has a random password nobody knows yet — the
+            # welcome email is the only way the client learns this workspace
+            # exists and how to set their own password. If it fails to send,
+            # don't undo the (successful) company creation, but make sure the
+            # Super Admin who just clicked "Create Company" finds out, since
+            # they're the only one who can otherwise reach this client.
+            from accounts.services import send_company_admin_welcome_email
+
+            try:
+                send_company_admin_welcome_email(owner, organization)
+            except Exception:
+                logger.exception("Unable to send Company Admin welcome email for organization %s", organization.id)
+                self._welcome_email_warning = (
+                    "Company created, but the welcome email could not be sent to "
+                    f"{owner.email}. Please share the sign-in link with them manually."
+                )
 
     def perform_update(self, serializer):
         organization = self.get_object()

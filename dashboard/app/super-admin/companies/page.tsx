@@ -237,7 +237,17 @@ export default function SuperAdminCompaniesPage() {
       setOrganizations((current) => [response.data, ...current]);
       setShowCreateModal(false);
       setCreateForm({ name: "", owner_email: "", owner_first_name: "", owner_last_name: "" });
-      setNotice(`Company "${response.data.name}" created! Onboarding Code: ${response.data.invite_code}`);
+
+      const baseNotice = `Company "${response.data.name}" created! Onboarding Code: ${response.data.invite_code}.`;
+      if (response.data.warning) {
+        setError(response.data.warning);
+        setNotice(baseNotice);
+      } else if (response.data.company_admin_notice) {
+        setError(response.data.company_admin_notice);
+        setNotice(baseNotice);
+      } else {
+        setNotice(`${baseNotice} A welcome email with sign-in instructions was sent to the Company Admin.`);
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to create company.");
     } finally {
@@ -506,7 +516,7 @@ export default function SuperAdminCompaniesPage() {
               <thead className="table-light">
                 <tr className="text-nowrap">
                   <th className="ps-4">Company Name</th>
-                  <th>HR Owner & Contact</th>
+                  <th>Company Admin & Contact</th>
                   <th>Invite Code</th>
                   <th>Workforce Size</th>
                   <th>Today Check-ins</th>
@@ -642,7 +652,7 @@ export default function SuperAdminCompaniesPage() {
         <Form onSubmit={handleCreateCompany}>
           <Modal.Body className="py-3">
             <p className="text-secondary small mb-3">
-              Super Admin can onboard a new company tenant. An HR Administrator account will be generated automatically.
+              Super Admin can onboard a new company tenant. A Company Admin account will be generated automatically with full authority over that company's workspace.
             </p>
 
             <Form.Group className="mb-3">
@@ -657,11 +667,11 @@ export default function SuperAdminCompaniesPage() {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label className="fw-semibold">Owner HR Email Address *</Form.Label>
+              <Form.Label className="fw-semibold">Company Admin Email Address *</Form.Label>
               <Form.Control
                 type="email"
                 required
-                placeholder="hr@acmetech.com"
+                placeholder="admin@acmetech.com"
                 value={createForm.owner_email}
                 onChange={(e) => setCreateForm({ ...createForm, owner_email: e.target.value })}
               />
@@ -670,7 +680,7 @@ export default function SuperAdminCompaniesPage() {
             <Row className="g-2">
               <Col xs={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label className="fw-semibold">Owner First Name</Form.Label>
+                  <Form.Label className="fw-semibold">Company Admin First Name</Form.Label>
                   <Form.Control
                     type="text"
                     placeholder="e.g. Rahul"
@@ -681,7 +691,7 @@ export default function SuperAdminCompaniesPage() {
               </Col>
               <Col xs={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label className="fw-semibold">Owner Last Name</Form.Label>
+                  <Form.Label className="fw-semibold">Company Admin Last Name</Form.Label>
                   <Form.Control
                     type="text"
                     placeholder="e.g. Sharma"
@@ -724,10 +734,10 @@ export default function SuperAdminCompaniesPage() {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label className="fw-semibold">Owner Email</Form.Label>
+              <Form.Label className="fw-semibold">Company Admin Email</Form.Label>
               <Form.Control
                 type="email"
-                placeholder="Assign owner email"
+                placeholder="Assign company admin email"
                 value={editForm.owner_email}
                 onChange={(e) => setEditForm({ ...editForm, owner_email: e.target.value })}
               />
@@ -763,7 +773,7 @@ export default function SuperAdminCompaniesPage() {
               <Row className="g-3 mb-4">
                 <Col xs={12} sm={4}>
                   <div className="p-3 border rounded bg-light">
-                    <span className="text-secondary small fw-semibold text-uppercase d-block">Owner</span>
+                    <span className="text-secondary small fw-semibold text-uppercase d-block">Company Admin</span>
                     <strong className="text-dark d-block">{companyStats.owner_name || "Unassigned"}</strong>
                     <small className="text-secondary">{companyStats.owner_email || "No email"}</small>
                   </div>

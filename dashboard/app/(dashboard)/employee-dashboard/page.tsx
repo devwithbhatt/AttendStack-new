@@ -575,14 +575,14 @@ const EmployeeDashboard = () => {
   const monthlySalary = Number(employee.annual_salary) / 12;
   const taskStats = {
     total: tasks.length,
+    todo: tasks.filter((task) => task.status === "TODO").length,
     active: tasks.filter((task) => ["PENDING", "TODO", "IN_PROGRESS", "ON_HOLD"].includes(task.status)).length,
     overdue: tasks.filter((task) => task.is_overdue).length,
     completed: tasks.filter((task) => ["COMPLETED", "CLOSED"].includes(task.status)).length,
     onHold: tasks.filter((task) => task.status === "ON_HOLD").length,
-    dueSoon: tasks.filter((task) => {
-      const days = daysUntil(task.due_date);
-      return days !== null && days >= 0 && days <= 3 && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status);
-    }).length,
+    highPriority: tasks.filter(
+      (task) => task.priority === "HIGH" && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status)
+    ).length,
   };
   const taskCompletionRate = taskStats.total ? Math.round((taskStats.completed / taskStats.total) * 100) : 0;
   const taskHealthLabel = taskStats.overdue > 0 ? "Needs Attention" : taskStats.onHold > 0 ? "On Hold" : taskStats.active > 0 ? "In Progress" : "Clear";
@@ -807,14 +807,20 @@ const EmployeeDashboard = () => {
           <Row className="g-3 mb-4">
             <Col xs={6} lg={2}>
               <div className="employee-task-metric is-neutral">
-                <span>Total</span>
-                <strong>{taskStats.total}</strong>
+                <span>To Do</span>
+                <strong>{taskStats.todo}</strong>
               </div>
             </Col>
             <Col xs={6} lg={2}>
               <div className="employee-task-metric is-primary">
                 <span>Active</span>
                 <strong>{taskStats.active}</strong>
+              </div>
+            </Col>
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-warning">
+                <span>On Hold</span>
+                <strong>{taskStats.onHold}</strong>
               </div>
             </Col>
             <Col xs={6} lg={2}>
@@ -825,19 +831,13 @@ const EmployeeDashboard = () => {
             </Col>
             <Col xs={6} lg={2}>
               <div className="employee-task-metric is-warning">
-                <span>Due Soon</span>
-                <strong>{taskStats.dueSoon}</strong>
-              </div>
-            </Col>
-            <Col xs={6} lg={2}>
-              <div className="employee-task-metric is-warning">
-                <span>On Hold</span>
-                <strong>{taskStats.onHold}</strong>
+                <span>High Priority</span>
+                <strong>{taskStats.highPriority}</strong>
               </div>
             </Col>
             <Col xs={6} lg={2}>
               <div className="employee-task-metric is-success">
-                <span>Completed</span>
+                <span>Done</span>
                 <strong>{taskStats.completed}</strong>
               </div>
             </Col>

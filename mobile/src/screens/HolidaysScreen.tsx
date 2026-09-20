@@ -9,13 +9,13 @@ import { colors, fonts, radii, shadow } from "../theme";
 import { Badge } from "../components/Badge";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { isAdminRole, type Holiday } from "../types";
+import { hasModulePermission, type Holiday } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
 export default function HolidaysScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
-  const canManage = isAdminRole(user?.role);
+  const canManage = hasModulePermission(user, "holidays", "edit");
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
