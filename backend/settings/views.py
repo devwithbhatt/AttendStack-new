@@ -22,9 +22,10 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     permission_module = "settings"
     parser_classes = [JSONParser, MultiPartParser, FormParser]
-    
+
     def get_object(self):
-        return SystemSettings.get_settings()
+        from organizations.services import get_organization_for_user
+        return SystemSettings.get_settings(get_organization_for_user(self.request.user))
     
     def update(self, request, *args, **kwargs):
         # Only allow admins to update settings
@@ -103,10 +104,13 @@ class SettingsChangeLogsView(generics.ListAPIView):
     """
     serializer_class = SettingsChangeLogSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrHR]
-    queryset = SettingsChangeLog.objects.all().order_by('-changed_at')
-    
+
     def get_queryset(self):
-        return super().get_queryset()[:100]  # Limit to last 100 changes
+        from organizations.services import get_organization_for_user
+        org = get_organization_for_user(self.request.user)
+        return SettingsChangeLog.objects.filter(
+            settings__organization=org
+        ).order_by('-changed_at')[:100]  # Limit to last 100 changes
 
 
 class SyncSimplyJobSettingsView(generics.GenericAPIView):
@@ -119,13 +123,13 @@ class SyncSimplyJobSettingsView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         from django.conf import settings
         from organizations.models import Organization
-        settings_instance = SystemSettings.get_settings()
-        synced_fields = []
-        company_data = {}
 
         # 1. Find connected organization strictly for this user
         from organizations.services import get_organization_for_user
         org = get_organization_for_user(request.user)
+        settings_instance = SystemSettings.get_settings(org)
+        synced_fields = []
+        company_data = {}
 
         # 2. Extract from SimplyJob DB if configured
         db_url = getattr(settings, "SIMPLYJOB_DATABASE_URL", "").strip()

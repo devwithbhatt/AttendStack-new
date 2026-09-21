@@ -17,7 +17,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSettings
         fields = "__all__"
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["organization", "created_at", "updated_at"]
         
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -36,7 +36,7 @@ class SystemSettingsUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSettings
         fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = ("id", "organization", "created_at", "updated_at")
         
     def validate_working_days(self, value):
         valid_days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]

@@ -183,7 +183,7 @@ class PayrollSerializer(serializers.ModelSerializer):
 
     def get_company_details(self, obj):
         try:
-            settings = SystemSettings.get_settings()
+            settings = SystemSettings.get_settings(obj.employee.organization)
             logo_url = None
             if settings.company_logo:
                 request = self.context.get("request")
@@ -295,7 +295,7 @@ class EmployeeIncrementSerializer(serializers.ModelSerializer):
         if obj.employee.override_increment_policy and obj.employee.custom_increment_months:
             return obj.employee.custom_increment_months
         try:
-            settings = SystemSettings.get_settings()
+            settings = SystemSettings.get_settings(obj.employee.organization)
             return settings.default_increment_months or 12
         except Exception:
             return 12

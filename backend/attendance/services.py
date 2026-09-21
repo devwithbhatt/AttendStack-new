@@ -143,7 +143,7 @@ def monthly_leave_limit_snapshot(
     Pending requests reserve capacity as well as approved requests so concurrent
     approvals cannot push an employee over policy.
     """
-    settings = SystemSettings.get_settings()
+    settings = SystemSettings.get_settings(employee.organization)
     limit = monthly_leave_limit(settings, leave_type)
     requested_by_month = leave_units_by_month(start_date, end_date, is_half_day)
     if limit is None:
@@ -208,7 +208,7 @@ def monthly_leave_limit_error(snapshot: dict, leave_type_label: str) -> str | No
 
 def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
     """Apply each annual leave allocation independently and chronologically."""
-    settings = SystemSettings.get_settings()
+    settings = SystemSettings.get_settings(employee.organization)
 
     for leave_type in LEAVE_ALLOCATION_FIELDS:
         paid_used = Decimal("0")

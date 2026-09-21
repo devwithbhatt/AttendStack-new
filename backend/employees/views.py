@@ -190,7 +190,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         from settings.models import SystemSettings
 
         year = timezone.localdate().year
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(employee.organization)
         records = AttendanceRecord.objects.select_related("leave_request").filter(
             employee=employee,
             date__year=year,

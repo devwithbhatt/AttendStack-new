@@ -70,7 +70,8 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         try:
             from settings.models import SystemSettings
-            sys_settings = SystemSettings.objects.first()
+            from organizations.services import get_organization_for_user
+            sys_settings = SystemSettings.get_settings(get_organization_for_user(obj))
             if sys_settings and sys_settings.company_logo:
                 return request.build_absolute_uri(sys_settings.company_logo.url) if request else sys_settings.company_logo.url
         except Exception:
@@ -101,7 +102,8 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         if getattr(obj, 'role', '') in ['SUPER_ADMIN', 'ADMIN']:
             try:
                 from settings.models import SystemSettings
-                sys_settings = SystemSettings.objects.first()
+                from organizations.services import get_organization_for_user
+                sys_settings = SystemSettings.get_settings(get_organization_for_user(obj))
                 if sys_settings and sys_settings.company_logo:
                     return request.build_absolute_uri(sys_settings.company_logo.url) if request else sys_settings.company_logo.url
             except Exception:
@@ -237,7 +239,8 @@ class ConversationSerializer(serializers.ModelSerializer):
                 if getattr(other_member.user, 'role', '') in ['SUPER_ADMIN', 'ADMIN']:
                     try:
                         from settings.models import SystemSettings
-                        sys_settings = SystemSettings.objects.first()
+                        from organizations.services import get_organization_for_user
+                        sys_settings = SystemSettings.get_settings(get_organization_for_user(other_member.user))
                         if sys_settings and sys_settings.company_logo:
                             return request.build_absolute_uri(sys_settings.company_logo.url) if request else sys_settings.company_logo.url
                     except Exception:

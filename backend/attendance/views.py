@@ -211,7 +211,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             effective_shift = Shift.get_default_shift(employee.organization)
 
         SystemSettings = apps.get_model('settings', 'SystemSettings')
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(employee.organization)
 
         shift_name = effective_shift.name if effective_shift else "General Shift"
         shift_start_time = (
@@ -315,8 +315,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         Returns a dict of location data captured (may be empty if restrictions are off).
         Raises ValidationError with a clear, user-friendly message on any violation.
         """
+        from organizations.services import get_organization_for_user
+
         SystemSettings = apps.get_model('settings', 'SystemSettings')
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(get_organization_for_user(request.user))
         location_data = {}
 
         # Detect client IP
@@ -603,8 +605,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         Returns the detected IP address of the requesting client.
         Used by the admin settings page to easily find the correct IP to whitelist.
         """
+        from organizations.services import get_organization_for_user
+
         SystemSettings = apps.get_model('settings', 'SystemSettings')
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(get_organization_for_user(request.user))
         client_ip = get_ip_address(request)
 
         # Check if this IP is already in the allow-list
@@ -658,7 +662,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         """Return the authenticated employee's authoritative prorated leave balance."""
         employee = self._current_employee()
         year = timezone.localdate().year
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(employee.organization)
         paid_records = AttendanceRecord.objects.select_related("leave_request").filter(
             employee=employee, date__year=year, is_paid=True,
             leave_request__status=LeaveStatus.APPROVED,
@@ -710,7 +714,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         exclude_id = request.query_params.get("exclude_id")
         if exclude_id:
             excluded_request = LeaveRequest.objects.filter(pk=exclude_id, employee=employee).first()
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(employee.organization)
         monthly_snapshot = monthly_leave_limit_snapshot(
             employee,
             start_date,

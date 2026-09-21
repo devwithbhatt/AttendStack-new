@@ -27,7 +27,7 @@ def get_effective_increment_config(employee: Employee, settings: SystemSettings 
         return False, 12, "PERCENTAGE", Decimal("0.00")
 
     if settings is None:
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(employee.organization)
 
     if not settings.increment_enabled:
         return False, settings.default_increment_months, settings.default_increment_type, Decimal(str(settings.default_increment_value))
@@ -66,11 +66,11 @@ def sync_employee_increments(employee: Employee = None):
     Ensures active employees have next_increment_date set and
     a PENDING EmployeeIncrement record created for upcoming cycle.
     Automatically purges pending/rescheduled increments for any employee who is not active.
-    """
-    settings = SystemSettings.get_settings()
-    if not settings.increment_enabled:
-        return
 
+    When called without `employee`, this sweeps every active employee across
+    every organization — so each employee's own organization's increment
+    policy is resolved individually inside the loop, not once upfront.
+    """
     today = timezone.localdate()
 
     if employee:
@@ -99,6 +99,10 @@ def sync_employee_increments(employee: Employee = None):
         employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
 
     for emp in employees:
+        settings = SystemSettings.get_settings(emp.organization)
+        if not settings.increment_enabled:
+            continue
+
         enabled, months, inc_type, inc_val = get_effective_increment_config(emp, settings)
         if not enabled:
             continue
@@ -273,7 +277,7 @@ def update_increment_hike(
     current_salary = Decimal(str(increment.current_salary or increment.employee.annual_salary or 0))
 
     if reset_to_company_policy:
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(increment.employee.organization)
         target_type = settings.default_increment_type or "PERCENTAGE"
         target_val = Decimal(str(settings.default_increment_value or 10.00))
         calc_amount, new_salary = calculate_increment_amounts(current_salary, target_type, target_val)

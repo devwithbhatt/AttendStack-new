@@ -4,7 +4,21 @@ from django.core.validators import MaxValueValidator
 
 
 class SystemSettings(models.Model):
-    """Singleton model to store global system settings"""
+    """Per-organization system/company settings.
+
+    One row per tenant organization (`organization` is a OneToOne). A row
+    with `organization=None` is a fallback used only when no organization
+    context is available (e.g. tests) — real request-driven code paths must
+    always resolve and pass the caller's actual organization.
+    """
+    organization = models.OneToOneField(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="system_settings",
+    )
+
     # Attendance Settings
     shift_start_time = models.TimeField(default="10:00:00")
     late_cutoff_time = models.TimeField(default="10:15:00")
@@ -160,24 +174,23 @@ class SystemSettings(models.Model):
         verbose_name_plural = "System Settings"
 
     def save(self, *args, **kwargs):
-        # Ensure only one instance exists (singleton pattern)
-        if SystemSettings.objects.exists() and not self.pk:
-            self.pk = SystemSettings.objects.first().pk
-        
         # Set default working days if not set
         if not self.working_days:
             self.working_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
-            
+
         super().save(*args, **kwargs)
 
     @classmethod
     def get_settings(cls, organization=None):
-        """Get the singleton instance, create if it doesn't exist"""
-        settings, created = cls.objects.get_or_create(pk=1)
+        """Get-or-create this organization's settings row. `organization=None`
+        is reserved for contexts with no resolvable tenant (tests, bootstrap)
+        and always resolves to the same shared fallback row — callers with a
+        real organization must always pass it explicitly."""
+        settings, created = cls.objects.get_or_create(organization=organization)
         return settings
 
     def __str__(self):
-        return "Global System Settings"
+        return f"Settings for {self.organization}" if self.organization_id else "Default/Fallback Settings"
 
 
 class SettingsChangeLog(models.Model):

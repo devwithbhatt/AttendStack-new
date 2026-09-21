@@ -107,7 +107,7 @@ class Shift(models.Model):
 
         # Auto-bootstrap default General Shift from SystemSettings if no default shift exists
         try:
-            settings = SystemSettings.get_settings()
+            settings = SystemSettings.get_settings(organization)
             return cls.objects.create(
                 organization=organization,
                 name="General Shift",
@@ -240,7 +240,7 @@ class AttendanceRecord(models.Model):
             return
 
         # Get current system settings for dynamic thresholds
-        settings = SystemSettings.get_settings()
+        settings = SystemSettings.get_settings(getattr(self.employee, "organization", None))
         local_check_in = timezone.localtime(self.check_in)
         
         # Helper to safely obtain a datetime.time object
