@@ -433,6 +433,24 @@ function ChatPageContent() {
         setOrganization(JSON.parse(orgData));
       } catch { }
     }
+
+    // The cached copy above can be stale (e.g. a Super Admin just granted
+    // this company AttendStack access) — re-verify against the backend so a
+    // long-lived session doesn't keep showing a paywall that's already lifted.
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/me/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((freshOrg) => {
+          if (freshOrg && freshOrg.id) {
+            setOrganization(freshOrg);
+            localStorage.setItem("organization", JSON.stringify(freshOrg));
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const isFeatureLocked =
