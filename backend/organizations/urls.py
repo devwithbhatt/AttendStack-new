@@ -7,6 +7,7 @@ from .views import (
     OrganizationVerifyCodeView,
     OrganizationVerifyApiKeyView,
     OrganizationEmployeesSyncStatusView,
+    OrganizationDirectorySyncView,
 )
 
 router = DefaultRouter()
@@ -21,5 +22,6 @@ urlpatterns = [
     path("organizations/verify-code/", OrganizationVerifyCodeView.as_view(), name="organization-verify-code"),
     path("organizations/verify-api-key/", OrganizationVerifyApiKeyView.as_view(), name="organization-verify-api-key"),
     path("organizations/employee-sync-status/", OrganizationEmployeesSyncStatusView.as_view(), name="organization-employees-sync-status"),
+    path("organizations/directory-sync/", OrganizationDirectorySyncView.as_view(), name="organization-directory-sync"),
     path("", include(router.urls)),
 ]

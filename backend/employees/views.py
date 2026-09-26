@@ -13,7 +13,7 @@ from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
 from django.utils import timezone
 
 from organizations.models import Organization
-from .models import Employee, EmployeeStatus
+from .models import Employee, EmployeeStatus, MERGE_REQUEST_SOURCE
 from .serializers import (
     EmployeeDirectorySerializer,
     EmployeeListSerializer,
@@ -23,6 +23,7 @@ from .serializers import (
 )
 from .services import (
     create_employee_user,
+    delete_employee_user,
     reset_employee_user_password,
     sync_employee_user_access,
 )
@@ -104,6 +105,12 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
         department = self.request.query_params.get("department")
         status_filter = self.request.query_params.get("status")
+
+        if self.action == "list":
+            # Pending "Merge with existing company" requests get their own
+            # Approve/Deny section (see merge_requests below) rather than
+            # cluttering the main directory as ordinary Inactive employees.
+            queryset = queryset.exclude(external_source=MERGE_REQUEST_SOURCE)
 
         if department:
             queryset = queryset.filter(department__iexact=department)
@@ -347,3 +354,42 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         response_serializer = EmployeeListSerializer(employee, context={"request": request})
         return Response(response_serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="merge-requests")
+    def merge_requests(self, request):
+        """Pending 'Merge with existing company' signups awaiting this
+        organization's admin to approve (join as a full teammate) or deny
+        (remove the request entirely) — see accounts.OrganizationMergeJoinSerializer."""
+        queryset = Employee.objects.filter(external_source=MERGE_REQUEST_SOURCE)
+
+        if not (request.user.is_superuser or getattr(request.user, 'role', '') == UserRole.SUPER_ADMIN):
+            organization = self._organization_for_user()
+            queryset = queryset.filter(organization=organization) if organization else queryset.none()
+
+        queryset = queryset.order_by("-created_at")
+        serializer = EmployeeListSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="approve-merge-request")
+    def approve_merge_request(self, request, pk=None):
+        employee = self.get_object()
+        if employee.external_source != MERGE_REQUEST_SOURCE:
+            raise NotFound("This employee has no pending join request.")
+
+        employee.status = EmployeeStatus.ACTIVE
+        employee.external_source = ""
+        employee.save(update_fields=["status", "external_source", "updated_at"])
+        sync_employee_user_access(employee)
+
+        serializer = EmployeeListSerializer(employee, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="deny-merge-request")
+    def deny_merge_request(self, request, pk=None):
+        employee = self.get_object()
+        if employee.external_source != MERGE_REQUEST_SOURCE:
+            raise NotFound("This employee has no pending join request.")
+
+        delete_employee_user(employee)
+        employee.delete()
+        return Response({"detail": "Join request denied and removed."})

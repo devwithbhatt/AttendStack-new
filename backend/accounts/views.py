@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -30,6 +31,7 @@ from .serializers import (
     ResetPasswordWithOTPSerializer,
     SimplyJobEmployeeOnboardingSerializer,
     EmployeeSelfRegistrationSerializer,
+    OrganizationMergeJoinSerializer,
     OrganizationRegistrationSerializer,
     SubAdminPermissionSerializer,
     UpdateSubAdminSerializer,
@@ -38,6 +40,8 @@ from .serializers import (
 )
 from .services import request_password_reset_otp, reset_password_with_otp, request_login_otp, verify_login_otp
 from employees.services import sync_employee_from_simplyjob
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -299,6 +303,60 @@ class OrganizationCodeLookupView(APIView):
         return Response({
             "organization_name": organization.name,
         })
+
+
+class OrganizationNameCheckView(APIView):
+    """
+    Public: warns a new organization signup when the company name they typed
+    looks like an already-registered organization (case/punctuation/legal-suffix
+    differences, e.g. "bhatt square" vs "Bhatt Square Private Limited"), so the
+    frontend can offer "Proceed" (create a new, separate company anyway) or
+    "Merge" (join the existing one instead of creating a duplicate).
+    """
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        name = str(request.query_params.get("name", "")).strip()
+        if not name:
+            return Response({"possible_duplicate": False})
+
+        from organizations.name_matching import find_similar_organization
+
+        match = find_similar_organization(name)
+        if match is None:
+            return Response({"possible_duplicate": False})
+
+        return Response({
+            "possible_duplicate": True,
+            "organization_id": match.id,
+            "organization_name": match.name,
+        })
+
+
+class OrganizationMergeJoinView(generics.CreateAPIView):
+    """Public: joins an existing organization as a pending (inactive) employee
+    instead of creating a new one — see OrganizationMergeJoinSerializer."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    serializer_class = OrganizationMergeJoinSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.save()
+        return Response(
+            {
+                "detail": (
+                    f"Your request to join {employee.organization.name} has been submitted. "
+                    "A company administrator needs to approve your access before you can sign in."
+                ),
+                "organization_name": employee.organization.name,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 
@@ -569,6 +627,7 @@ class SSOLoginView(APIView):
             return Response({"detail": "Invalid SSO payload parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
         user = User.objects.filter(email__iexact=email).first()
+        user_already_existed = user is not None
         if user is None:
             full_name = str(payload_data.get("full_name", "Workspace User")).strip()
             parts = full_name.split()
@@ -589,14 +648,45 @@ class SSOLoginView(APIView):
 
         organization = None
         if source_company_id and role != "EMPLOYEE":
-            organization, _ = Organization.objects.update_or_create(
-                external_company_id=source_company_id,
-                defaults={
-                    "name": company_name or "Company Workspace",
-                    "owner": user,
-                    "external_source": "simplyjob",
-                },
-            )
+            organization = Organization.objects.filter(external_company_id=source_company_id).first()
+            newly_provisioned = False
+
+            if organization is None:
+                # Don't hijack someone who already has their own AttendStack
+                # account into a brand new organization — leave them exactly as
+                # they were and just resolve to what they already own.
+                existing_owned = user_already_existed and user.owned_organizations.first()
+                if existing_owned:
+                    organization = existing_owned
+                else:
+                    org_kwargs = {
+                        "external_company_id": source_company_id,
+                        "name": company_name or "Company Workspace",
+                        "owner": user,
+                        "external_source": "simplyjob",
+                    }
+                    requested_plan_name = str(payload_data.get("plan_name", "")).strip()
+                    if requested_plan_name:
+                        org_kwargs["plan_name"] = requested_plan_name
+                    organization = Organization.objects.create(**org_kwargs)
+                    newly_provisioned = True
+
+            if newly_provisioned:
+                from roles.services import ensure_admin_role
+
+                admin_role = ensure_admin_role(organization)
+                user.custom_role = admin_role
+                user.save(update_fields=["custom_role"])
+
+                # This SSO jump is the only signal that a bundle purchase just
+                # auto-provisioned a workspace — if the email fails, don't block
+                # the sign-in itself, just log it so support can follow up.
+                from accounts.services import send_purchase_thank_you_email
+
+                try:
+                    send_purchase_thank_you_email(user, organization)
+                except Exception:
+                    logger.exception("Unable to send purchase thank-you email for organization %s", organization.id)
         elif user.employee_profile and user.employee_profile.organization:
             organization = user.employee_profile.organization
 

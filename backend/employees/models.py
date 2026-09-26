@@ -19,6 +19,13 @@ class EmployeeStatus(models.TextChoices):
     TERMINATED = "TERMINATED", "Terminated"
 
 
+# Employee.external_source value marking a "Merge with existing company" signup
+# (see accounts.serializers.OrganizationMergeJoinSerializer) as a pending join
+# request awaiting the company admin's approval or denial — see
+# employees.views.EmployeeViewSet.merge_requests/approve_merge_request/deny_merge_request.
+MERGE_REQUEST_SOURCE = "merge_request"
+
+
 ATTENDANCE_ELIGIBLE_STATUSES = (
     EmployeeStatus.ACTIVE,
     EmployeeStatus.PROVISION,

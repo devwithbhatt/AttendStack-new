@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import UserRole
 from organizations.models import Organization
-from .models import Employee, EmployeeStatus
+from .models import Employee, EmployeeStatus, MERGE_REQUEST_SOURCE
 
 User = get_user_model()
 
@@ -246,3 +246,103 @@ class EmployeeStatusActionTests(APITestCase):
         self.assertEqual(response.status_code, http_status.HTTP_204_NO_CONTENT)
         self.assertFalse(User.objects.filter(pk=employee_user_id).exists())
         self.assertIsNone(authenticate(email=employee_email, password="StrongPass123!"))
+
+
+@override_settings(ROOT_URLCONF="employees.urls")
+class MergeRequestActionTests(APITestCase):
+    """The Employees page 'Requests' section: pending 'Merge with existing
+    company' signups (see accounts.OrganizationMergeJoinSerializer) that a
+    company admin can Approve (join as a full teammate) or Deny (removed
+    entirely)."""
+
+    def setUp(self):
+        self.organization = Organization.objects.create(name="AttendStack")
+        self.other_organization = Organization.objects.create(name="Other Co")
+        self.admin_user = User.objects.create_hr(
+            email="org-admin@example.com",
+            password="StrongPass123!",
+        )
+        self.organization.owner = self.admin_user
+        self.organization.save(update_fields=["owner"])
+
+        self.pending_employee = Employee.objects.create(
+            organization=self.organization,
+            full_name="Late Joiner",
+            email="late-joiner@example.com",
+            phone="9876543210",
+            status=EmployeeStatus.INACTIVE,
+            external_source=MERGE_REQUEST_SOURCE,
+        )
+        self.pending_user = User.objects.create_user(
+            email=self.pending_employee.email,
+            password="StrongPass123!",
+            role=UserRole.EMPLOYEE,
+            employee_id=self.pending_employee.employee_id,
+        )
+
+        self.other_pending_employee = Employee.objects.create(
+            organization=self.other_organization,
+            full_name="Different Company Joiner",
+            email="different-co@example.com",
+            phone="9876543211",
+            status=EmployeeStatus.INACTIVE,
+            external_source=MERGE_REQUEST_SOURCE,
+        )
+
+        self.client.force_authenticate(self.admin_user)
+
+    def test_pending_requests_are_excluded_from_the_main_employee_list(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        rows = response.data["results"] if isinstance(response.data, dict) else response.data
+        ids = [str(row["id"]) for row in rows]
+        self.assertNotIn(str(self.pending_employee.id), ids)
+
+    def test_merge_requests_endpoint_is_scoped_to_the_caller_organization(self):
+        response = self.client.get("/merge-requests/")
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        ids = [str(row["id"]) for row in response.data]
+        self.assertIn(str(self.pending_employee.id), ids)
+        self.assertNotIn(str(self.other_pending_employee.id), ids)
+
+    def test_approve_activates_employee_and_unblocks_login(self):
+        response = self.client.post(f"/{self.pending_employee.id}/approve-merge-request/")
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.pending_employee.refresh_from_db()
+        self.assertEqual(self.pending_employee.status, EmployeeStatus.ACTIVE)
+        self.assertEqual(self.pending_employee.external_source, "")
+
+        login_response = self.client.post(
+            "/api/v1/accounts/login/",
+            {"email": "late-joiner@example.com", "password": "StrongPass123!"},
+        )
+        self.assertNotEqual(login_response.status_code, http_status.HTTP_401_UNAUTHORIZED)
+
+    def test_approve_cannot_reach_a_different_organizations_request(self):
+        response = self.client.post(f"/{self.other_pending_employee.id}/approve-merge-request/")
+
+        self.assertEqual(response.status_code, http_status.HTTP_404_NOT_FOUND)
+
+    def test_deny_deletes_the_employee_and_login_account(self):
+        response = self.client.post(f"/{self.pending_employee.id}/deny-merge-request/")
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.assertFalse(Employee.objects.filter(pk=self.pending_employee.id).exists())
+        self.assertIsNone(authenticate(email="late-joiner@example.com", password="StrongPass123!"))
+
+    def test_cannot_approve_or_deny_an_ordinary_non_pending_employee(self):
+        ordinary_employee = Employee.objects.create(
+            organization=self.organization,
+            full_name="Ordinary Employee",
+            email="ordinary@example.com",
+            phone="9876543212",
+        )
+
+        approve_response = self.client.post(f"/{ordinary_employee.id}/approve-merge-request/")
+        deny_response = self.client.post(f"/{ordinary_employee.id}/deny-merge-request/")
+
+        self.assertEqual(approve_response.status_code, http_status.HTTP_404_NOT_FOUND)
+        self.assertEqual(deny_response.status_code, http_status.HTTP_404_NOT_FOUND)

@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import re
 
@@ -41,6 +42,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
+
+        from employees.models import Employee, EmployeeStatus
+
+        employee = Employee.objects.filter(email__iexact=self.user.email).first()
+        if employee and employee.status in (EmployeeStatus.INACTIVE, EmployeeStatus.TERMINATED):
+            if employee.status == EmployeeStatus.INACTIVE:
+                message = "Your account is pending approval from your company administrator."
+            else:
+                message = "Your account has been deactivated. Contact your company administrator."
+            raise AuthenticationFailed(message)
+
         # Append full user profile with granular RBAC permissions to the response body
         user_profile = UserProfileSerializer(self.user, context=self.context).data
         data["user"] = user_profile
@@ -463,6 +475,13 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
                     "designation": "Organization Owner",
                 },
             )
+
+            if not owner.custom_role_id:
+                from roles.services import ensure_admin_role
+
+                admin_role = ensure_admin_role(organization)
+                owner.custom_role = admin_role
+                owner.save(update_fields=["custom_role"])
         return organization
 
 
@@ -591,6 +610,72 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
                 emergency_contact_name=validated_data.get("emergency_contact_name", ""),
                 emergency_contact_relationship=validated_data.get("emergency_contact_relationship", ""),
                 emergency_contact_phone=validated_data.get("emergency_contact_phone", ""),
+            )
+            User.objects.create_user(
+                email=employee.email,
+                password=validated_data["password"],
+                first_name=first_name,
+                last_name=last_name,
+                phone=employee.phone,
+                employee_id=employee.employee_id,
+            )
+        return employee
+
+
+class OrganizationMergeJoinSerializer(serializers.Serializer):
+    """Public: joins an EXISTING organization as a pending (inactive) employee.
+    Used when the organization-name duplicate check (see OrganizationNameCheckView)
+    flags a new signup as a likely match for an already-registered company and the
+    person chooses "Merge" instead of creating a second, duplicate organization.
+    The resulting employee starts INACTIVE — see CustomTokenObtainPairSerializer,
+    which blocks sign-in until the company admin activates them."""
+
+    organization_id = serializers.IntegerField()
+    full_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    phone = serializers.RegexField(r"^\+?[0-9]{10,15}$")
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate_organization_id(self, value):
+        from organizations.models import Organization
+
+        organization = Organization.objects.filter(pk=value, is_active=True).first()
+        if organization is None:
+            raise serializers.ValidationError("Select a valid, active company to join.")
+        self.organization = organization
+        return value
+
+    def validate_full_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter your full name.")
+        return value
+
+    def validate_email(self, value):
+        from employees.models import Employee
+
+        if User.objects.filter(email__iexact=value).exists() or Employee.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("An account or employee record already exists with this email address.")
+        return value.lower()
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return attrs
+
+    def create(self, validated_data):
+        from employees.models import Employee, EmployeeStatus, MERGE_REQUEST_SOURCE
+
+        first_name, last_name = _split_full_name(validated_data["full_name"])
+        with transaction.atomic():
+            employee = Employee.objects.create(
+                organization=self.organization,
+                full_name=validated_data["full_name"],
+                email=validated_data["email"],
+                phone=validated_data["phone"],
+                status=EmployeeStatus.INACTIVE,
+                external_source=MERGE_REQUEST_SOURCE,
             )
             User.objects.create_user(
                 email=employee.email,

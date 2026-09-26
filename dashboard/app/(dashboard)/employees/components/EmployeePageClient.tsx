@@ -19,8 +19,10 @@ import {
   IconMail,
   IconAlertTriangle,
   IconCheck,
+  IconX,
   IconBuildingSkyscraper,
   IconClock,
+  IconUserPlus,
 } from "@tabler/icons-react";
 import { Alert, Button, Dropdown, Form, Modal, Spinner } from "react-bootstrap";
 import Link from "next/link";
@@ -176,6 +178,10 @@ const EmployeePageClient = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  const [pendingRequests, setPendingRequests] = useState<Employee[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(true);
+  const [requestActionId, setRequestActionId] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -316,10 +322,118 @@ const EmployeePageClient = () => {
     }
   };
 
+  const loadMergeRequests = async () => {
+    setIsLoadingRequests(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}merge-requests/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setPendingRequests(Array.isArray(data) ? data : data.results || []);
+    } catch (err) {
+      console.error("Failed to load pending join requests", err);
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
+
   useEffect(() => {
     loadEmployees();
     loadShifts();
+    loadMergeRequests();
   }, []);
+
+  const handleApproveRequest = async (request: Employee) => {
+    const result = await Swal.fire({
+      title: "Approve join request?",
+      html: `<strong>${request.full_name}</strong> (${request.email}) will be added to your company as a full team member with access to all features.`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#198754",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Approve",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+      setRequestActionId(request.id);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${request.id}/approve-merge-request/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response));
+      }
+
+      setPendingRequests((prev) => prev.filter((item) => item.id !== request.id));
+      await loadEmployees();
+
+      Swal.fire({
+        title: "Approved!",
+        text: `${request.full_name} now has full access to your company workspace.`,
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Action Failed",
+        text: err instanceof Error ? err.message : "Unable to approve this request.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+    } finally {
+      setRequestActionId(null);
+    }
+  };
+
+  const handleDenyRequest = async (request: Employee) => {
+    const result = await Swal.fire({
+      title: "Deny join request?",
+      text: `This cancels ${request.full_name}'s request and removes it. They can sign up again if this was a mistake.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Deny",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+      setRequestActionId(request.id);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${request.id}/deny-merge-request/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        throw new Error(await parseApiError(response));
+      }
+
+      setPendingRequests((prev) => prev.filter((item) => item.id !== request.id));
+      Swal.fire({
+        title: "Request Denied",
+        text: `${request.full_name}'s join request has been cancelled.`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Action Failed",
+        text: err instanceof Error ? err.message : "Unable to deny this request.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+    } finally {
+      setRequestActionId(null);
+    }
+  };
 
   const openShiftModal = (employee: Employee) => {
     setShiftEmployee(employee);
@@ -709,6 +823,66 @@ const EmployeePageClient = () => {
   const uniqueDepartments = [...new Set(employees.map((employee) => employee.department).filter(Boolean))];
   return (
     <Fragment>
+      {!isLoadingRequests && pendingRequests.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4 join-requests-card">
+          <div className="card-body p-3 p-md-4">
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <div className="d-flex align-items-center justify-content-center rounded-circle bg-warning-subtle flex-shrink-0" style={{ width: 36, height: 36 }}>
+                <IconUserPlus size={18} className="text-warning" />
+              </div>
+              <div>
+                <h5 className="mb-0 fw-bold">Join Requests</h5>
+                <p className="text-secondary mb-0 small">
+                  These people signed up saying they belong to your company. Approve to add them as a full team member, or deny to cancel the request.
+                </p>
+              </div>
+            </div>
+
+            <div className="d-flex flex-column gap-2">
+              {pendingRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 border rounded-3 bg-light-subtle"
+                >
+                  <div className="d-flex align-items-center gap-3 min-w-0">
+                    <img
+                      src={request.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                      alt={request.full_name}
+                      className="rounded-circle flex-shrink-0"
+                      style={{ width: "38px", height: "38px", objectFit: "cover" }}
+                    />
+                    <div className="min-w-0">
+                      <div className="fw-semibold text-truncate" title={request.full_name}>{request.full_name}</div>
+                      <div className="text-muted small text-truncate" title={request.email}>{request.email}</div>
+                    </div>
+                  </div>
+                  <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                    <Button
+                      variant="success"
+                      size="sm"
+                      className="d-flex align-items-center gap-1 fw-semibold"
+                      disabled={requestActionId === request.id}
+                      onClick={() => handleApproveRequest(request)}
+                    >
+                      <IconCheck size={16} /> Approve
+                    </Button>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      className="d-flex align-items-center gap-1 fw-semibold"
+                      disabled={requestActionId === request.id}
+                      onClick={() => handleDenyRequest(request)}
+                    >
+                      <IconX size={16} /> Deny
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
           <h2 className="mb-0 fw-bold">Employees</h2>

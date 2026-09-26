@@ -9,6 +9,8 @@ from .views import (
     HealthCheckView,
     LoginView,
     OrganizationCodeLookupView,
+    OrganizationMergeJoinView,
+    OrganizationNameCheckView,
     OrganizationRegistrationView,
     RequestPasswordResetOTPView,
     ResendLoginOTPView,
@@ -34,6 +36,8 @@ urlpatterns = [
     path("sso-login/", SSOLoginView.as_view(), name="sso_login"),
     path("verify-registration-token/", VerifyRegistrationTokenView.as_view(), name="verify_registration_token"),
     path("register-organization/", OrganizationRegistrationView.as_view(), name="register_organization"),
+    path("register-organization/check-name/", OrganizationNameCheckView.as_view(), name="check_organization_name"),
+    path("register-organization/merge/", OrganizationMergeJoinView.as_view(), name="register_organization_merge"),
 
     path("register-employee/", EmployeeSelfRegistrationView.as_view(), name="register_employee"),
     path("organization-code/", OrganizationCodeLookupView.as_view(), name="organization_code_lookup"),

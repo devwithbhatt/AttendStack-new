@@ -62,6 +62,47 @@ class OrganizationVerifyCodeView(APIView):
                 "error": "The organization code does not exist or has been expired/reset."
             }, status=status.HTTP_404_NOT_FOUND)
 
+class OrganizationDirectorySyncView(APIView):
+    """
+    Server-to-server only: returns every organization's basic identity so
+    SimplyJob's admin portal can show a unified company directory across both
+    products (including companies that signed up on AttendStack directly and
+    have no corresponding SimplyJob account). Guarded by the same shared
+    secret used for the SSO handshake — never exposed to browsers.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        import hmac
+
+        from django.conf import settings
+
+        expected = (
+            getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
+            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+        ).strip()
+        provided = str(request.headers.get("X-Sync-Secret", "")).strip()
+        if not expected or not provided or not hmac.compare_digest(expected, provided):
+            return Response({"detail": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
+
+        organizations = Organization.objects.filter(is_active=True).select_related("owner").order_by("id")
+        return Response([
+            {
+                "id": org.id,
+                "name": org.name,
+                "owner_email": org.owner.email if org.owner else None,
+                "external_company_id": org.external_company_id,
+                "external_source": org.external_source,
+                "plan_name": org.plan_name,
+                "plan_status": org.plan_status,
+                "invite_code": org.invite_code,
+                "created_at": org.created_at.isoformat() if org.created_at else None,
+            }
+            for org in organizations
+        ])
+
+
 class OrganizationVerifyApiKeyView(APIView):
     """
     Public endpoint to verify an AttendStack API Key.

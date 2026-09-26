@@ -14,6 +14,7 @@ import {
   Form,
   Image,
   InputGroup,
+  Modal,
   Row,
   Spinner,
 } from "react-bootstrap";
@@ -25,6 +26,7 @@ import {
   IconKey,
   IconShieldCheck,
   IconBuildingSkyscraper,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
@@ -52,6 +54,11 @@ function OrganizationRegistrationContent() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [duplicateMatch, setDuplicateMatch] = useState<{ id: number; name: string } | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [proceedConfirmed, setProceedConfirmed] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [mergedOrgName, setMergedOrgName] = useState("");
   const [isSimplyJobPrefilled, setIsSimplyJobPrefilled] = useState(false);
   const [simplyJobData, setSimplyJobData] = useState<{
     company_name?: string;
@@ -139,9 +146,18 @@ function OrganizationRegistrationContent() {
   const update = (key: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError("");
+  const extractError = (requestError: unknown) => {
+    const data = axios.isAxiosError(requestError) ? requestError.response?.data : null;
+    const firstError =
+      data && typeof data === "object"
+        ? Object.values(data)
+          .flat()
+          .find((value) => typeof value === "string")
+        : null;
+    return typeof firstError === "string" ? firstError : "Please check your details and try again.";
+  };
+
+  const createOrganization = async () => {
     setLoading(true);
     try {
       const response = await axios.post(
@@ -150,20 +166,82 @@ function OrganizationRegistrationContent() {
       );
       setInviteCode(response.data.organization.invite_code);
     } catch (requestError) {
-      const data = axios.isAxiosError(requestError) ? requestError.response?.data : null;
-      const firstError =
-        data && typeof data === "object"
-          ? Object.values(data)
-            .flat()
-            .find((value) => typeof value === "string")
-          : null;
-      setError(
-        typeof firstError === "string"
-          ? firstError
-          : "Please check your details and try again."
-      );
+      setError(extractError(requestError));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+
+    // Only nudge on a possible duplicate for a cold, self-typed signup — a
+    // SimplyJob-prefilled handoff already deliberately links/creates one
+    // specific company via source_company_id, so skip the check there.
+    if (isSimplyJobPrefilled || proceedConfirmed) {
+      await createOrganization();
+      return;
+    }
+
+    setCheckingDuplicate(true);
+    try {
+      const response = await axios.get(
+        `${apiRoot}/api/v1/accounts/register-organization/check-name/`,
+        { params: { name: form.organization_name } }
+      );
+      if (response.data?.possible_duplicate) {
+        setDuplicateMatch({
+          id: response.data.organization_id,
+          name: response.data.organization_name,
+        });
+        return;
+      }
+    } catch (requestError) {
+      console.warn("Organization name check failed:", requestError);
+      // Fail open — don't block signup if the check itself errors out.
+    } finally {
+      setCheckingDuplicate(false);
+    }
+
+    await createOrganization();
+  };
+
+  const proceedAsNewCompany = () => {
+    setDuplicateMatch(null);
+    setProceedConfirmed(true);
+  };
+
+  useEffect(() => {
+    if (proceedConfirmed) {
+      createOrganization();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proceedConfirmed]);
+
+  const mergeWithExistingCompany = async () => {
+    if (!duplicateMatch) return;
+    setMerging(true);
+    setError("");
+    try {
+      const response = await axios.post(
+        `${apiRoot}/api/v1/accounts/register-organization/merge/`,
+        {
+          organization_id: duplicateMatch.id,
+          full_name: form.full_name,
+          email: form.email,
+          phone: form.phone,
+          password: form.password,
+          confirm_password: form.confirm_password,
+        }
+      );
+      setMergedOrgName(response.data?.organization_name || duplicateMatch.name);
+      setDuplicateMatch(null);
+    } catch (requestError) {
+      setError(extractError(requestError));
+      setDuplicateMatch(null);
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -251,7 +329,20 @@ function OrganizationRegistrationContent() {
                 </Alert>
               )}
 
-              {inviteCode ? (
+              {mergedOrgName ? (
+                <Alert variant="success" className="mb-0 text-center p-4 rounded-3">
+                  <IconShieldCheck size={40} className="text-success mb-2" />
+                  <h2 className="h4 fw-bold text-success mb-2">Request submitted!</h2>
+                  <p className="text-muted mb-0">
+                    Your request to join <strong>{mergedOrgName}</strong> has been sent. A
+                    company administrator needs to approve your access before you can sign
+                    in — you&apos;ll be notified once that happens.
+                  </p>
+                  <Link href="/admin/sign-in" className="btn btn-outline-success mt-4 px-4 fw-semibold">
+                    Back to sign in
+                  </Link>
+                </Alert>
+              ) : inviteCode ? (
                 <Alert variant="success" className="mb-0 text-center p-4 rounded-3">
                   <IconShieldCheck size={40} className="text-success mb-2" />
                   <h2 className="h4 fw-bold text-success mb-2">
@@ -420,13 +511,18 @@ function OrganizationRegistrationContent() {
                       type="submit"
                       className="w-100 mt-4 py-2 fw-bold"
                       variant="primary"
-                      disabled={loading}
+                      disabled={loading || checkingDuplicate}
                       style={{ backgroundColor: "#4F46E5", borderColor: "#4F46E5" }}
                     >
                       {loading ? (
                         <>
                           <Spinner size="sm" className="me-2" />
                           Creating workspace…
+                        </>
+                      ) : checkingDuplicate ? (
+                        <>
+                          <Spinner size="sm" className="me-2" />
+                          Checking company name…
                         </>
                       ) : isSimplyJobPrefilled ? (
                         "Complete & Connect Organization Workspace"
@@ -438,7 +534,7 @@ function OrganizationRegistrationContent() {
                 )
               )}
 
-              {!inviteCode && (
+              {!inviteCode && !mergedOrgName && (
                 <p className="text-center text-secondary small mt-4 mb-0">
                   Already have a company account?{" "}
                   <Link href="/admin/sign-in" className="fw-semibold text-primary">
@@ -448,14 +544,53 @@ function OrganizationRegistrationContent() {
               )}
             </Card.Body>
           </Card>
-          <p className="text-center text-secondary small mt-3 mb-0">
-            Joining an existing company?{" "}
-            <Link href="/register" className="text-secondary text-decoration-underline">
-              Create an employee account
-            </Link>
-          </p>
+          {!inviteCode && !mergedOrgName && (
+            <p className="text-center text-secondary small mt-3 mb-0">
+              Joining an existing company?{" "}
+              <Link href="/register" className="text-secondary text-decoration-underline">
+                Create an employee account
+              </Link>
+            </p>
+          )}
         </Col>
       </Row>
+
+      <Modal show={!!duplicateMatch} onHide={() => setDuplicateMatch(null)} centered>
+        <Modal.Body className="p-4 text-center">
+          <div
+            className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+            style={{ width: 56, height: 56, backgroundColor: "#FEF3C7" }}
+          >
+            <IconAlertTriangle size={28} style={{ color: "#B45309" }} />
+          </div>
+          <h2 className="h5 fw-bold text-dark mb-2">This company may already be registered</h2>
+          <p className="text-muted mb-4">
+            We found <strong className="text-dark">{duplicateMatch?.name}</strong> already
+            registered with us. If that&apos;s your company, you can request to join it
+            instead of creating a second, separate workspace.
+          </p>
+          <div className="d-grid gap-2">
+            <Button
+              variant="primary"
+              onClick={mergeWithExistingCompany}
+              disabled={merging}
+              style={{ backgroundColor: "#4F46E5", borderColor: "#4F46E5" }}
+            >
+              {merging ? (
+                <>
+                  <Spinner size="sm" className="me-2" />
+                  Sending request…
+                </>
+              ) : (
+                `Merge with ${duplicateMatch?.name || "this company"}`
+              )}
+            </Button>
+            <Button variant="outline-secondary" onClick={proceedAsNewCompany} disabled={merging}>
+              Proceed — this is a different company
+            </Button>
+          </div>
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 }
