@@ -63,6 +63,7 @@ interface PlanItem {
   badge_text: string;
   is_popular: boolean;
   is_active: boolean;
+  requires_contact_sales: boolean;
   sort_order: number;
   allows_employees: boolean;
   allows_attendance: boolean;
@@ -92,6 +93,19 @@ export default function AttendStackPlansPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponError, setCouponError] = useState("");
   const [isActivating, setIsActivating] = useState(false);
+
+  // Contact Sales modal (for plans with requires_contact_sales, e.g. Enterprise)
+  const [contactSalesPlan, setContactSalesPlan] = useState<PlanItem | null>(null);
+  const [contactForm, setContactForm] = useState({
+    full_name: "",
+    company_email: "",
+    company_name: "",
+    website: "",
+    job_title: "",
+    phone: "",
+    message: "",
+  });
+  const [isSubmittingLead, setIsSubmittingLead] = useState(false);
 
   // Invoice Profile Settings
   const [invoiceProfile, setInvoiceProfile] = useState({
@@ -422,6 +436,60 @@ export default function AttendStackPlansPage() {
     }, 600);
   };
 
+  const openContactSalesModal = (plan: PlanItem) => {
+    let currentUser: any = null;
+    if (typeof window !== "undefined") {
+      try {
+        currentUser = JSON.parse(localStorage.getItem("user") || "null");
+      } catch {}
+    }
+
+    setContactForm({
+      full_name: currentUser?.full_name || currentUser?.name || "",
+      company_email: currentUser?.email || organization?.email || "",
+      company_name: organization?.name || "",
+      website: organization?.website || "",
+      job_title: "",
+      phone: organization?.phone || "",
+      message: `I want to enquire about the ${plan.name} plan.`,
+    });
+    setContactSalesPlan(plan);
+  };
+
+  const handleSubmitContactSales = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactSalesPlan) return;
+
+    setIsSubmittingLead(true);
+    try {
+      const res = await fetch(`${BASE_URL}/sales-leads/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ ...contactForm, plan_name: contactSalesPlan.name }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          Object.values(errData).flat().find((v) => typeof v === "string") as string ||
+            "Could not submit your enquiry. Please try again."
+        );
+      }
+
+      setContactSalesPlan(null);
+      Swal.fire({
+        icon: "success",
+        title: "Enquiry Sent!",
+        text: "Thanks — our sales team will reach out to you shortly.",
+        confirmButtonColor: "#0d6efd",
+      });
+    } catch (err: any) {
+      Swal.fire("Submission Failed", err.message || "Could not submit your enquiry.", "error");
+    } finally {
+      setIsSubmittingLead(false);
+    }
+  };
+
   return (
     <div className={`py-3 ${styles.workspace}`}>
       <DasherBreadcrumb />
@@ -708,10 +776,17 @@ export default function AttendStackPlansPage() {
                       </div>
 
                       <div className={styles.price}>
-                        <div className="d-flex align-items-baseline gap-1">
-                          <span className="fs-2 fw-bold text-primary">{price}</span>
-                          <span className="text-secondary small fw-semibold">{period}</span>
-                        </div>
+                        {plan.requires_contact_sales ? (
+                          <div className="d-flex align-items-baseline gap-1">
+                            <span className="fs-2 fw-bold text-primary">Custom</span>
+                            <span className="text-secondary small fw-semibold">pricing</span>
+                          </div>
+                        ) : (
+                          <div className="d-flex align-items-baseline gap-1">
+                            <span className="fs-2 fw-bold text-primary">{price}</span>
+                            <span className="text-secondary small fw-semibold">{period}</span>
+                          </div>
+                        )}
                         <small className="text-muted">
                           Includes {plan.max_employees === -1 ? "Unlimited" : plan.max_employees} active employee seats
                         </small>
@@ -791,9 +866,19 @@ export default function AttendStackPlansPage() {
                       <Button
                         variant={plan.is_popular ? "primary" : "outline-primary"}
                         className="w-100 fw-bold py-2 shadow-sm mt-auto"
-                        onClick={() => setSelectedPlanForCheckout(plan)}
+                        onClick={() =>
+                          plan.requires_contact_sales
+                            ? openContactSalesModal(plan)
+                            : setSelectedPlanForCheckout(plan)
+                        }
                       >
-                        {isCurrent ? "Renew Current Plan" : isPurchasedOnSimplyJob ? `Upgrade to ${plan.name}` : `Choose ${plan.name}`}
+                        {plan.requires_contact_sales
+                          ? "Contact Sales"
+                          : isCurrent
+                          ? "Renew Current Plan"
+                          : isPurchasedOnSimplyJob
+                          ? `Upgrade to ${plan.name}`
+                          : `Choose ${plan.name}`}
                       </Button>
                     </div>
                   </Card>
@@ -1183,6 +1268,111 @@ export default function AttendStackPlansPage() {
             </Modal.Footer>
           </>
         )}
+      </Modal>
+
+      {/* ── CONTACT SALES MODAL (Enterprise / requires_contact_sales plans) ── */}
+      <Modal show={Boolean(contactSalesPlan)} onHide={() => setContactSalesPlan(null)} centered size="lg">
+        <Modal.Header closeButton className="bg-primary text-white py-3 border-0">
+          <Modal.Title className="fw-bold text-white fs-5 d-flex align-items-center gap-2">
+            <IconCreditCard size={22} />
+            Contact Sales — {contactSalesPlan?.name}
+          </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSubmitContactSales}>
+          <Modal.Body className="p-4">
+            <p className="text-secondary small mb-3">
+              Tell us a bit about your company and our sales team will reach out with pricing tailored to your needs.
+            </p>
+            <Row className="g-3">
+              <Col md={6}>
+                <Form.Group controlId="leadFullName">
+                  <Form.Label className="fw-semibold small">Full Name</Form.Label>
+                  <Form.Control
+                    value={contactForm.full_name}
+                    onChange={(e) => setContactForm({ ...contactForm, full_name: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="leadCompanyEmail">
+                  <Form.Label className="fw-semibold small">Company Email</Form.Label>
+                  <Form.Control
+                    type="email"
+                    value={contactForm.company_email}
+                    onChange={(e) => setContactForm({ ...contactForm, company_email: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="leadCompanyName">
+                  <Form.Label className="fw-semibold small">Company Name</Form.Label>
+                  <Form.Control
+                    value={contactForm.company_name}
+                    onChange={(e) => setContactForm({ ...contactForm, company_name: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="leadWebsite">
+                  <Form.Label className="fw-semibold small">Company Website URL</Form.Label>
+                  <Form.Control
+                    type="url"
+                    placeholder="https://yourcompany.com"
+                    value={contactForm.website}
+                    onChange={(e) => setContactForm({ ...contactForm, website: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="leadJobTitle">
+                  <Form.Label className="fw-semibold small">Job Title</Form.Label>
+                  <Form.Control
+                    value={contactForm.job_title}
+                    onChange={(e) => setContactForm({ ...contactForm, job_title: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="leadPhone">
+                  <Form.Label className="fw-semibold small">Phone Number</Form.Label>
+                  <Form.Control
+                    type="tel"
+                    value={contactForm.phone}
+                    onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12}>
+                <Form.Group controlId="leadMessage">
+                  <Form.Label className="fw-semibold small">Message</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    value={contactForm.message}
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+          </Modal.Body>
+          <Modal.Footer className="border-0 pt-0 pb-3 pe-4">
+            <Button variant="secondary" onClick={() => setContactSalesPlan(null)} disabled={isSubmittingLead}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" className="fw-bold px-4 shadow-sm" disabled={isSubmittingLead}>
+              {isSubmittingLead ? (
+                <>
+                  <Spinner size="sm" className="me-1.5" /> Sending...
+                </>
+              ) : (
+                "Send Enquiry"
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
       </Modal>
     </div>
   );

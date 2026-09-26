@@ -127,6 +127,10 @@ class Plan(models.Model):
     badge_text = models.CharField(max_length=50, blank=True, default="")
     is_popular = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    requires_contact_sales = models.BooleanField(
+        default=False,
+        help_text="Show a 'Contact Sales' button (opens the lead form) instead of self-serve checkout on the public Plans page.",
+    )
     sort_order = models.IntegerField(default=0)
 
     # Granular Feature Access Controls (matching AttendStack Sidebar Modules)
@@ -154,4 +158,29 @@ class Plan(models.Model):
 
     def __str__(self):
         return f"{self.name} (₹{self.monthly_price}/mo)"
+
+
+class SalesLead(models.Model):
+    """A 'Contact Sales' enquiry submitted from the Plans page (see
+    organizations/views.py SalesLeadCreateView) for plans marked
+    requires_contact_sales, e.g. Enterprise."""
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_leads"
+    )
+    plan_name = models.CharField(max_length=100, blank=True)
+    full_name = models.CharField(max_length=150)
+    company_email = models.EmailField()
+    company_name = models.CharField(max_length=150)
+    website = models.URLField(blank=True)
+    job_title = models.CharField(max_length=120, blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.company_name} — {self.plan_name} ({self.created_at:%Y-%m-%d})"
 

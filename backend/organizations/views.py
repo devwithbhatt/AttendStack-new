@@ -980,7 +980,7 @@ class PlanViewSet(viewsets.ModelViewSet):
                 ],
             },
             {
-                "name": "Enterprise Sovereign Plan",
+                "name": "Enterprise",
                 "slug": "enterprise",
                 "description": "Complete workforce sovereignty, custom shift logic, and dedicated API infrastructure.",
                 "monthly_price": 1999.00,
@@ -989,6 +989,7 @@ class PlanViewSet(viewsets.ModelViewSet):
                 "badge_text": "UNLIMITED CAPACITY",
                 "is_popular": False,
                 "is_active": True,
+                "requires_contact_sales": True,
                 "sort_order": 3,
                 "allows_employees": True,
                 "allows_attendance": True,
@@ -1020,5 +1021,55 @@ class PlanViewSet(viewsets.ModelViewSet):
             p, _ = Plan.objects.update_or_create(slug=d["slug"], defaults=d)
             results.append(PlanSerializer(p).data)
         return Response({"message": "Default plans seeded successfully.", "plans": results})
+
+
+from .models import SalesLead
+from .serializers import SalesLeadSerializer
+
+
+class SalesLeadCreateView(APIView):
+    """Receives the 'Contact Sales' lead form submitted from the Plans page
+    for a requires_contact_sales plan (e.g. Enterprise) — stores it and
+    emails the sales team."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = SalesLeadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from organizations.services import get_organization_for_user
+
+        organization = get_organization_for_user(request.user)
+        lead = serializer.save(organization=organization)
+
+        try:
+            from django.conf import settings
+            from django.core.mail import send_mail
+
+            sales_email = getattr(settings, "SALES_TEAM_EMAIL", None) or settings.DEFAULT_FROM_EMAIL
+            send_mail(
+                subject=f"New Sales Enquiry — {lead.plan_name or 'AttendStack'} — {lead.company_name}",
+                message=(
+                    f"Full Name: {lead.full_name}\n"
+                    f"Company Email: {lead.company_email}\n"
+                    f"Company Name: {lead.company_name}\n"
+                    f"Website: {lead.website}\n"
+                    f"Job Title: {lead.job_title}\n"
+                    f"Phone: {lead.phone}\n"
+                    f"Plan: {lead.plan_name}\n\n"
+                    f"Message:\n{lead.message}"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[sales_email],
+                fail_silently=True,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to email sales lead notification for lead %s", lead.id)
+
+        return Response(
+            {"detail": "Thanks! Our sales team will reach out to you shortly."},
+            status=status.HTTP_201_CREATED,
+        )
 
 

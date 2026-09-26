@@ -181,6 +181,9 @@ PASSWORD_RESET_SUPPORT_EMAIL = config(
     "PASSWORD_RESET_SUPPORT_EMAIL",
     default=EMAIL_HOST_USER or "support@attendstack.com",
 )
+# Where "Contact Sales" enquiries from the Plans page (see organizations/views.py
+# SalesLeadCreateView) get emailed.
+SALES_TEAM_EMAIL = config("SALES_TEAM_EMAIL", default="onboarding@bhattsquare.com")
 
 # Public URL of the dashboard frontend, used to build links inside outbound
 # emails (e.g. the Company Admin welcome email's sign-in link).

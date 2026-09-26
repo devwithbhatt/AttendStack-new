@@ -178,7 +178,7 @@ class AdministratorSerializer(serializers.ModelSerializer):
         return "Platform Global"
 
 
-from .models import Plan
+from .models import Plan, SalesLead
 
 class PlanSerializer(serializers.ModelSerializer):
     class Meta:
@@ -194,6 +194,7 @@ class PlanSerializer(serializers.ModelSerializer):
             "badge_text",
             "is_popular",
             "is_active",
+            "requires_contact_sales",
             "sort_order",
             "allows_employees",
             "allows_attendance",
@@ -212,5 +213,23 @@ class PlanSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class SalesLeadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesLead
+        fields = [
+            "id",
+            "plan_name",
+            "full_name",
+            "company_email",
+            "company_name",
+            "website",
+            "job_title",
+            "phone",
+            "message",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
 
 
