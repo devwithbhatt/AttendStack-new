@@ -327,3 +327,34 @@ def send_company_admin_welcome_email(user, organization):
         "text/html",
     )
     message.send(fail_silently=False)
+
+
+def send_purchase_thank_you_email(user, organization):
+    """
+    Confirms a bundle purchase (SimplyJob + AttendStack) and tells the new
+    Company Admin their AttendStack workspace was auto-provisioned — no
+    manual Super Admin onboarding step was needed. Same no-password,
+    OTP-self-service pattern as `send_company_admin_welcome_email`.
+    """
+    support_email = getattr(settings, "PASSWORD_RESET_SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL)
+    login_url = f"{settings.FRONTEND_BASE_URL}/admin/sign-in"
+    context = {
+        "name": user.get_short_name() or user.get_full_name() or "there",
+        "organization_name": organization.name,
+        "email": user.email,
+        "login_url": login_url,
+        "support_email": support_email,
+    }
+    message = EmailMultiAlternatives(
+        subject="[AttendStack] Thanks for your SimplyJob + AttendStack purchase",
+        body=render_to_string("accounts/purchase_thank_you.txt", context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+        reply_to=[support_email] if support_email else None,
+        headers={"X-Auto-Response-Suppress": "All"},
+    )
+    message.attach_alternative(
+        render_to_string("accounts/purchase_thank_you.html", context),
+        "text/html",
+    )
+    message.send(fail_silently=False)

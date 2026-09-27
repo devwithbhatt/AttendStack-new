@@ -50,6 +50,9 @@ interface PlanItem {
   monthly_price: number | string;
   yearly_price: number | string;
   max_employees: number;
+  included_employees: number;
+  direct_overage_price_per_employee: number | string | null;
+  simplyjob_overage_price_per_employee: number | string;
   badge_text: string;
   is_popular: boolean;
   is_active: boolean;
@@ -75,7 +78,10 @@ const emptyPlan: PlanItem = {
   description: "",
   monthly_price: 499,
   yearly_price: 4990,
-  max_employees: 50,
+  max_employees: -1,
+  included_employees: 5,
+  direct_overage_price_per_employee: 399,
+  simplyjob_overage_price_per_employee: 250,
   badge_text: "",
   is_popular: false,
   is_active: true,
@@ -184,7 +190,13 @@ export default function SuperAdminPlansPage() {
       slug,
       monthly_price: Number(formData.monthly_price) || 0,
       yearly_price: Number(formData.yearly_price) || 0,
-      max_employees: Number(formData.max_employees) || 50,
+      max_employees: Number(formData.max_employees) || -1,
+      included_employees: Number(formData.included_employees) || 0,
+      direct_overage_price_per_employee:
+        formData.direct_overage_price_per_employee === null || formData.direct_overage_price_per_employee === ""
+          ? null
+          : Number(formData.direct_overage_price_per_employee),
+      simplyjob_overage_price_per_employee: Number(formData.simplyjob_overage_price_per_employee) || 0,
       sort_order: Number(formData.sort_order) || 0,
     };
 
@@ -411,7 +423,7 @@ export default function SuperAdminPlansPage() {
                   <th className="py-3">Plan Name & Slug</th>
                   <th className="py-3">Monthly Price</th>
                   <th className="py-3">Yearly Price</th>
-                  <th className="py-3">Capacity Limit</th>
+                  <th className="py-3">Seats &amp; Overage Pricing</th>
                   <th className="py-3">Enabled Capabilities</th>
                   <th className="py-3">Status</th>
                   <th className="py-3 text-end pe-4">Actions</th>
@@ -441,9 +453,13 @@ export default function SuperAdminPlansPage() {
                       <small className="text-muted"> / yr</small>
                     </td>
                     <td>
-                      <span className="fw-semibold">
-                        {p.max_employees === -1 ? "Unlimited" : `${p.max_employees} Seats`}
-                      </span>
+                      <span className="fw-semibold d-block">{p.included_employees} seats included</span>
+                      <small className="text-muted d-block">
+                        Direct: {p.direct_overage_price_per_employee != null ? `₹${p.direct_overage_price_per_employee}/extra` : "Contact Sales"}
+                      </small>
+                      <small className="text-success d-block">
+                        SimplyJob: ₹{p.simplyjob_overage_price_per_employee}/extra
+                      </small>
                     </td>
                     <td>
                       <div className="d-flex flex-wrap gap-1" style={{ maxWidth: "280px" }}>
@@ -570,6 +586,51 @@ export default function SuperAdminPlansPage() {
                     type="number"
                     value={formData.max_employees}
                     onChange={(e) => setFormData({ ...formData, max_employees: Number(e.target.value) })}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row className="g-3 mb-3">
+              <Col md={4}>
+                <Form.Group controlId="includedEmployees">
+                  <Form.Label className="fw-semibold small">Employees Included in Base Price</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    required
+                    value={formData.included_employees}
+                    onChange={(e) => setFormData({ ...formData, included_employees: Number(e.target.value) })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group controlId="directOveragePrice">
+                  <Form.Label className="fw-semibold small">Direct Overage ₹/Employee (blank = Contact Sales)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.direct_overage_price_per_employee ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        direct_overage_price_per_employee: e.target.value === "" ? null : e.target.value,
+                      })
+                    }
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group controlId="simplyjobOveragePrice">
+                  <Form.Label className="fw-semibold small">SimplyJob-Linked Overage ₹/Employee</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={formData.simplyjob_overage_price_per_employee}
+                    onChange={(e) => setFormData({ ...formData, simplyjob_overage_price_per_employee: e.target.value })}
                   />
                 </Form.Group>
               </Col>

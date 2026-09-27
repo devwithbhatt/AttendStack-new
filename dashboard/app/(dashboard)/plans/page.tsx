@@ -60,6 +60,9 @@ interface PlanItem {
   monthly_price: number | string;
   yearly_price: number | string;
   max_employees: number;
+  included_employees: number;
+  direct_overage_price_per_employee: number | string | null;
+  simplyjob_overage_price_per_employee: number | string;
   badge_text: string;
   is_popular: boolean;
   is_active: boolean;
@@ -189,10 +192,22 @@ export default function AttendStackPlansPage() {
     loadData();
   }, []);
 
-  const isPurchasedOnSimplyJob = organization?.plan_source === "SIMPLYJOB";
+  // Real, verified SimplyJob linkage (external_company_id / external_source
+  // set via the link-simplyjob endpoint) — not the old `plan_source` string,
+  // which the client could set to anything via renew-plan. This is what
+  // gates the cheaper per-seat rate, so it can't be spoofed by just typing a
+  // promo code on AttendStack directly.
+  const isPurchasedOnSimplyJob = organization?.is_simplyjob_linked === true;
   const employeeCount = organization?.active_employee_count ?? organization?.employee_count ?? 4;
-  const maxCapacity = organization?.max_employees || 50;
-  const capacityPercent = Math.min(100, Math.round((employeeCount / maxCapacity) * 100));
+  const currentPlan = plans.find((p) => p.name === organization?.plan_name);
+  const includedSeatsOnCurrentPlan = currentPlan?.included_employees ?? 5;
+  const capacityPercent = Math.min(100, Math.round((employeeCount / Math.max(1, includedSeatsOnCurrentPlan)) * 100));
+  const seatsOverIncluded = Math.max(0, employeeCount - includedSeatsOnCurrentPlan);
+  const currentOverageRate = currentPlan
+    ? isPurchasedOnSimplyJob
+      ? Number(currentPlan.simplyjob_overage_price_per_employee) || 0
+      : Number(currentPlan.direct_overage_price_per_employee) || 0
+    : 0;
 
   // Checkout Calculations
   const checkoutDetails = useMemo(() => {
@@ -200,12 +215,19 @@ export default function AttendStackPlansPage() {
     const basePrice = Number(
       isYearly ? selectedPlanForCheckout.yearly_price : selectedPlanForCheckout.monthly_price
     );
-    const discount = appliedCoupon ? Math.round(basePrice * 0.15) : 0;
-    const taxable = Math.max(0, basePrice - discount);
+    const includedSeats = Number(selectedPlanForCheckout.included_employees) || 0;
+    const extraSeats = Math.max(0, employeeCount - includedSeats);
+    const perSeatRate = isPurchasedOnSimplyJob
+      ? Number(selectedPlanForCheckout.simplyjob_overage_price_per_employee) || 0
+      : Number(selectedPlanForCheckout.direct_overage_price_per_employee) || 0;
+    const overageCost = extraSeats * perSeatRate * (isYearly ? 12 : 1);
+    const subtotal = basePrice + overageCost;
+    const discount = appliedCoupon ? Math.round(subtotal * 0.15) : 0;
+    const taxable = Math.max(0, subtotal - discount);
     const gst = Math.round(taxable * 0.18);
     const total = taxable + gst;
-    return { basePrice, discount, taxable, gst, total };
-  }, [selectedPlanForCheckout, isYearly, appliedCoupon]);
+    return { basePrice, includedSeats, extraSeats, perSeatRate, overageCost, discount, taxable, gst, total };
+  }, [selectedPlanForCheckout, isYearly, appliedCoupon, employeeCount, isPurchasedOnSimplyJob]);
 
   const handleApplyCoupon = () => {
     const code = couponCode.trim().toUpperCase();
@@ -213,11 +235,11 @@ export default function AttendStackPlansPage() {
       setCouponError("Enter coupon code.");
       return;
     }
-    if (code === "ATTEND15" || code === "WELCOME10" || code === "SIMPLYJOB") {
+    if (code === "ATTEND15" || code === "WELCOME10") {
       setAppliedCoupon({ code, discountPercent: 15 });
       setCouponError("");
     } else {
-      setCouponError("Invalid promo code. Try 'ATTEND15' or 'SIMPLYJOB'");
+      setCouponError("Invalid promo code. Try 'ATTEND15' or 'WELCOME10'.");
       setAppliedCoupon(null);
     }
   };
@@ -670,16 +692,20 @@ export default function AttendStackPlansPage() {
                         <IconUsers size={15} className="me-1" /> Active Employees
                       </span>
                       <span className="small fw-bold text-dark">
-                        {employeeCount} / {maxCapacity === -1 ? "Unlimited" : `${maxCapacity} seats`}
+                        {employeeCount} / {includedSeatsOnCurrentPlan} included
                       </span>
                     </div>
                     <ProgressBar
                       now={capacityPercent}
-                      variant={capacityPercent > 90 ? "danger" : capacityPercent > 70 ? "warning" : "primary"}
+                      variant={seatsOverIncluded > 0 ? "warning" : "primary"}
                       style={{ height: "5px" }}
                       className="mb-1"
                     />
-                    <small className="text-muted">{maxCapacity - employeeCount} seats available</small>
+                    <small className="text-muted">
+                      {seatsOverIncluded > 0
+                        ? `${seatsOverIncluded} seat${seatsOverIncluded === 1 ? "" : "s"} over — billed at ₹${currentOverageRate}/employee`
+                        : `${includedSeatsOnCurrentPlan - employeeCount} seats available before overage`}
+                    </small>
                   </div>
                 </Col>
 
@@ -788,14 +814,38 @@ export default function AttendStackPlansPage() {
                           </div>
                         )}
                         <small className="text-muted">
-                          Includes {plan.max_employees === -1 ? "Unlimited" : plan.max_employees} active employee seats
+                          Includes {plan.included_employees} active employee seats
                         </small>
                       </div>
 
                       <div className={styles.featureList}>
                         <div className={styles.featureItem}>
                           <span className={styles.featureIcon}><IconCheck size={11} strokeWidth={3} /></span>
-                          <span><strong>{plan.max_employees === -1 ? "Unlimited" : `Up to ${plan.max_employees}`}</strong> Active Employees</span>
+                          <span><strong>{plan.included_employees}</strong> Employees Included</span>
+                        </div>
+
+                        <div className={styles.featureItem}>
+                          <span className={styles.featureIcon}><IconCheck size={11} strokeWidth={3} /></span>
+                          {isPurchasedOnSimplyJob ? (
+                            <span>
+                              <strong>₹{plan.simplyjob_overage_price_per_employee}</strong>/extra employee{" "}
+                              <Badge bg="success" className="ms-1">SimplyJob rate</Badge>
+                            </span>
+                          ) : plan.direct_overage_price_per_employee != null ? (
+                            <span>
+                              <strong>₹{plan.direct_overage_price_per_employee}</strong>/extra employee direct —{" "}
+                              <span className="text-success fw-semibold">
+                                ₹{plan.simplyjob_overage_price_per_employee} via SimplyJob
+                              </span>
+                            </span>
+                          ) : (
+                            <span>
+                              Contact Sales for extra seats direct —{" "}
+                              <span className="text-success fw-semibold">
+                                ₹{plan.simplyjob_overage_price_per_employee} via SimplyJob
+                              </span>
+                            </span>
+                          )}
                         </div>
 
                         {plan.allows_geofencing && (
@@ -899,7 +949,7 @@ export default function AttendStackPlansPage() {
                   </div>
                   <h4 className="fw-bold text-white mb-1.5">Also hiring on SimplyJob?</h4>
                   <p className="text-secondary-subtle mb-0 small" style={{ maxWidth: "640px" }}>
-                    Candidate profiles hired on SimplyJob automatically synchronize into AttendStack. You can manage hiring subscriptions on SimplyJob or upgrade your AttendStack workforce tools independently right here.
+                    Candidate profiles hired on SimplyJob automatically synchronize into AttendStack. Link your SimplyJob organization ID and every extra employee seat drops to ₹250/month — cheaper than buying seats directly here.
                   </p>
                 </Col>
                 <Col lg={4} className="text-lg-end">
@@ -1185,7 +1235,12 @@ export default function AttendStackPlansPage() {
                   <h5 className="fw-bold text-dark mb-1">{selectedPlanForCheckout.name}</h5>
                   <p className="text-secondary small mb-0">
                     Duration: <strong>{isYearly ? "365 Days (Annual)" : "30 Days (Monthly)"}</strong> ·{" "}
-                    Capacity: <strong>{selectedPlanForCheckout.max_employees === -1 ? "Unlimited" : `${selectedPlanForCheckout.max_employees} Employees`}</strong>
+                    Included: <strong>{selectedPlanForCheckout.included_employees} Employees</strong>
+                    {checkoutDetails.extraSeats > 0 && (
+                      <>
+                        {" "}· Extra: <strong>{checkoutDetails.extraSeats} Employees</strong> @ ₹{checkoutDetails.perSeatRate}/each
+                      </>
+                    )}
                   </p>
                 </div>
                 <div className="text-end">
@@ -1221,9 +1276,18 @@ export default function AttendStackPlansPage() {
               {/* Price Breakdown Summary */}
               <div className="bg-light p-3 rounded-3 border mb-3.5">
                 <div className="d-flex justify-content-between small mb-1">
-                  <span className="text-muted">Subtotal:</span>
+                  <span className="text-muted">Base Plan ({selectedPlanForCheckout.included_employees} seats):</span>
                   <span className="fw-semibold">₹{checkoutDetails.basePrice}</span>
                 </div>
+                {checkoutDetails.extraSeats > 0 && (
+                  <div className="d-flex justify-content-between small mb-1">
+                    <span className="text-muted">
+                      Extra Seats ({checkoutDetails.extraSeats} × ₹{checkoutDetails.perSeatRate}
+                      {isYearly ? " × 12 mo" : ""}):
+                    </span>
+                    <span className="fw-semibold">₹{checkoutDetails.overageCost}</span>
+                  </div>
+                )}
                 {appliedCoupon && (
                   <div className="d-flex justify-content-between small mb-1 text-success">
                     <span>Discount Coupon ({appliedCoupon.code}):</span>
@@ -1241,10 +1305,26 @@ export default function AttendStackPlansPage() {
                 </div>
               </div>
 
-              {isPurchasedOnSimplyJob && (
+              {isPurchasedOnSimplyJob ? (
                 <div className="bg-success-subtle p-2.5 rounded-3 border border-success-subtle small text-success-emphasis mb-2">
                   <strong>Seamless Upgrade:</strong> All your active SimplyJob candidate invitations, organization ID, and employees will be preserved instantly!
                 </div>
+              ) : (
+                checkoutDetails.extraSeats > 0 &&
+                selectedPlanForCheckout.direct_overage_price_per_employee != null && (
+                  <div className="bg-warning-subtle p-2.5 rounded-3 border border-warning-subtle small text-dark mb-2">
+                    <strong>Save on extra seats:</strong> Organizations linked to SimplyJob pay ₹
+                    {selectedPlanForCheckout.simplyjob_overage_price_per_employee}/extra employee instead of ₹
+                    {selectedPlanForCheckout.direct_overage_price_per_employee} — that's ₹
+                    {Math.round(
+                      checkoutDetails.extraSeats *
+                        (Number(selectedPlanForCheckout.direct_overage_price_per_employee) -
+                          Number(selectedPlanForCheckout.simplyjob_overage_price_per_employee)) *
+                        (isYearly ? 12 : 1)
+                    )}{" "}
+                    saved on this order. Link your SimplyJob organization ID from Settings to unlock it.
+                  </div>
+                )
               )}
             </Modal.Body>
             <Modal.Footer className="border-0 pt-0 pb-3 pe-4">

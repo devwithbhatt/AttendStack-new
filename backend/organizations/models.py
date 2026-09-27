@@ -124,6 +124,25 @@ class Plan(models.Model):
     monthly_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     yearly_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     max_employees = models.IntegerField(default=50, help_text="-1 for unlimited")
+
+    # Employee-wise (per-seat) pricing on top of the flat monthly/yearly price.
+    # `included_employees` are covered by the flat price; every employee beyond
+    # that is billed per-seat at one of two rates depending on whether the
+    # organization is verified as linked to SimplyJob (see
+    # OrganizationSerializer.is_simplyjob_linked) — SimplyJob-linked orgs get
+    # the cheaper rate, which is the incentive to route purchases through
+    # SimplyJob instead of buying AttendStack directly.
+    included_employees = models.IntegerField(
+        default=5, help_text="Employees covered by the flat price before per-seat overage applies."
+    )
+    direct_overage_price_per_employee = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Price per additional employee beyond included_employees for orgs NOT linked to SimplyJob. Leave blank for contact-sales tiers.",
+    )
+    simplyjob_overage_price_per_employee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=250.00,
+        help_text="Discounted price per additional employee beyond included_employees for orgs verified as linked to SimplyJob.",
+    )
     badge_text = models.CharField(max_length=50, blank=True, default="")
     is_popular = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
