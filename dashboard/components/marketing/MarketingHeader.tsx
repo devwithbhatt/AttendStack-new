@@ -45,6 +45,7 @@ export default function MarketingHeader() {
           <Link href="/about">About us</Link>
           <Link href="/capabilities">Capabilities</Link>
           <Link href="/#workflow">How it works</Link>
+          <Link href="/pricing">Plans</Link>
         </nav>
 
         <div className={styles.navActions}>
@@ -77,6 +78,7 @@ export default function MarketingHeader() {
             <Link href="/about" onClick={closeMenu}>About us</Link>
             <Link href="/capabilities" onClick={closeMenu}>Capabilities</Link>
             <Link href="/#workflow" onClick={closeMenu}>How it works</Link>
+            <Link href="/pricing" onClick={closeMenu}>Plans</Link>
           </nav>
           <div className={styles.mobileMenuActions}>
             <Link
