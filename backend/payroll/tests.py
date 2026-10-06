@@ -355,3 +355,99 @@ class PayrollMultiTenantIsolationTests(APITestCase):
         self.assertEqual(generated.count(), 1)
         self.assertEqual(generated.first().employee_id, self.emp_a.id)
 
+
+from .models import EmployeeIncrement, IncrementStatus, IncrementType
+
+
+@override_settings(ROOT_URLCONF="payroll.urls")
+class EmployeeIncrementMultiTenantIsolationTests(APITestCase):
+    """
+    Employee Salary Increment Management had no organization scoping at
+    all — an HR/Super Admin viewing it from any company's dashboard saw,
+    and could approve/reject, every other company's increments too.
+    """
+
+    def setUp(self):
+        self.org_a = Organization.objects.create(name="Increment Org Alpha")
+        self.org_b = Organization.objects.create(name="Increment Org Beta")
+
+        self.emp_a = create_employee()
+        self.emp_a.organization = self.org_a
+        self.emp_a.employee_id = "EMP-INC-A-001"
+        self.emp_a.email = "alpha.increment@example.com"
+        self.emp_a.save()
+
+        self.emp_b = Employee.objects.create(
+            organization=self.org_b,
+            employee_id="EMP-INC-B-001",
+            full_name="Beta Increment Employee",
+            email="beta.increment@example.com",
+            phone="9876543213",
+            department="Ops",
+            designation="Associate",
+            joining_date=date(2026, 5, 1),
+        )
+
+        self.increment_a = EmployeeIncrement.objects.create(
+            employee=self.emp_a, due_date=date(2026, 6, 1), current_salary=120000,
+            increment_type=IncrementType.PERCENTAGE, increment_value=10, new_salary=132000,
+            status=IncrementStatus.PENDING,
+        )
+        self.increment_b = EmployeeIncrement.objects.create(
+            employee=self.emp_b, due_date=date(2026, 6, 1), current_salary=100000,
+            increment_type=IncrementType.PERCENTAGE, increment_value=10, new_salary=110000,
+            status=IncrementStatus.PENDING,
+        )
+
+        self.hr_a = User.objects.create_user(
+            email="hr.increment.alpha@example.com", password="StrongPass123!", role=UserRole.HR,
+        )
+        self.org_a.owner = self.hr_a
+        self.org_a.save(update_fields=["owner"])
+
+        self.hr_b = User.objects.create_user(
+            email="hr.increment.beta@example.com", password="StrongPass123!", role=UserRole.HR,
+        )
+        self.org_b.owner = self.hr_b
+        self.org_b.save(update_fields=["owner"])
+
+    def test_hr_b_cannot_see_company_as_increments(self):
+        self.client.force_authenticate(self.hr_b)
+        response = self.client.get("/increments/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        employee_ids = [r["employee_details"]["id"] for r in results]
+        self.assertNotIn(str(self.emp_a.id), employee_ids)
+
+    def test_hr_b_cannot_approve_company_as_increment(self):
+        # The exact regression reported: Salary Increment Management
+        # showed and could act on another company's employees.
+        self.client.force_authenticate(self.hr_b)
+        response = self.client.post(f"/increments/{self.increment_a.id}/approve/", {}, format="json")
+        self.assertEqual(response.status_code, http_status.HTTP_404_NOT_FOUND)
+        self.increment_a.refresh_from_db()
+        self.assertEqual(self.increment_a.status, IncrementStatus.PENDING)
+
+    def test_hr_a_can_approve_its_own_increment(self):
+        self.client.force_authenticate(self.hr_a)
+        response = self.client.post(f"/increments/{self.increment_a.id}/approve/", {}, format="json")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.increment_a.refresh_from_db()
+        self.assertEqual(self.increment_a.status, IncrementStatus.APPROVED)
+
+    def test_summary_counts_are_scoped_per_organization(self):
+        self.client.force_authenticate(self.hr_a)
+        response = self.client.get("/increments/summary/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.assertEqual(response.data["pending_count"], 1)
+
+    def test_super_admin_without_organization_id_sees_no_increments(self):
+        super_admin = User.objects.create_superuser(
+            email="platform.increment.admin@example.com", password="StrongPass123!",
+        )
+        self.client.force_authenticate(super_admin)
+        response = self.client.get("/increments/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 0)
+

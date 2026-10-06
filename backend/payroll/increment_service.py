@@ -322,11 +322,45 @@ def update_increment_hike(
     return increment
 
 
-def get_increment_chart_projections(months_ahead: int = 12):
+def get_increment_chart_projections(months_ahead: int = 12, organization=None):
     """
     Returns monthly projection data for upcoming employee increments
     for the line chart visualization (Active employees only).
+
+    `organization` is required to scope results to a single company; a
+    platform admin with no resolvable organization gets an empty series
+    rather than every tenant's data merged together.
     """
+    if organization is None:
+        empty_series = []
+        today = timezone.localdate()
+        from calendar import monthrange
+        for i in range(months_ahead):
+            month_idx = today.month - 1 + i
+            year = today.year + month_idx // 12
+            month = month_idx % 12 + 1
+            m_start = date(year, month, 1)
+            empty_series.append({
+                "month_key": m_start.strftime("%Y-%m"),
+                "month_label": m_start.strftime("%b %Y"),
+                "employee_count": 0,
+                "total_raise_amount": 0.0,
+                "employees": [],
+            })
+        next_month_info = empty_series[1] if len(empty_series) > 1 else (empty_series[0] if empty_series else {"month_label": "", "employee_count": 0, "total_raise_amount": 0, "employees": []})
+        return {
+            "months_ahead": months_ahead,
+            "total_upcoming_count": 0,
+            "total_upcoming_raise": 0.0,
+            "next_month": {
+                "label": next_month_info["month_label"],
+                "employee_count": next_month_info["employee_count"],
+                "total_raise_amount": next_month_info["total_raise_amount"],
+                "employees": next_month_info["employees"],
+            },
+            "series": empty_series,
+        }
+
     try:
         sync_employee_increments()
     except Exception:
@@ -350,6 +384,7 @@ def get_increment_chart_projections(months_ahead: int = 12):
         m_end = date(year, month, last_day)
 
         increments = EmployeeIncrement.objects.filter(
+            employee__organization=organization,
             employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=m_start,

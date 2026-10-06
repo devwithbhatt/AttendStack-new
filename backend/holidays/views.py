@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
@@ -21,7 +22,13 @@ class HolidayViewSet(viewsets.ModelViewSet):
     pagination_class = HolidayPagination
 
     def get_queryset(self):
-        queryset = Holiday.objects.all().order_by('date')
+        from organizations.services import resolve_organization_for_request
+
+        organization = resolve_organization_for_request(self.request)
+        if organization is None:
+            return Holiday.objects.none()
+
+        queryset = Holiday.objects.filter(organization=organization).order_by('date')
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(name__icontains=search.strip())
@@ -35,6 +42,38 @@ class HolidayViewSet(viewsets.ModelViewSet):
             except (ValueError, TypeError):
                 pass
         return queryset
+
+    def _check_date_available(self, organization, date_value, exclude_pk=None):
+        # The organization+date uniqueness is enforced at the DB level via
+        # a composite constraint (see Holiday.Meta.constraints), but DRF's
+        # ModelSerializer only auto-generates a validator for a plain
+        # single-field unique=True — it doesn't introspect Meta.constraints
+        # for composite UniqueConstraints. Check explicitly here so a
+        # collision surfaces as a clean validation error instead of a raw
+        # IntegrityError.
+        clash = Holiday.objects.filter(organization=organization, date=date_value)
+        if exclude_pk is not None:
+            clash = clash.exclude(pk=exclude_pk)
+        if clash.exists():
+            raise ValidationError({"date": "A holiday already exists on this date for your company."})
+
+    def perform_create(self, serializer):
+        from organizations.services import resolve_organization_for_request
+
+        organization = resolve_organization_for_request(self.request)
+        if organization is None:
+            raise ValidationError(
+                "Could not determine which company to create this holiday for."
+            )
+        self._check_date_available(organization, serializer.validated_data["date"])
+        serializer.save(organization=organization)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        new_date = serializer.validated_data.get("date", instance.date)
+        if new_date != instance.date:
+            self._check_date_available(instance.organization, new_date, exclude_pk=instance.pk)
+        serializer.save()
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

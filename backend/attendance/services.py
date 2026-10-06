@@ -447,10 +447,15 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
     """Create missing holiday and Sunday attendance records for active employees."""
     days_in_month = calendar.monthrange(year, month)[1]
     all_dates = [date(year, month, day) for day in range(1, days_in_month + 1)]
-    holiday_dates = set(
-        Holiday.objects.filter(date__year=year, date__month=month).values_list("date", flat=True)
-    )
-    sunday_dates = {day for day in all_dates if day.weekday() == 6} - holiday_dates
+
+    # Holidays are company-specific — one organization's holiday must never
+    # affect another's attendance. Group them by org up front instead of
+    # treating the platform as sharing a single calendar.
+    holiday_dates_by_org: dict = {}
+    for org_id, holiday_date in Holiday.objects.filter(
+        date__year=year, date__month=month
+    ).values_list("organization_id", "date"):
+        holiday_dates_by_org.setdefault(org_id, set()).add(holiday_date)
 
     created_count = 0
     updated_count = 0
@@ -460,6 +465,8 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
     ).prefetch_related("status_history")
 
     for employee in employees:
+        holiday_dates = holiday_dates_by_org.get(employee.organization_id, set())
+        sunday_dates = {day for day in all_dates if day.weekday() == 6} - holiday_dates
         employment_start = max(employee.joining_date, date(year, month, 1))
         for holiday_date in holiday_dates:
             if (
@@ -534,17 +541,23 @@ def auto_mark_absent_employees(start_date: date | None = None, end_date: date | 
     if effective_start > effective_end:
         return {"created": 0, "skipped": 0}
 
-    holiday_dates = set(
-        Holiday.objects.filter(date__gte=effective_start, date__lte=effective_end).values_list("date", flat=True)
-    )
+    # Holidays are company-specific — one organization's holiday must never
+    # affect another's attendance, so this can't be a single shared set
+    # gating the whole day for every employee on the platform.
+    holiday_dates_by_org: dict = {}
+    for org_id, holiday_date in Holiday.objects.filter(
+        date__gte=effective_start, date__lte=effective_end
+    ).values_list("organization_id", "date"):
+        holiday_dates_by_org.setdefault(org_id, set()).add(holiday_date)
 
     created_count = 0
     skipped_count = 0
 
     current = effective_start
     while current <= effective_end:
-        # Skip Sundays (weekday 6) and holidays
-        if current.weekday() == 6 or current in holiday_dates:
+        # Sunday is a universal non-working day; holidays are checked per
+        # employee below since they're company-specific.
+        if current.weekday() == 6:
             current += timedelta(days=1)
             continue
 
@@ -554,6 +567,9 @@ def auto_mark_absent_employees(start_date: date | None = None, end_date: date | 
         )
 
         for employee in active_employees:
+            if current in holiday_dates_by_org.get(employee.organization_id, set()):
+                continue
+
             existing = AttendanceRecord.objects.filter(employee=employee, date=current).first()
 
             if existing:

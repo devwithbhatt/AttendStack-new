@@ -204,6 +204,14 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(employee=emp)
             except Employee.DoesNotExist:
                 return queryset.none()
+        elif user.is_authenticated:
+            from organizations.services import resolve_organization_for_request
+
+            org = resolve_organization_for_request(self.request)
+            if org:
+                queryset = queryset.filter(employee__organization=org)
+            else:
+                return queryset.none()
 
         # Filter by employee status (defaults to ACTIVE employees only)
         employee_status_param = self.request.query_params.get("employee_status")
@@ -260,9 +268,22 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
 
+        from organizations.services import resolve_organization_for_request
+
+        org = resolve_organization_for_request(request)
+        if org is None:
+            return Response({
+                "pending_count": 0,
+                "due_this_month": 0,
+                "due_next_month": 0,
+                "this_month_name": "",
+                "next_month_name": "",
+                "approved_this_year": 0,
+            })
+
         today = timezone.localdate()
         from calendar import monthrange
-        
+
         _, tm_last_day = monthrange(today.year, today.month)
         this_month_start = date(today.year, today.month, 1)
         this_month_end = date(today.year, today.month, tm_last_day)
@@ -275,24 +296,28 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         _, nm_last_day = monthrange(nm_year, nm_month)
         next_month_start = date(nm_year, nm_month, 1)
         next_month_end = date(nm_year, nm_month, nm_last_day)
-        
+
         pending_count = EmployeeIncrement.objects.filter(
+            employee__organization=org,
             employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED]
         ).count()
         due_this_month = EmployeeIncrement.objects.filter(
+            employee__organization=org,
             employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=this_month_start,
             due_date__lte=this_month_end
         ).count()
         due_next_month = EmployeeIncrement.objects.filter(
+            employee__organization=org,
             employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=next_month_start,
             due_date__lte=next_month_end
         ).count()
         approved_this_year = EmployeeIncrement.objects.filter(
+            employee__organization=org,
             employee__status=EmployeeStatus.ACTIVE,
             status=IncrementStatus.APPROVED,
             action_date__year=today.year
@@ -456,6 +481,9 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         except (ValueError, TypeError):
             months_ahead = 12
 
-        data = get_increment_chart_projections(months_ahead=months_ahead)
+        from organizations.services import resolve_organization_for_request
+
+        org = resolve_organization_for_request(request)
+        data = get_increment_chart_projections(months_ahead=months_ahead, organization=org)
         return Response(data, status=status.HTTP_200_OK)
 
