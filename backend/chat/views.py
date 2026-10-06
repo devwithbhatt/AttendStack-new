@@ -47,6 +47,165 @@ class ConversationViewSet(viewsets.ModelViewSet):
             members__user=self.request.user
         ).distinct().order_by('-updated_at')
 
+    def _is_group_manager(self, user, conversation):
+        """
+        True if `user` can manage (rename / add members / remove members /
+        delete) a GROUP conversation: either a group-level ADMIN for that
+        specific conversation, or a company-level administrator (matching
+        the same check already used to gate group creation/announcements).
+        """
+        if conversation.type != Conversation.ConversationType.GROUP:
+            return False
+        is_group_admin = conversation.members.filter(
+            user=user, role=ConversationMember.Role.ADMIN
+        ).exists()
+        user_role = getattr(user, 'role', '')
+        is_company_admin = user_role in ['SUPER_ADMIN', 'HR'] or user.is_staff or user.is_superuser
+        return is_group_admin or is_company_admin
+
+    def _broadcast_conversation_update(self, conversation, request):
+        conv_data = ConversationSerializer(conversation, context={'request': request}).data
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                from django.core.serializers.json import DjangoJSONEncoder
+                import json
+                clean_data = json.loads(json.dumps(conv_data, cls=DjangoJSONEncoder))
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{conversation.id}",
+                    {
+                        "type": "chat.conversation_updated",
+                        "conversation": clean_data
+                    }
+                )
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to broadcast WS conversation update: {e}")
+
+    def update(self, request, *args, **kwargs):
+        return Response(
+            {"error": "Use the rename-group endpoint to rename a conversation."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        conversation = self.get_object()
+        if conversation.type == Conversation.ConversationType.GROUP and not self._is_group_manager(request.user, conversation):
+            return Response(
+                {"error": "Only group admins or company administrators can delete this group."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='rename-group')
+    def rename_group(self, request, pk=None):
+        conversation = self.get_object()
+        if conversation.type != Conversation.ConversationType.GROUP:
+            return Response({"error": "Only group conversations can be renamed."}, status=status.HTTP_400_BAD_REQUEST)
+        if not self._is_group_manager(request.user, conversation):
+            return Response(
+                {"error": "Only group admins or company administrators can rename this group."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response({"error": "Group name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(name) > 255:
+            return Response({"error": "Group name must be 255 characters or fewer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        conversation.name = name
+        conversation.save(update_fields=['name', 'updated_at'])
+
+        self._broadcast_conversation_update(conversation, request)
+        return Response(ConversationSerializer(conversation, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='add-members')
+    def add_members(self, request, pk=None):
+        conversation = self.get_object()
+        if conversation.type != Conversation.ConversationType.GROUP:
+            return Response({"error": "Members can only be added to group conversations."}, status=status.HTTP_400_BAD_REQUEST)
+        if not self._is_group_manager(request.user, conversation):
+            return Response(
+                {"error": "Only group admins or company administrators can add members."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        raw_member_ids = (
+            request.data.getlist('member_ids')
+            if hasattr(request.data, 'getlist')
+            else request.data.get('member_ids')
+        )
+        member_ids = list(set(raw_member_ids or []))
+        if not member_ids:
+            return Response({"error": "member_ids is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        org = get_user_organization(request.user)
+        if not org:
+            return Response({"error": "Organization not found for your account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing_ids = set(str(uid) for uid in conversation.members.values_list('user_id', flat=True))
+        users = User.objects.filter(id__in=member_ids, is_active=True)
+
+        added_any = False
+        for u in users:
+            if str(u.id) in existing_ids:
+                continue
+            u_org = get_user_organization(u)
+            if not u_org or u_org.id != org.id:
+                return Response(
+                    {"error": f"{u.email} does not belong to your organization."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            ConversationMember.objects.create(conversation=conversation, user=u, role=ConversationMember.Role.MEMBER)
+            added_any = True
+
+        if added_any:
+            conversation.save(update_fields=['updated_at'])
+            self._broadcast_conversation_update(conversation, request)
+
+        return Response(ConversationSerializer(conversation, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='remove-member')
+    def remove_member(self, request, pk=None):
+        conversation = self.get_object()
+        if conversation.type != Conversation.ConversationType.GROUP:
+            return Response({"error": "Members can only be removed from group conversations."}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_user_id = request.data.get('user_id')
+        if not target_user_id:
+            return Response({"error": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_self_removal = str(target_user_id) == str(request.user.id)
+        if not is_self_removal and not self._is_group_manager(request.user, conversation):
+            return Response(
+                {"error": "Only group admins or company administrators can remove other members."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        member = conversation.members.filter(user_id=target_user_id).first()
+        if not member:
+            return Response({"error": "This user is not a member of the group."}, status=status.HTTP_404_NOT_FOUND)
+
+        if member.role == ConversationMember.Role.ADMIN:
+            other_admins_exist = conversation.members.filter(
+                role=ConversationMember.Role.ADMIN
+            ).exclude(id=member.id).exists()
+            if not other_admins_exist:
+                return Response(
+                    {"error": "Cannot remove the only group admin. Promote another member to admin first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        member.delete()
+        conversation.save(update_fields=['updated_at'])
+        self._broadcast_conversation_update(conversation, request)
+
+        return Response(ConversationSerializer(conversation, context={'request': request}).data)
+
     @action(detail=False, methods=['post'], url_path='direct')
     def create_direct(self, request):
         serializer = CreateDirectConversationSerializer(data=request.data)

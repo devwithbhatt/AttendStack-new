@@ -78,6 +78,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'conversation_id': event.get('conversation_id')
         }, cls=DjangoJSONEncoder))
 
+    async def chat_conversation_updated(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'conversation_updated',
+            'conversation': event['conversation']
+        }, cls=DjangoJSONEncoder))
+
     async def chat_message_reaction(self, event):
         await self.send(text_data=json.dumps({
             'type': 'message_reaction',

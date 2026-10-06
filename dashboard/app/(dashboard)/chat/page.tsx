@@ -68,6 +68,13 @@ import {
   VolumeX,
   Sticker as StickerIcon,
   Film as GifIcon,
+  Info,
+  Pencil,
+  UserPlus,
+  UserMinus,
+  Shield,
+  LogOut,
+  Save,
 } from "lucide-react";
 import {
   useQuery,
@@ -114,6 +121,9 @@ import {
   sendAnnouncement,
   acknowledgeAnnouncement,
   reactToMessage,
+  renameGroup,
+  addGroupMembers,
+  removeGroupMember,
 } from "../../../helper/chatApi";
 
 // Redux for sidebar control & Branding context
@@ -728,6 +738,126 @@ function ChatPageContent() {
     },
   });
 
+  // Group Info modal: rename, view/add/remove members, delete (admin/company-admin only)
+  const [showGroupInfoModal, setShowGroupInfoModal] = useState<boolean>(false);
+  const [groupInfoNameDraft, setGroupInfoNameDraft] = useState<string>("");
+  const [groupInfoAddQuery, setGroupInfoAddQuery] = useState<string>("");
+  const [groupInfoAddResults, setGroupInfoAddResults] = useState<UserMinimal[]>([]);
+  const [groupInfoAddLoading, setGroupInfoAddLoading] = useState<boolean>(false);
+  const [groupInfoSelectedNew, setGroupInfoSelectedNew] = useState<UserMinimal[]>([]);
+  const groupInfoSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openGroupInfoModal = () => {
+    setGroupInfoNameDraft(activeConversation?.name || "");
+    setGroupInfoAddQuery("");
+    setGroupInfoAddResults([]);
+    setGroupInfoSelectedNew([]);
+    setShowGroupInfoModal(true);
+  };
+
+  const handleGroupInfoAddSearch = (q: string) => {
+    setGroupInfoAddQuery(q);
+    if (groupInfoSearchTimer.current) clearTimeout(groupInfoSearchTimer.current);
+    if (!q.trim()) {
+      setGroupInfoAddResults([]);
+      return;
+    }
+    groupInfoSearchTimer.current = setTimeout(async () => {
+      setGroupInfoAddLoading(true);
+      try {
+        const results = await searchUsers(q);
+        const existingIds = new Set((activeConversation?.members || []).map((m) => String(m.user.id)));
+        setGroupInfoAddResults(results.filter((u) => !existingIds.has(String(u.id))));
+      } catch {
+        setGroupInfoAddResults([]);
+      } finally {
+        setGroupInfoAddLoading(false);
+      }
+    }, 300);
+  };
+
+  const renameGroupMutation = useMutation({
+    mutationFn: () => renameGroup(activeConversation!.id, groupInfoNameDraft.trim()),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === updated.id ? updated : c))
+      );
+      Swal.fire({
+        title: "Group Renamed",
+        icon: "success",
+        timer: 1200,
+        showConfirmButton: false,
+        customClass: { popup: "rounded-4 shadow" },
+      });
+    },
+    onError: (err: any) => {
+      Swal.fire("Error", err?.response?.data?.error || "Could not rename group.", "error");
+    },
+  });
+
+  const addGroupMembersMutation = useMutation({
+    mutationFn: () =>
+      addGroupMembers(
+        activeConversation!.id,
+        groupInfoSelectedNew.map((u) => String(u.id))
+      ),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === updated.id ? updated : c))
+      );
+      setGroupInfoSelectedNew([]);
+      setGroupInfoAddQuery("");
+      setGroupInfoAddResults([]);
+    },
+    onError: (err: any) => {
+      Swal.fire("Error", err?.response?.data?.error || "Could not add members.", "error");
+    },
+  });
+
+  const removeGroupMemberMutation = useMutation({
+    mutationFn: (userId: string) => removeGroupMember(activeConversation!.id, userId),
+    onSuccess: (updated, userId) => {
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === updated.id ? updated : c))
+      );
+      // If I removed myself (left the group), close the modal and drop the conversation
+      if (String(userId) === String(currentUserId)) {
+        setShowGroupInfoModal(false);
+        if (activeConversationId === updated.id) {
+          setActiveConversationId(null);
+        }
+      }
+    },
+    onError: (err: any) => {
+      Swal.fire("Error", err?.response?.data?.error || "Could not remove member.", "error");
+    },
+  });
+
+  const handleRemoveGroupMember = (member: { user: UserMinimal }, isSelf: boolean) => {
+    Swal.fire({
+      title: isSelf ? "Leave this group?" : `Remove ${member.user.name || member.user.email}?`,
+      text: isSelf
+        ? "You will no longer receive messages from this group."
+        : "They will be removed from this group immediately.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: isSelf ? "Yes, leave" : "Yes, remove",
+      reverseButtons: true,
+      customClass: {
+        popup: "rounded-4 shadow-lg",
+        confirmButton: "btn btn-danger px-4 py-2 rounded-pill fw-bold",
+        cancelButton: "btn btn-secondary px-4 py-2 rounded-pill fw-bold me-2",
+      },
+      buttonsStyling: false,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        removeGroupMemberMutation.mutate(String(member.user.id));
+      }
+    });
+  };
+
   // Announcement modal & state
   const [showAnnouncementModal, setShowAnnouncementModal] = useState<boolean>(false);
   const [announcementText, setAnnouncementText] = useState<string>("");
@@ -1053,6 +1183,26 @@ function ChatPageContent() {
     [conversations, activeConversationId]
   );
 
+  // Group management (rename / add / remove members / delete) is restricted
+  // to the group's own admin (the creator, or anyone promoted) or a
+  // company-level administrator — mirrors the backend's _is_group_manager.
+  const canManageGroup = useCallback(
+    (conv: Conversation | null): boolean => {
+      if (!conv || conv.type !== "GROUP") return false;
+      const isGroupAdmin = (conv.members || []).some(
+        (m) => String(m.user.id) === String(currentUserId) && m.role === "ADMIN"
+      );
+      const isCompanyAdmin = userRole !== "EMPLOYEE";
+      return isGroupAdmin || isCompanyAdmin;
+    },
+    [currentUserId, userRole]
+  );
+
+  const canManageActiveGroup = useMemo(
+    () => canManageGroup(activeConversation),
+    [canManageGroup, activeConversation]
+  );
+
   const filteredMentionMembers = useMemo(() => {
     if (!activeConversation?.members) return [];
     return activeConversation.members
@@ -1206,6 +1356,22 @@ function ChatPageContent() {
               }
               return m;
             });
+          });
+        } else if (data.type === "conversation_updated") {
+          const updated: Conversation = data.conversation;
+          queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) => {
+            // If I was removed from the group, I'm no longer in its
+            // members list — drop it from my sidebar entirely.
+            const stillAMember = (updated.members || []).some(
+              (m) => String(m.user.id) === String(currentUserId)
+            );
+            if (!stillAMember) {
+              if (activeConversationId === updated.id) {
+                setActiveConversationId(null);
+              }
+              return old.filter((c) => c.id !== updated.id);
+            }
+            return old.map((c) => (c.id === updated.id ? updated : c));
           });
         } else if (data.type === "typing") {
           if (data.is_typing) {
@@ -1463,6 +1629,13 @@ function ChatPageContent() {
           popup: "rounded-4 shadow",
         },
       });
+    },
+    onError: (err: any) => {
+      Swal.fire(
+        "Error",
+        err?.response?.data?.error || "Could not delete this conversation.",
+        "error"
+      );
     },
   });
 
@@ -3034,17 +3207,19 @@ function ChatPageContent() {
                       </div>
                     </div>
 
-                    <div className="chat-conv-delete-wrap ms-1">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="p-1 text-danger border-0 opacity-75"
-                        title="Delete conversation"
-                        onClick={(e) => handleDeleteConversation(e, conv.id)}
-                      >
-                        <Trash2 size={15} />
-                      </Button>
-                    </div>
+                    {(conv.type !== "GROUP" || canManageGroup(conv)) && (
+                      <div className="chat-conv-delete-wrap ms-1">
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="p-1 text-danger border-0 opacity-75"
+                          title="Delete conversation"
+                          onClick={(e) => handleDeleteConversation(e, conv.id)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -3144,6 +3319,11 @@ function ChatPageContent() {
                       <Dropdown.Item onClick={() => refetchMessages()} className="small px-3 py-1.5">
                         Refresh Messages
                       </Dropdown.Item>
+                      {activeConversation.type === "GROUP" && (
+                        <Dropdown.Item onClick={openGroupInfoModal} className="small px-3 py-1.5">
+                          <Info size={13} className="me-2 text-primary" /> Group Info &amp; Members
+                        </Dropdown.Item>
+                      )}
                       {userRole !== "EMPLOYEE" && (
                         <Dropdown.Item onClick={() => setShowAnnouncementModal(true)} className="small px-3 py-1.5">
                           <Megaphone size={13} className="me-2 text-primary" /> Broadcast Announcement
@@ -3952,6 +4132,223 @@ function ChatPageContent() {
             onClick={() => clearChatMutation.mutate()}
           >
             {clearChatMutation.isPending ? "Clearing..." : "Clear Chat"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* GROUP INFO & MEMBERS MODAL */}
+      <Modal show={showGroupInfoModal} onHide={() => setShowGroupInfoModal(false)} centered size="lg">
+        <Modal.Header closeButton className="border-bottom-0 pb-0">
+          <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
+            <Info size={20} className="text-primary" /> Group Info &amp; Members
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-3">
+          {activeConversation && activeConversation.type === "GROUP" && (
+            <>
+              {/* Group name — editable only by group admin / company admin */}
+              <Form.Group className="mb-3">
+                <Form.Label className="small fw-semibold text-muted">Group Name</Form.Label>
+                {canManageActiveGroup ? (
+                  <InputGroup>
+                    <Form.Control
+                      className="rounded-start-3 shadow-none border"
+                      value={groupInfoNameDraft}
+                      onChange={(e) => setGroupInfoNameDraft(e.target.value)}
+                      maxLength={255}
+                    />
+                    <Button
+                      variant="primary"
+                      style={{ backgroundColor: "#6366f1", borderColor: "#6366f1" }}
+                      disabled={
+                        !groupInfoNameDraft.trim() ||
+                        groupInfoNameDraft.trim() === activeConversation.name ||
+                        renameGroupMutation.isPending
+                      }
+                      onClick={() => renameGroupMutation.mutate()}
+                    >
+                      <Save size={15} className="me-1" />
+                      {renameGroupMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                  </InputGroup>
+                ) : (
+                  <p className="mb-0 fw-semibold text-dark">{activeConversation.name}</p>
+                )}
+              </Form.Group>
+
+              {/* Add members — admin/company-admin only */}
+              {canManageActiveGroup && (
+                <Form.Group className="mb-3">
+                  <Form.Label className="small fw-semibold text-muted">Add Members</Form.Label>
+                  <InputGroup className="bg-light rounded-3 border">
+                    <InputGroup.Text className="bg-transparent border-0">
+                      <Search size={16} className="text-muted" />
+                    </InputGroup.Text>
+                    <Form.Control
+                      placeholder="Search team members to add..."
+                      className="bg-transparent border-0 shadow-none small"
+                      value={groupInfoAddQuery}
+                      onChange={(e) => handleGroupInfoAddSearch(e.target.value)}
+                    />
+                  </InputGroup>
+
+                  {groupInfoSelectedNew.length > 0 && (
+                    <div className="d-flex flex-wrap gap-1 mt-2">
+                      {groupInfoSelectedNew.map((u) => (
+                        <Badge
+                          key={u.id}
+                          bg="primary"
+                          className="d-flex align-items-center gap-1 px-3 py-2 rounded-pill"
+                          style={{ backgroundColor: "#6366f1" }}
+                        >
+                          {u.name || u.email}
+                          <X
+                            size={14}
+                            className="cursor-pointer ms-1"
+                            onClick={() =>
+                              setGroupInfoSelectedNew((prev) => prev.filter((p) => p.id !== u.id))
+                            }
+                          />
+                        </Badge>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        className="rounded-pill px-3 border-0"
+                        style={{ backgroundColor: "#6366f1" }}
+                        disabled={addGroupMembersMutation.isPending}
+                        onClick={() => addGroupMembersMutation.mutate()}
+                      >
+                        <UserPlus size={13} className="me-1" />
+                        {addGroupMembersMutation.isPending ? "Adding..." : "Add"}
+                      </Button>
+                    </div>
+                  )}
+
+                  {groupInfoAddQuery.trim() && (
+                    <div className="list-group mt-2" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                      {groupInfoAddLoading ? (
+                        <div className="text-center py-3">
+                          <Spinner animation="border" size="sm" variant="primary" />
+                        </div>
+                      ) : groupInfoAddResults.length === 0 ? (
+                        <p className="text-muted text-center py-2 mb-0 small">No matching team members found.</p>
+                      ) : (
+                        groupInfoAddResults.map((user) => {
+                          const isSelected = groupInfoSelectedNew.some((m) => m.id === user.id);
+                          return (
+                            <div
+                              key={user.id}
+                              className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-2 border-0 rounded-3 mb-1 cursor-pointer ${isSelected ? "bg-primary-subtle" : ""}`}
+                              onClick={() => {
+                                setGroupInfoSelectedNew((prev) =>
+                                  isSelected ? prev.filter((m) => m.id !== user.id) : [...prev, user]
+                                );
+                              }}
+                            >
+                              <div className="d-flex align-items-center gap-2">
+                                <SafeAvatar
+                                  src={user.avatar || user.profile_photo_url}
+                                  name={user.name || user.email}
+                                  size={30}
+                                  fontSize={12}
+                                  className="flex-shrink-0"
+                                />
+                                <div>
+                                  <div className="small fw-bold text-dark">{user.name || user.email}</div>
+                                  <small className="text-muted" style={{ fontSize: "11px" }}>{user.email}</small>
+                                </div>
+                              </div>
+                              <Form.Check type="checkbox" checked={isSelected} readOnly />
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </Form.Group>
+              )}
+
+              {/* Member list — everyone can view; remove button per permission */}
+              <Form.Label className="small fw-semibold text-muted">
+                {activeConversation.members?.length || 0} Members
+              </Form.Label>
+              <div className="list-group" style={{ maxHeight: "260px", overflowY: "auto" }}>
+                {(activeConversation.members || []).map((m) => {
+                  const isSelf = String(m.user.id) === String(currentUserId);
+                  const canRemoveThis = isSelf || canManageActiveGroup;
+                  return (
+                    <div
+                      key={m.id}
+                      className="list-group-item d-flex align-items-center justify-content-between p-2 border-0 rounded-3 mb-1"
+                    >
+                      <div className="d-flex align-items-center gap-2 min-w-0">
+                        <SafeAvatar
+                          src={m.user.avatar || m.user.profile_photo_url}
+                          name={m.user.name || m.user.email}
+                          size={34}
+                          fontSize={13}
+                          className="flex-shrink-0"
+                        />
+                        <div className="text-truncate">
+                          <div className="d-flex align-items-center gap-1.5">
+                            <span className="small fw-bold text-dark text-truncate">
+                              {m.user.name || m.user.email}
+                              {isSelf && <span className="text-muted fw-normal"> (You)</span>}
+                            </span>
+                            {m.role === "ADMIN" && (
+                              <Badge bg="warning" text="dark" className="d-flex align-items-center gap-1 rounded-pill px-2" style={{ fontSize: "9px" }}>
+                                <Shield size={9} /> Admin
+                              </Badge>
+                            )}
+                          </div>
+                          <small className="text-muted text-truncate d-block" style={{ fontSize: "11px" }}>
+                            {m.user.email}
+                          </small>
+                        </div>
+                      </div>
+                      {canRemoveThis && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className={`p-1 border-0 ${isSelf ? "text-secondary" : "text-danger"}`}
+                          title={isSelf ? "Leave group" : "Remove member"}
+                          onClick={() => handleRemoveGroupMember(m, isSelf)}
+                          disabled={removeGroupMemberMutation.isPending}
+                        >
+                          {isSelf ? <LogOut size={15} /> : <UserMinus size={15} />}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer className="border-top-0 d-flex justify-content-between">
+          {canManageActiveGroup ? (
+            <Button
+              variant="outline-danger"
+              size="sm"
+              className="rounded-pill px-3"
+              onClick={() => {
+                setShowGroupInfoModal(false);
+                if (activeConversation) {
+                  handleDeleteConversation(
+                    { stopPropagation: () => {} } as React.MouseEvent,
+                    activeConversation.id
+                  );
+                }
+              }}
+            >
+              <Trash2 size={14} className="me-1" /> Delete Group
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button variant="light" size="sm" className="rounded-pill px-3" onClick={() => setShowGroupInfoModal(false)}>
+            Close
           </Button>
         </Modal.Footer>
       </Modal>

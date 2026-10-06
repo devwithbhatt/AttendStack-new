@@ -168,6 +168,33 @@ export const deleteConversation = async (conversationId: string): Promise<void> 
   await apiClient.delete(`/api/v1/chat/conversations/${conversationId}/`);
 };
 
+export const renameGroup = async (conversationId: string, name: string): Promise<Conversation> => {
+  const response = await apiClient.post(`/api/v1/chat/conversations/${conversationId}/rename-group/`, {
+    name,
+  });
+  return response.data;
+};
+
+export const addGroupMembers = async (
+  conversationId: string,
+  memberIds: string[]
+): Promise<Conversation> => {
+  const response = await apiClient.post(`/api/v1/chat/conversations/${conversationId}/add-members/`, {
+    member_ids: memberIds,
+  });
+  return response.data;
+};
+
+export const removeGroupMember = async (
+  conversationId: string,
+  userId: string
+): Promise<Conversation> => {
+  const response = await apiClient.post(`/api/v1/chat/conversations/${conversationId}/remove-member/`, {
+    user_id: userId,
+  });
+  return response.data;
+};
+
 export const sendAnnouncement = async (payload: {
   content: string;
   target_type: string;
