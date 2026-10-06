@@ -1923,7 +1923,7 @@ function ChatPageContent() {
     }
   };
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB limit
 
   // Helper to add files
   const addFiles = useCallback((newFiles: File[]) => {
@@ -1962,10 +1962,10 @@ function ChatPageContent() {
 
       Swal.fire({
         icon: "warning",
-        title: "File Exceeds 10 MB Limit",
+        title: "File Exceeds 50 MB Limit",
         html: `
           <p style="font-size:13.5px; color:#64748b; margin-bottom:12px; line-height:1.5;">
-            Only files up to <strong>10 MB</strong> are allowed in chat. The following file(s) exceed the size limit:
+            Only files up to <strong>50 MB</strong> are allowed in chat. The following file(s) exceed the size limit:
           </p>
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; text-align:left; margin-bottom:12px;">
             ${fileListHtml}

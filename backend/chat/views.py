@@ -340,14 +340,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Enforce 10 MB max file size per attachment
-        MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+        MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
         for f in files:
             if f.size > MAX_FILE_SIZE_BYTES:
                 size_mb = round(f.size / (1024 * 1024), 2)
                 return Response(
                     {
-                        "error": f"File '{f.name}' ({size_mb} MB) exceeds the maximum allowed file size of 10 MB. Please upload files under 10 MB."
+                        "error": f"File '{f.name}' ({size_mb} MB) exceeds the maximum allowed file size of 50 MB. Please upload files under 50 MB."
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
