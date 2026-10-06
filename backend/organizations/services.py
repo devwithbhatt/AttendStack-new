@@ -162,3 +162,43 @@ def get_organization_for_user(user):
 
     return None
 
+
+def resolve_organization_for_request(request):
+    """
+    Resolve the organization a per-tenant operational endpoint (Employees,
+    Attendance, Payroll, Leave Requests, Shifts, ...) should be scoped to.
+
+    Non-super-admin users are always scoped to their own organization via
+    get_organization_for_user, unchanged.
+
+    Super Admins and staff don't own a single organization — they manage
+    the whole platform. These per-tenant ViewSets are views of ONE
+    company's data, not a cross-tenant aggregate (that's what the dedicated
+    Super Admin dashboard/summary endpoints are for), so a Super Admin must
+    explicitly say which company they're inspecting via an
+    `organization_id` query parameter. Without one, this returns None, and
+    every caller must treat None as "show nothing" — never silently fall
+    back to "show every organization's data blended together", which is
+    what happened here before this helper existed.
+    """
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    # Note: `is_staff` deliberately excluded — create_hr()/create_sub_admin()
+    # both default it to True for ordinary, org-scoped company accounts in
+    # this codebase, so it is not a reliable "platform-wide admin" signal
+    # here the way Django's own convention might suggest.
+    is_platform_admin = (
+        getattr(user, "is_superuser", False)
+        or getattr(user, "role", "") == "SUPER_ADMIN"
+    )
+    if is_platform_admin:
+        org_id = request.query_params.get("organization_id")
+        if not org_id:
+            return None
+        from organizations.models import Organization
+        return Organization.objects.filter(id=org_id).first()
+
+    return get_organization_for_user(user)
+

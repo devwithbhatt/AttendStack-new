@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.contrib.auth import authenticate, get_user_model
 from django.test import override_settings
 from django.utils import timezone
@@ -126,7 +128,9 @@ class EmployeeStatusActionTests(APITestCase):
             status=EmployeeStatus.TERMINATED,
         )
 
-        response = self.client.get("/")
+        # A platform admin must specify which company it's listing — see
+        # organizations.services.resolve_organization_for_request.
+        response = self.client.get(f"/?organization_id={self.organization.id}")
         employees = response.data["results"] if isinstance(response.data, dict) else response.data
 
         self.assertEqual(response.status_code, http_status.HTTP_200_OK)
@@ -420,3 +424,43 @@ class MergeRequestActionTests(APITestCase):
 
         self.assertEqual(approve_response.status_code, http_status.HTTP_404_NOT_FOUND)
         self.assertEqual(deny_response.status_code, http_status.HTTP_404_NOT_FOUND)
+
+
+@override_settings(ROOT_URLCONF="employees.urls")
+class EmployeeMultiTenantIsolationTests(APITestCase):
+    """
+    A Super Admin browsing one company's Employees page must see only that
+    company's roster — never every tenant's employees blended together
+    (the old behavior when no company was specified).
+    """
+
+    def setUp(self):
+        self.org_a = Organization.objects.create(name="Tenant Alpha")
+        self.org_b = Organization.objects.create(name="Tenant Beta")
+
+        self.emp_a = Employee.objects.create(
+            organization=self.org_a, full_name="Alpha Worker", email="alpha.emp@example.com",
+            employee_id="EMP-ISO-A", phone="9876500001", joining_date=date(2025, 1, 1),
+            status=EmployeeStatus.ACTIVE,
+        )
+        self.emp_b = Employee.objects.create(
+            organization=self.org_b, full_name="Beta Worker", email="beta.emp@example.com",
+            employee_id="EMP-ISO-B", phone="9876500002", joining_date=date(2025, 1, 1),
+            status=EmployeeStatus.ACTIVE,
+        )
+
+        self.super_admin = User.objects.create_superuser(
+            email="platform.employees.admin@example.com", password="StrongPass123!",
+        )
+        self.client.force_authenticate(self.super_admin)
+
+    def test_list_without_organization_id_is_empty(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 0)
+
+    def test_list_with_organization_id_shows_only_that_org(self):
+        response = self.client.get(f"/?organization_id={self.org_b.id}")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        emails = [e["email"] for e in response.data["results"]]
+        self.assertEqual(emails, ["beta.emp@example.com"])

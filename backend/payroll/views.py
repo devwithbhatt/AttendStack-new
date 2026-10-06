@@ -17,13 +17,6 @@ class PayrollViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     permission_module = "payroll"
 
-    def _organization_for_user(self):
-        user = self.request.user
-        if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
-            return None
-        from organizations.services import get_organization_for_user
-        return get_organization_for_user(user)
-
     def get_queryset(self):
         queryset = super().get_queryset()
         month = self.request.query_params.get("month")
@@ -45,8 +38,10 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(employee=employee)
             except Employee.DoesNotExist:
                 queryset = queryset.none()
-        elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
-            org = self._organization_for_user()
+        elif user.is_authenticated:
+            from organizations.services import resolve_organization_for_request
+
+            org = resolve_organization_for_request(self.request)
             if org:
                 queryset = queryset.filter(employee__organization=org)
             else:
@@ -74,13 +69,15 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        org = self._organization_for_user()
+        from organizations.services import resolve_organization_for_request
+
+        org = resolve_organization_for_request(request)
         employees = Employee.objects.filter(
             joining_date__lte=payroll_period_end(month, year),
         )
         if org:
             employees = employees.filter(organization=org)
-        elif not (request.user.is_superuser or getattr(request.user, 'role', '') == "SUPER_ADMIN"):
+        else:
             employees = employees.none()
         generated_count = 0
         updated_count = 0

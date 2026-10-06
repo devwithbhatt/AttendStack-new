@@ -108,7 +108,7 @@ class Shift(models.Model):
         # Auto-bootstrap default General Shift from SystemSettings if no default shift exists
         try:
             settings = SystemSettings.get_settings(organization)
-            return cls.objects.create(
+            shift = cls.objects.create(
                 organization=organization,
                 name="General Shift",
                 code="GEN",
@@ -122,6 +122,15 @@ class Shift(models.Model):
                 is_default=True,
                 is_active=True,
             )
+            # start_time/end_time were handed in straight from `settings`,
+            # which (for a never-before-saved SystemSettings instance) can
+            # still hold the field's raw string default ("10:00:00") rather
+            # than a real datetime.time — same class of issue __str__ above
+            # already guards against. Reload from the DB so callers always
+            # get back properly typed time objects, not whatever happened
+            # to be in memory.
+            shift.refresh_from_db()
+            return shift
         except Exception:
             return qs.first()
 

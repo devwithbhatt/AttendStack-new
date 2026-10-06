@@ -94,12 +94,30 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             if not check_user_module_permission(user, "employees", "view"):
                 return queryset.none()
 
-        if not user.is_superuser and getattr(user, 'role', '') != UserRole.SUPER_ADMIN:
+        # Note: `is_staff` deliberately excluded — create_hr()/create_sub_admin()
+        # both default it to True for ordinary, org-scoped company accounts,
+        # so it is not a reliable "platform-wide admin" signal here.
+        is_platform_admin = (
+            user.is_superuser
+            or getattr(user, 'role', '') == UserRole.SUPER_ADMIN
+        )
+
+        if is_platform_admin:
+            # Bulk listing is where cross-tenant data actually leaked —
+            # require an explicit company before showing a roster. Single-
+            # object actions (retrieve/update/delete/status/create-password/
+            # etc.) are identified by an unguessable UUID already, so
+            # platform admins keep acting on any specific employee without
+            # first selecting a company context, same as Django's own admin
+            # site — only `list` needs this gate.
+            if self.action == "list":
+                from organizations.services import resolve_organization_for_request
+
+                organization = resolve_organization_for_request(self.request)
+                queryset = queryset.filter(organization=organization) if organization else queryset.none()
+        else:
             organization = self._organization_for_user()
-            if organization is None:
-                queryset = queryset.none()
-            else:
-                queryset = queryset.filter(organization=organization)
+            queryset = queryset.filter(organization=organization) if organization else queryset.none()
 
         queryset = queryset.annotate(
             account_exists_annotation=Exists(User.objects.filter(email__iexact=OuterRef("email"), role=UserRole.EMPLOYEE)),
@@ -400,9 +418,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         (remove the request entirely) — see accounts.OrganizationMergeJoinSerializer."""
         queryset = Employee.objects.filter(external_source=MERGE_REQUEST_SOURCE)
 
-        if not (request.user.is_superuser or getattr(request.user, 'role', '') == UserRole.SUPER_ADMIN):
-            organization = self._organization_for_user()
-            queryset = queryset.filter(organization=organization) if organization else queryset.none()
+        from organizations.services import resolve_organization_for_request
+
+        organization = resolve_organization_for_request(request)
+        queryset = queryset.filter(organization=organization) if organization else queryset.none()
 
         queryset = queryset.order_by("-created_at")
         serializer = EmployeeListSerializer(queryset, many=True, context={"request": request})

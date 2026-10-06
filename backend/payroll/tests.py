@@ -239,3 +239,99 @@ class PaidPayrollModificationTests(TestCase):
         self.assertEqual(updated.basic_salary, Decimal("11000.00"))
         self.assertFalse(updated.is_modified_after_payment)
 
+
+from django.contrib.auth import get_user_model
+from django.test import override_settings
+from rest_framework import status as http_status
+from rest_framework.test import APITestCase
+
+from accounts.models import UserRole
+from organizations.models import Organization
+
+User = get_user_model()
+
+
+@override_settings(ROOT_URLCONF="payroll.urls")
+class PayrollMultiTenantIsolationTests(APITestCase):
+    """
+    A Super Admin browsing a specific company's Payroll page must see only
+    that company's data — never every tenant's payroll blended together
+    (the old behavior when no organization context was supplied), and never
+    a different company's data just because it happened to be the oldest
+    org in the database.
+    """
+
+    def setUp(self):
+        self.org_a = Organization.objects.create(name="Org Alpha")
+        self.org_b = Organization.objects.create(name="Org Beta")
+
+        self.emp_a = create_employee()
+        self.emp_a.organization = self.org_a
+        self.emp_a.employee_id = "EMP-A-001"
+        self.emp_a.email = "alpha.payroll@example.com"
+        self.emp_a.save()
+
+        self.emp_b = Employee.objects.create(
+            organization=self.org_b,
+            employee_id="EMP-B-001",
+            full_name="Beta Employee",
+            email="beta.payroll@example.com",
+            phone="9876543212",
+            department="Ops",
+            designation="Associate",
+            joining_date=date(2026, 5, 1),
+        )
+
+        Payroll.objects.create(employee=self.emp_a, month=5, year=2026, basic_salary=10000, net_salary=10000)
+        Payroll.objects.create(employee=self.emp_b, month=5, year=2026, basic_salary=12000, net_salary=12000)
+
+        self.super_admin = User.objects.create_superuser(
+            email="platform.admin@example.com", password="StrongPass123!",
+        )
+        self.hr_a = User.objects.create_user(
+            email="hr.alpha@example.com", password="StrongPass123!", role=UserRole.HR,
+        )
+        self.org_a.owner = self.hr_a
+        self.org_a.save(update_fields=["owner"])
+
+    def test_super_admin_without_organization_id_sees_nothing(self):
+        self.client.force_authenticate(self.super_admin)
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 0)
+
+    def test_super_admin_with_organization_id_sees_only_that_org(self):
+        self.client.force_authenticate(self.super_admin)
+        response = self.client.get(f"/?organization_id={self.org_b.id}")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["employee_details"]["id"], str(self.emp_b.id))
+
+    def test_hr_still_sees_only_their_own_organization(self):
+        self.client.force_authenticate(self.hr_a)
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["employee_details"]["id"], str(self.emp_a.id))
+
+    def test_generate_payroll_for_super_admin_without_org_affects_nothing(self):
+        self.client.force_authenticate(self.super_admin)
+        Payroll.objects.all().delete()
+        response = self.client.post("/generate/", {"month": 6, "year": 2026}, format="json")
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        self.assertEqual(Payroll.objects.count(), 0)
+
+    def test_generate_payroll_for_super_admin_with_org_scopes_correctly(self):
+        self.client.force_authenticate(self.super_admin)
+        Payroll.objects.all().delete()
+        response = self.client.post(
+            f"/generate/?organization_id={self.org_a.id}", {"month": 6, "year": 2026}, format="json"
+        )
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        generated = Payroll.objects.filter(month=6, year=2026)
+        self.assertEqual(generated.count(), 1)
+        self.assertEqual(generated.first().employee_id, self.emp_a.id)
+

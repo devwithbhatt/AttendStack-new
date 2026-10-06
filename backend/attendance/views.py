@@ -119,12 +119,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(date=timezone.now().date())
 
         # Enforce organization data isolation
-        if not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
-            org = self._organization_for_user()
-            if org:
-                queryset = queryset.filter(employee__organization=org)
-            else:
-                queryset = queryset.none()
+        from organizations.services import resolve_organization_for_request
+
+        org = resolve_organization_for_request(self.request)
+        if org:
+            queryset = queryset.filter(employee__organization=org)
+        else:
+            queryset = queryset.none()
 
         # Enforce data isolation: Employees can only view their own records
         if user.is_authenticated and getattr(user, 'role', '') == "EMPLOYEE":
@@ -265,8 +266,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         auto_mark_calendar_days(today.month, today.year)
         auto_mark_absent_employees(today, today)
         
-        user = request.user
-        org = self._organization_for_user()
+        from organizations.services import resolve_organization_for_request
+
+        org = resolve_organization_for_request(request)
 
         records_qs = AttendanceRecord.objects.select_related("employee").filter(date=today)
         employees_qs = Employee.objects.attendance_eligible_on(today).filter(
@@ -276,7 +278,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if org:
             records_qs = records_qs.filter(employee__organization=org)
             employees_qs = employees_qs.filter(organization=org)
-        elif not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+        else:
             records_qs = records_qs.none()
             employees_qs = employees_qs.none()
 
@@ -804,12 +806,13 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
-        elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+        elif user.is_authenticated:
             if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
                 if not check_user_module_permission(user, "leaves", "view"):
                     return queryset.none()
-            from organizations.services import get_organization_for_user
-            org = get_organization_for_user(user)
+            from organizations.services import resolve_organization_for_request
+
+            org = resolve_organization_for_request(self.request)
             if org:
                 queryset = queryset.filter(employee__organization=org)
             else:
@@ -1019,10 +1022,14 @@ class ShiftViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         org = self._organization()
+        if org is None:
+            from organizations.services import resolve_organization_for_request
+
+            org = resolve_organization_for_request(self.request)
         qs = Shift.objects.all()
         if org:
             qs = qs.filter(organization=org)
-        elif not (self.request.user.is_superuser or getattr(self.request.user, "role", "") == "SUPER_ADMIN"):
+        else:
             qs = qs.none()
         return qs.order_by("-is_default", "name")
 

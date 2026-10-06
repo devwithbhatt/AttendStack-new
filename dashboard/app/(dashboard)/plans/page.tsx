@@ -566,7 +566,7 @@ export default function AttendStackPlansPage() {
       <nav className={styles.tabs} aria-label="Billing workspace sections" role="tablist">
         {[
           { key: "plans", label: "Plans & Usage", icon: <IconBriefcase size={17} />, badge: organization ? "Active" : plans.length },
-          { key: "payments", label: "Payment History", icon: <IconReceipt size={17} />, badge: "2 Invoices" },
+          { key: "payments", label: "Payment History", icon: <IconReceipt size={17} />, badge: "Coming Soon" },
           { key: "settings", label: "Tax Invoice Settings", icon: <IconSettings size={17} />, badge: "Ready" },
         ].map((tab) => (
           <button
@@ -981,136 +981,11 @@ export default function AttendStackPlansPage() {
               </Button>
             </div>
 
-            <div className="table-responsive border rounded-3">
-              <Table className={`${styles.compactTable} align-middle mb-0`} hover>
-                <thead>
-                  <tr>
-                    <th className="ps-3">Invoice #</th>
-                    <th>Plan / Description</th>
-                    <th>Channel</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th className="text-end pe-3">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="ps-3 font-monospace fw-bold text-primary">SJ-2026-000032</td>
-                    <td>
-                      <strong className="text-dark">{organization?.plan_name || "Growth Pro Plan"}</strong>
-                      <small className="d-block text-muted">Digital Subscription Service</small>
-                    </td>
-                    <td>
-                      <Badge bg="primary-subtle" className="text-primary border border-primary-subtle rounded-pill px-2 py-0.5">
-                        {isPurchasedOnSimplyJob ? "SimplyJob Integrated" : "AttendStack Direct"}
-                      </Badge>
-                    </td>
-                    <td>19 Aug 2026</td>
-                    <td><strong>₹500.00</strong> <small className="text-muted">+ 18% GST</small></td>
-                    <td>
-                      <Badge bg="success-subtle" className="text-success border border-success-subtle rounded-pill px-2 py-0.5">
-                        PAID
-                      </Badge>
-                    </td>
-                    <td className="text-end pe-3">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="text-decoration-none fw-semibold p-0 text-primary d-inline-flex align-items-center"
-                        disabled={isDownloadingInvoice === "SJ-2026-000032"}
-                        onClick={() =>
-                          handleDownloadInvoice({
-                            invoice_number: "SJ-2026-000032",
-                            plan_name: organization?.plan_name || "Growth Pro Plan",
-                            subtotal: 500,
-                            taxable_amount: 500,
-                            gst_rate: 18,
-                            gst_amount: 90,
-                            amount: 590,
-                            created_at: new Date(),
-                            paid_at: new Date(),
-                            provider: "Razorpay",
-                            provider_payment_id: "pay_TRa39fwdvMtbOp",
-                            provider_order_id: "order_TRa2mALbLAbc5B",
-                            subscription_id: "13",
-                            service_period_start: new Date(),
-                            service_period_end: new Date(Date.now() + 30 * 86400000),
-                            status: "paid",
-                          })
-                        }
-                      >
-                        {isDownloadingInvoice === "SJ-2026-000032" ? (
-                          <>
-                            <Spinner size="sm" className="me-1" /> Generating...
-                          </>
-                        ) : (
-                          <>
-                            <IconFileText size={15} className="me-1" /> Invoice PDF
-                          </>
-                        )}
-                      </Button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="ps-3 font-monospace fw-bold text-primary">SJ-2026-000018</td>
-                    <td>
-                      <strong className="text-dark">Starter Plan</strong>
-                      <small className="d-block text-muted">Digital Subscription Service</small>
-                    </td>
-                    <td>
-                      <Badge bg="info-subtle" className="text-info border border-info-subtle rounded-pill px-2 py-0.5">
-                        SimplyJob Integrated
-                      </Badge>
-                    </td>
-                    <td>20 Jul 2026</td>
-                    <td><strong>₹500.00</strong> <small className="text-muted">+ 18% GST</small></td>
-                    <td>
-                      <Badge bg="success-subtle" className="text-success border border-success-subtle rounded-pill px-2 py-0.5">
-                        PAID
-                      </Badge>
-                    </td>
-                    <td className="text-end pe-3">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="text-decoration-none fw-semibold p-0 text-primary d-inline-flex align-items-center"
-                        disabled={isDownloadingInvoice === "SJ-2026-000018"}
-                        onClick={() =>
-                          handleDownloadInvoice({
-                            invoice_number: "SJ-2026-000018",
-                            plan_name: "Starter Plan",
-                            subtotal: 500,
-                            taxable_amount: 500,
-                            gst_rate: 18,
-                            gst_amount: 90,
-                            amount: 590,
-                            created_at: new Date(Date.now() - 30 * 86400000),
-                            paid_at: new Date(Date.now() - 30 * 86400000),
-                            provider: "Razorpay",
-                            provider_payment_id: "pay_TQz71mKloVbn9X",
-                            provider_order_id: "order_TQz69bHjkLp11R",
-                            subscription_id: "12",
-                            service_period_start: new Date(Date.now() - 30 * 86400000),
-                            service_period_end: new Date(),
-                            status: "paid",
-                          })
-                        }
-                      >
-                        {isDownloadingInvoice === "SJ-2026-000018" ? (
-                          <>
-                            <Spinner size="sm" className="me-1" /> Generating...
-                          </>
-                        ) : (
-                          <>
-                            <IconFileText size={15} className="me-1" /> Invoice PDF
-                          </>
-                        )}
-                      </Button>
-                    </td>
-                  </tr>
-                </tbody>
-              </Table>
+            <div className="text-center py-5 border rounded-3 bg-light">
+              <IconReceipt size={32} className="text-secondary mb-2" />
+              <p className="text-secondary small mb-0">
+                No payment records yet. Real payment history will appear here once billing is connected.
+              </p>
             </div>
           </div>
         </Card>

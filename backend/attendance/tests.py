@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -9,7 +9,7 @@ from employees.models import Employee, EmployeeStatus
 from holidays.models import Holiday
 from settings.models import SystemSettings
 
-from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
+from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, Shift
 from .eligibility import attendance_eligible_records
 from .serializers import AttendanceRecordSerializer, LeaveRequestSerializer
 from .services import auto_mark_calendar_days, earned_leave_allocation, leave_allocation, sync_leave_request_attendance
@@ -456,13 +456,17 @@ from rest_framework import status
 class AttendanceVisibilityApiTests(APITestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
+        from organizations.models import Organization
 
         User = get_user_model()
         self.admin = User.objects.create_superuser(
             email="attendance.admin@example.com",
             password="StrongPass123!",
         )
+        self.org = Organization.objects.create(name="Visibility Test Org")
         self.employee = create_employee()
+        self.employee.organization = self.org
+        self.employee.save(update_fields=["organization"])
         self.client.force_authenticate(self.admin)
 
     def test_list_keeps_pre_transition_history_and_hides_ineligible_dates(self):
@@ -477,9 +481,11 @@ class AttendanceVisibilityApiTests(APITestCase):
         self.employee._status_effective_date = date(2026, 5, 10)
         self.employee.save(update_fields=["status", "updated_at"])
 
+        # A Super Admin must specify which company it's inspecting — see
+        # organizations.services.resolve_organization_for_request.
         response = self.client.get(
             reverse("attendance:attendance-list"),
-            {"year": 2026, "month": 5},
+            {"year": 2026, "month": 5, "organization_id": str(self.org.id)},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -674,3 +680,107 @@ class GeofenceBypassTests(APITestCase):
         record = AttendanceRecord.objects.get(employee=self.employee, date=today)
         self.assertEqual(record.status, AttendanceStatus.PAID_LEAVE)
         self.assertIsNone(record.check_in)
+
+
+class MultiTenantIsolationApiTests(APITestCase):
+    """
+    A Super Admin browsing one company's Attendance Records, Today's
+    Attendance, Leave Requests, or Shifts must never see a different
+    company's data — whether that's because no company was specified
+    (previously: silently returned every tenant's data blended together)
+    or because a different company happened to be the oldest in the
+    database (previously: the implicit fallback for several of these).
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from organizations.models import Organization
+
+        User = get_user_model()
+        self.org_a = Organization.objects.create(name="Tenant Alpha")
+        self.org_b = Organization.objects.create(name="Tenant Beta")
+
+        self.emp_a = create_employee(email="alpha.att@example.com", employee_id="EMP-ATT-A", aadhaar_number="111111111111")
+        self.emp_a.organization = self.org_a
+        self.emp_a.save(update_fields=["organization"])
+
+        self.emp_b = create_employee(email="beta.att@example.com", employee_id="EMP-ATT-B", aadhaar_number="222222222222")
+        self.emp_b.organization = self.org_b
+        self.emp_b.save(update_fields=["organization"])
+
+        today = timezone.localdate()
+        AttendanceRecord.objects.create(employee=self.emp_a, date=today, status=AttendanceStatus.PRESENT)
+        AttendanceRecord.objects.create(employee=self.emp_b, date=today, status=AttendanceStatus.PRESENT)
+
+        LeaveRequest.objects.create(
+            employee=self.emp_a, start_date=today, end_date=today, leave_type="CASUAL", reason="Alpha leave",
+        )
+        LeaveRequest.objects.create(
+            employee=self.emp_b, start_date=today, end_date=today, leave_type="CASUAL", reason="Beta leave",
+        )
+
+        Shift.objects.create(
+            organization=self.org_a, name="Alpha Shift", start_time=time(10, 0), end_time=time(18, 0),
+        )
+        Shift.objects.create(
+            organization=self.org_b, name="Beta Shift", start_time=time(10, 0), end_time=time(18, 0),
+        )
+
+        self.super_admin = User.objects.create_superuser(
+            email="platform.attendance.admin@example.com", password="StrongPass123!",
+        )
+        self.client.force_authenticate(self.super_admin)
+
+    def test_attendance_list_without_org_is_empty(self):
+        response = self.client.get(reverse("attendance:attendance-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 0)
+
+    def test_attendance_list_with_org_shows_only_that_org(self):
+        response = self.client.get(
+            reverse("attendance:attendance-list"), {"organization_id": str(self.org_b.id)}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        emails = [r["employee_email"] for r in response.data["results"]]
+        self.assertEqual(emails, ["beta.att@example.com"])
+
+    def test_today_without_org_is_empty(self):
+        response = self.client.get(reverse("attendance:attendance-today"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)
+
+    def test_today_with_org_shows_only_that_org(self):
+        response = self.client.get(
+            reverse("attendance:attendance-today"), {"organization_id": str(self.org_a.id)}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        emails = [r["employee_email"] for r in response.data]
+        self.assertEqual(emails, ["alpha.att@example.com"])
+
+    def test_leaves_without_org_is_empty(self):
+        response = self.client.get(reverse("attendance:leaves-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 0)
+
+    def test_leaves_with_org_shows_only_that_org(self):
+        response = self.client.get(
+            reverse("attendance:leaves-list"), {"organization_id": str(self.org_a.id)}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        emails = [r["employee_email"] for r in response.data["results"]]
+        self.assertEqual(emails, ["alpha.att@example.com"])
+
+    def test_shifts_without_org_is_empty(self):
+        response = self.client.get(reverse("attendance:shifts-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["results"] if isinstance(response.data, dict) else response.data
+        self.assertEqual(len(results), 0)
+
+    def test_shifts_with_org_shows_only_that_org(self):
+        response = self.client.get(
+            reverse("attendance:shifts-list"), {"organization_id": str(self.org_b.id)}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["results"] if isinstance(response.data, dict) else response.data
+        names = [s["name"] for s in results]
+        self.assertEqual(names, ["Beta Shift"])
