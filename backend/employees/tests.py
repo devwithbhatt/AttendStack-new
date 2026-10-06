@@ -248,6 +248,80 @@ class EmployeeStatusActionTests(APITestCase):
         self.assertIsNone(authenticate(email=employee_email, password="StrongPass123!"))
 
 
+@override_settings(
+    ROOT_URLCONF="employees.urls",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+class EmployeeCreationLoginProvisioningTests(APITestCase):
+    """
+    Adding an employee through the API (HR/Admin's "+ Add Employee") must
+    provision a login account and email them a way to set their password —
+    otherwise they're invisible everywhere (Chat, etc.) until someone
+    remembers to run "Create Password" manually.
+    """
+
+    def setUp(self):
+        self.organization = Organization.objects.create(name="AttendStack")
+        self.admin_user = User.objects.create_superuser(
+            email="admin2@example.com",
+            password="StrongPass123!",
+        )
+        self.client.force_authenticate(self.admin_user)
+
+    def _create_employee_payload(self, email="new.hire@example.com"):
+        return {
+            "full_name": "New Hire",
+            "email": email,
+            "phone": "9123456780",
+        }
+
+    def test_creating_employee_provisions_login_and_sends_welcome_email(self):
+        from django.core import mail
+
+        response = self.client.post("/", self._create_employee_payload(), format="json")
+
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        self.assertNotIn("warning", response.data)
+
+        user = User.objects.filter(email__iexact="new.hire@example.com").first()
+        self.assertIsNotNone(user)
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.role, UserRole.EMPLOYEE)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertIn("new.hire@example.com", sent.to)
+        self.assertIn("AttendStack", sent.subject)
+
+    def test_login_account_is_not_duplicated_if_one_already_exists(self):
+        existing = User.objects.create_user(
+            email="already.has.login@example.com",
+            password="StrongPass123!",
+            role=UserRole.EMPLOYEE,
+        )
+        response = self.client.post(
+            "/", self._create_employee_payload(email="already.has.login@example.com"), format="json"
+        )
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        self.assertEqual(
+            User.objects.filter(email__iexact="already.has.login@example.com").count(), 1
+        )
+        existing.refresh_from_db()
+
+    def test_employee_creation_still_succeeds_even_if_welcome_email_fails(self):
+        from unittest.mock import patch
+
+        with patch(
+            "employees.views.send_employee_welcome_email", side_effect=Exception("SMTP down")
+        ):
+            response = self.client.post("/", self._create_employee_payload(), format="json")
+
+        self.assertEqual(response.status_code, http_status.HTTP_201_CREATED)
+        self.assertIn("warning", response.data)
+        # The login account should still exist even though the email failed.
+        self.assertTrue(User.objects.filter(email__iexact="new.hire@example.com").exists())
+
+
 @override_settings(ROOT_URLCONF="employees.urls")
 class MergeRequestActionTests(APITestCase):
     """The Employees page 'Requests' section: pending 'Merge with existing

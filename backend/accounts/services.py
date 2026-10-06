@@ -329,6 +329,74 @@ def send_company_admin_welcome_email(user, organization):
     message.send(fail_silently=False)
 
 
+def send_employee_welcome_email(user, employee, organization):
+    """
+    Notify a newly added employee that their AttendStack login is ready.
+
+    Same no-password-by-email pattern as `send_company_admin_welcome_email`:
+    the account is provisioned with a random, never-disclosed password, and
+    the recipient must set their own via the existing OTP-based password
+    reset flow before they can sign in.
+    """
+    support_email = getattr(settings, "PASSWORD_RESET_SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL)
+    login_url = f"{settings.FRONTEND_BASE_URL}/sign-in"
+    context = {
+        "name": user.get_short_name() or user.get_full_name() or "there",
+        "organization_name": organization.name if organization else "",
+        "employee_id": employee.employee_id,
+        "designation": employee.designation,
+        "department": employee.department,
+        "email": user.email,
+        "login_url": login_url,
+        "support_email": support_email,
+    }
+    message = EmailMultiAlternatives(
+        subject=f"[AttendStack] Your {organization.name if organization else 'AttendStack'} account is ready",
+        body=render_to_string("accounts/employee_welcome.txt", context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+        reply_to=[support_email] if support_email else None,
+        headers={"X-Auto-Response-Suppress": "All"},
+    )
+    message.attach_alternative(
+        render_to_string("accounts/employee_welcome.html", context),
+        "text/html",
+    )
+    message.send(fail_silently=False)
+
+
+def send_employee_registration_confirmation_email(user, employee, organization):
+    """
+    Confirms a *self*-registration (the employee signed up directly with an
+    org invite code and chose their own password during the form) — unlike
+    `send_employee_welcome_email`, there's no "set your password" step here
+    since they already have one, so this is a plain confirmation.
+    """
+    support_email = getattr(settings, "PASSWORD_RESET_SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL)
+    login_url = f"{settings.FRONTEND_BASE_URL}/sign-in"
+    context = {
+        "name": user.get_short_name() or user.get_full_name() or "there",
+        "organization_name": organization.name if organization else "",
+        "employee_id": employee.employee_id,
+        "email": user.email,
+        "login_url": login_url,
+        "support_email": support_email,
+    }
+    message = EmailMultiAlternatives(
+        subject=f"[AttendStack] Your {organization.name if organization else 'AttendStack'} account is confirmed",
+        body=render_to_string("accounts/employee_registration_confirmation.txt", context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+        reply_to=[support_email] if support_email else None,
+        headers={"X-Auto-Response-Suppress": "All"},
+    )
+    message.attach_alternative(
+        render_to_string("accounts/employee_registration_confirmation.html", context),
+        "text/html",
+    )
+    message.send(fail_silently=False)
+
+
 def send_purchase_thank_you_email(user, organization):
     """
     Confirms a bundle purchase (SimplyJob + AttendStack) and tells the new

@@ -38,7 +38,13 @@ from .serializers import (
     UserProfileSerializer,
     UserUpdateSerializer,
 )
-from .services import request_password_reset_otp, reset_password_with_otp, request_login_otp, verify_login_otp
+from .services import (
+    request_password_reset_otp,
+    reset_password_with_otp,
+    request_login_otp,
+    verify_login_otp,
+    send_employee_registration_confirmation_email,
+)
 from employees.services import sync_employee_from_simplyjob
 
 logger = logging.getLogger(__name__)
@@ -252,6 +258,16 @@ class EmployeeSelfRegistrationView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         employee = serializer.save()
+
+        try:
+            account_user = User.objects.get(email__iexact=employee.email)
+            send_employee_registration_confirmation_email(account_user, employee, employee.organization)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Unable to send registration confirmation email for employee %s", employee.id
+            )
+
         return Response(
             {
                 "detail": "Your employee account has been created. You can now sign in.",

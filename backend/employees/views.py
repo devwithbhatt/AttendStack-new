@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
@@ -8,6 +10,7 @@ from rest_framework import serializers
 
 from accounts.permissions import IsAdminOrHR
 from accounts.models import UserRole
+from accounts.services import generate_secure_temp_password, send_employee_welcome_email
 from django.contrib.auth import get_user_model
 from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
 from django.utils import timezone
@@ -29,6 +32,7 @@ from .services import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -46,6 +50,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if self.action in ("list", "me"):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        self._welcome_email_warning = None
+        response = super().create(request, *args, **kwargs)
+        if self._welcome_email_warning:
+            response.data["warning"] = self._welcome_email_warning
+        return response
 
     def get_serializer_class(self):
         user = self.request.user
@@ -134,7 +145,34 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         else:
             organization = self._organization_for_user()
 
-        serializer.save(organization=organization)
+        employee = serializer.save(organization=organization)
+
+        # Every employee added by HR/Admin needs a way to actually sign in.
+        # Provision a login account with a random, never-disclosed password
+        # (same pattern as the Company Admin onboarding flow) and email them
+        # instructions to set their own via "Forgot password" — rather than
+        # leaving them invisible everywhere in Chat/attendance until someone
+        # remembers to run "Create Password" manually.
+        if not User.objects.filter(email__iexact=employee.email).exists():
+            try:
+                account_user, _ = create_employee_user(
+                    employee, password=generate_secure_temp_password()
+                )
+            except Exception:
+                logger.exception("Unable to create login account for employee %s", employee.id)
+                self._welcome_email_warning = (
+                    f"Employee created, but a login account could not be provisioned for "
+                    f"{employee.email}. Use \"Create Password\" from the employee's profile."
+                )
+            else:
+                try:
+                    send_employee_welcome_email(account_user, employee, organization)
+                except Exception:
+                    logger.exception("Unable to send welcome email for employee %s", employee.id)
+                    self._welcome_email_warning = (
+                        f"Employee created, but the welcome email could not be sent to "
+                        f"{employee.email}. Please share the sign-in link with them manually."
+                    )
 
     def get_serializer_class(self):
         if self.action == "list":
