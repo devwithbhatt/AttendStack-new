@@ -171,15 +171,23 @@ def resolve_organization_for_request(request):
     Non-super-admin users are always scoped to their own organization via
     get_organization_for_user, unchanged.
 
-    Super Admins and staff don't own a single organization — they manage
-    the whole platform. These per-tenant ViewSets are views of ONE
+    Super Admin accounts manage the whole platform, but in practice the
+    same account is very often *also* the real owner of one specific
+    company (the account that stood the platform up in the first place —
+    see Organization.owner). These per-tenant ViewSets are views of ONE
     company's data, not a cross-tenant aggregate (that's what the dedicated
-    Super Admin dashboard/summary endpoints are for), so a Super Admin must
-    explicitly say which company they're inspecting via an
-    `organization_id` query parameter. Without one, this returns None, and
-    every caller must treat None as "show nothing" — never silently fall
-    back to "show every organization's data blended together", which is
-    what happened here before this helper existed.
+    Super Admin dashboard/summary endpoints are for), so:
+
+    1. An explicit `organization_id` query parameter always wins — this is
+       how a Super Admin inspects a company they do NOT own (e.g. support/
+       oversight on a tenant they aren't the owner of).
+    2. Without one, fall back to the company this Super Admin actually
+       owns, if any — so their own day-to-day Employees/Payroll/Attendance
+       pages keep working exactly as before, with no frontend changes.
+    3. Only if neither applies does this return None, and every caller
+       must treat None as "show nothing" — never silently fall back to
+       "show every organization's data blended together", which is what
+       happened here before this helper existed.
     """
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_authenticated", False):
@@ -194,11 +202,12 @@ def resolve_organization_for_request(request):
         or getattr(user, "role", "") == "SUPER_ADMIN"
     )
     if is_platform_admin:
-        org_id = request.query_params.get("organization_id")
-        if not org_id:
-            return None
         from organizations.models import Organization
-        return Organization.objects.filter(id=org_id).first()
+
+        org_id = request.query_params.get("organization_id")
+        if org_id:
+            return Organization.objects.filter(id=org_id).first()
+        return Organization.objects.filter(owner=user).first()
 
     return get_organization_for_user(user)
 

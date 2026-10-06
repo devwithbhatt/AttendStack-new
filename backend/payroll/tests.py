@@ -301,6 +301,26 @@ class PayrollMultiTenantIsolationTests(APITestCase):
         results = response.data.get("results", response.data)
         self.assertEqual(len(results), 0)
 
+    def test_super_admin_who_owns_a_company_sees_it_by_default(self):
+        # The real-world shape: the account that stood the platform up is
+        # BOTH the platform's Super Admin AND the actual owner of their own
+        # company. Their everyday Employees/Payroll/Attendance pages have
+        # no "organization_id" selector in the UI, so without this
+        # fallback they'd see nothing at all on their own dashboard —
+        # exactly the regression this test guards against.
+        owner_super_admin = User.objects.create_superuser(
+            email="owner.super.admin@example.com", password="StrongPass123!",
+        )
+        self.org_a.owner = owner_super_admin
+        self.org_a.save(update_fields=["owner"])
+
+        self.client.force_authenticate(owner_super_admin)
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["employee_details"]["id"], str(self.emp_a.id))
+
     def test_super_admin_with_organization_id_sees_only_that_org(self):
         self.client.force_authenticate(self.super_admin)
         response = self.client.get(f"/?organization_id={self.org_b.id}")
