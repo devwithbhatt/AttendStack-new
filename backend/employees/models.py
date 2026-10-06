@@ -2,7 +2,7 @@ import uuid
 
 from django.core.validators import RegexValidator
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models, transaction
+from django.db import models, transaction, IntegrityError
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -218,6 +218,24 @@ class Employee(models.Model):
     def __str__(self):
         return f"{self.full_name} ({self.employee_id})"
 
+    @staticmethod
+    def _next_employee_id_candidate():
+        last_emp = Employee.objects.filter(employee_id__startswith="EMP-").order_by("-employee_id").first()
+        if last_emp:
+            try:
+                last_num = int(last_emp.employee_id.split("-")[1])
+                new_num = last_num + 1
+            except (IndexError, ValueError):
+                new_num = 1
+        else:
+            new_num = 1
+
+        while True:
+            candidate_id = f"EMP-{new_num:05d}"
+            if not Employee.objects.filter(employee_id=candidate_id).exists():
+                return candidate_id
+            new_num += 1
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         update_fields = kwargs.get("update_fields")
@@ -226,24 +244,8 @@ class Employee(models.Model):
         if not is_new and status_is_saved:
             previous_status = Employee.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
-        if not self.employee_id:
-            last_emp = Employee.objects.filter(employee_id__startswith="EMP-").order_by("-employee_id").first()
-            if last_emp:
-                try:
-                    last_num = int(last_emp.employee_id.split("-")[1])
-                    new_num = last_num + 1
-                except (IndexError, ValueError):
-                    new_num = 1
-            else:
-                new_num = 1
-            
-            while True:
-                candidate_id = f"EMP-{new_num:05d}"
-                if not Employee.objects.filter(employee_id=candidate_id).exists():
-                    self.employee_id = candidate_id
-                    break
-                new_num += 1
-                
+        auto_generate_id = not self.employee_id
+
         status_has_changed = is_new or (status_is_saved and previous_status != self.status) or hasattr(self, "_status_effective_date") or hasattr(self, "_status_end_date")
         if status_has_changed:
             end_date = getattr(self, "_status_end_date", self.status_end_date)
@@ -262,55 +264,72 @@ class Employee(models.Model):
                 update_fields_set.add("auto_transition_status")
                 kwargs["update_fields"] = list(update_fields_set)
 
-        with transaction.atomic():
-            super().save(*args, **kwargs)
+        # The employee_id candidate above is picked optimistically (read
+        # the highest existing code, propose the next one) with no row
+        # lock, so two concurrent "+ Add Employee" submissions can race for
+        # the same candidate. The DB's unique constraint always prevents an
+        # actual duplicate either way — this retry just means the loser
+        # transparently gets the next available code instead of a raw
+        # IntegrityError/500.
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            if auto_generate_id:
+                self.employee_id = self._next_employee_id_candidate()
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
 
-            if status_has_changed or hasattr(self, "_status_effective_date"):
-                default_effective_date = self.joining_date if is_new else timezone.localdate()
-                effective_date = getattr(self, "_status_effective_date", default_effective_date)
-                effective_date = max(effective_date, self.joining_date)
-                end_date = self.status_end_date
-                auto_transition = self.auto_transition_status
+                    if status_has_changed or hasattr(self, "_status_effective_date"):
+                        default_effective_date = self.joining_date if is_new else timezone.localdate()
+                        effective_date = getattr(self, "_status_effective_date", default_effective_date)
+                        effective_date = max(effective_date, self.joining_date)
+                        end_date = self.status_end_date
+                        auto_transition = self.auto_transition_status
 
-                # Delete any obsolete/conflicting records on or after effective_date for this employee
-                EmployeeStatusHistory.objects.filter(
-                    employee=self,
-                    effective_date__gte=effective_date,
-                ).delete()
+                        # Delete any obsolete/conflicting records on or after effective_date for this employee
+                        EmployeeStatusHistory.objects.filter(
+                            employee=self,
+                            effective_date__gte=effective_date,
+                        ).delete()
 
-                # Also delete any older duplicate records with the exact same status to prevent stale duplicates
-                EmployeeStatusHistory.objects.filter(
-                    employee=self,
-                    status=self.status,
-                ).delete()
+                        # Also delete any older duplicate records with the exact same status to prevent stale duplicates
+                        EmployeeStatusHistory.objects.filter(
+                            employee=self,
+                            status=self.status,
+                        ).delete()
 
-                EmployeeStatusHistory.objects.create(
-                    employee=self,
-                    status=self.status,
-                    effective_date=effective_date,
-                    end_date=end_date,
-                    auto_transition_status=auto_transition,
-                )
+                        EmployeeStatusHistory.objects.create(
+                            employee=self,
+                            status=self.status,
+                            effective_date=effective_date,
+                            end_date=end_date,
+                            auto_transition_status=auto_transition,
+                        )
 
-                if end_date and auto_transition:
-                    transition_date = end_date + timezone.timedelta(days=1)
-                    EmployeeStatusHistory.objects.filter(
-                        employee=self,
-                        effective_date=transition_date,
-                    ).delete()
+                        if end_date and auto_transition:
+                            transition_date = end_date + timezone.timedelta(days=1)
+                            EmployeeStatusHistory.objects.filter(
+                                employee=self,
+                                effective_date=transition_date,
+                            ).delete()
 
-                    EmployeeStatusHistory.objects.create(
-                        employee=self,
-                        status=auto_transition,
-                        effective_date=transition_date,
-                    )
+                            EmployeeStatusHistory.objects.create(
+                                employee=self,
+                                status=auto_transition,
+                                effective_date=transition_date,
+                            )
+                break
+            except IntegrityError:
+                if not auto_generate_id or attempt == max_attempts - 1:
+                    raise
+                continue
 
-            if hasattr(self, "_status_effective_date"):
-                del self._status_effective_date
-            if hasattr(self, "_status_end_date"):
-                del self._status_end_date
-            if hasattr(self, "_auto_transition_status"):
-                del self._auto_transition_status
+        if hasattr(self, "_status_effective_date"):
+            del self._status_effective_date
+        if hasattr(self, "_status_end_date"):
+            del self._status_end_date
+        if hasattr(self, "_auto_transition_status"):
+            del self._auto_transition_status
 
     def sync_status(self, today=None):
         """Syncs cached status fields on Employee with active status in status history for today."""

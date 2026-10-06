@@ -1,7 +1,8 @@
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import authenticate, get_user_model
-from django.test import override_settings
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status as http_status
 from rest_framework.test import APITestCase
@@ -11,6 +12,78 @@ from organizations.models import Organization
 from .models import Employee, EmployeeStatus, MERGE_REQUEST_SOURCE
 
 User = get_user_model()
+
+
+class EmployeeIdUniquenessTests(TestCase):
+    """
+    employee_id is picked optimistically (read the highest existing code,
+    propose the next one) with no row lock, so two concurrent "+ Add
+    Employee" submissions can race for the same candidate. The DB's unique
+    constraint always prevents an actual duplicate; this proves the loser
+    gets a transparent retry instead of a raw IntegrityError/500.
+    """
+
+    def _make_employee(self, employee_id, email):
+        return Employee.objects.create(
+            employee_id=employee_id,
+            full_name="Race Condition Test",
+            email=email,
+            phone="9876500100",
+            joining_date=date(2025, 1, 1),
+        )
+
+    def test_sequential_ids_increment_normally(self):
+        first = self._make_employee("", "seq1@example.com")
+        second = self._make_employee("", "seq2@example.com")
+        self.assertNotEqual(first.employee_id, second.employee_id)
+        self.assertTrue(first.employee_id.startswith("EMP-"))
+        self.assertTrue(second.employee_id.startswith("EMP-"))
+
+    def test_retries_when_the_computed_candidate_is_already_taken(self):
+        # Pre-occupy the id the generator would naturally compute next, to
+        # simulate a concurrent request having just won that exact race.
+        would_be_next = Employee._next_employee_id_candidate()
+        self._make_employee(would_be_next, "incumbent@example.com")
+
+        new_employee = self._make_employee("", "late-to-the-race@example.com")
+
+        self.assertNotEqual(new_employee.employee_id, would_be_next)
+        self.assertTrue(
+            Employee.objects.filter(employee_id=new_employee.employee_id).count() == 1
+        )
+
+    def test_gives_up_after_max_attempts_and_raises_instead_of_looping_forever(self):
+        from django.db import IntegrityError
+
+        with patch.object(Employee, "_next_employee_id_candidate", return_value="EMP-STUCK"):
+            self._make_employee("EMP-STUCK", "first@example.com")
+            with self.assertRaises(IntegrityError):
+                self._make_employee("", "second@example.com")
+
+
+class OrganizationInviteCodeUniquenessTests(TestCase):
+    """invite_code's keyspace (32^8) makes a real collision astronomically
+    unlikely, but confirms the same fail-safe retry exists if it ever
+    happens, rather than a bare IntegrityError reaching the user."""
+
+    def test_retries_when_the_generated_code_is_already_taken(self):
+        from organizations.models import generate_invite_code
+
+        taken_code = generate_invite_code()
+        Organization.objects.create(name="First Co", invite_code=taken_code)
+
+        # First call (the field's default=, at construction time) returns
+        # the already-taken code to force the collision; the second call
+        # (inside save()'s retry) returns a genuinely different one.
+        with patch(
+            "organizations.models.generate_invite_code",
+            side_effect=[taken_code, "ORG-RETRY01"],
+        ):
+            second = Organization(name="Second Co")
+            second.save()
+
+        self.assertNotEqual(second.invite_code, taken_code)
+        self.assertEqual(Organization.objects.filter(invite_code=taken_code).count(), 1)
 
 
 @override_settings(ROOT_URLCONF="employees.urls")

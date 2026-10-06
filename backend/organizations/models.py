@@ -1,6 +1,6 @@
 import secrets
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 
 
@@ -111,7 +111,26 @@ class Organization(models.Model):
             self.api_key = generate_api_key()
         # Automatically update plan_status based on plan_expires_at
         self.plan_status = self.computed_plan_status
-        super().save(*args, **kwargs)
+
+        # invite_code is assigned once, at instantiation, via the field's
+        # default — its keyspace (32^8) makes a real collision
+        # astronomically unlikely, but the DB's unique constraint would
+        # still raise a raw IntegrityError/500 if it ever happened. Retry
+        # with a freshly generated code rather than let that surface, but
+        # only for a brand-new row — never regenerate an existing
+        # organization's already-issued code out from under it.
+        is_new = self._state.adding
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                return
+            except IntegrityError:
+                if not is_new or attempt == max_attempts - 1:
+                    raise
+                self.invite_code = generate_invite_code()
+                continue
 
     def __str__(self):
         return self.name
