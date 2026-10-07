@@ -86,6 +86,7 @@ export function TextField({
   secureTextEntry,
   autoCapitalize,
   editable = true,
+  tall,
 }: {
   label: string;
   value: string;
@@ -98,12 +99,14 @@ export function TextField({
   secureTextEntry?: boolean;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   editable?: boolean;
+  /** A big editor box (e.g. the rulebook). */
+  tall?: boolean;
 }) {
   return (
     <View>
       <FieldLabel label={label} required={required} />
       <TextInput
-        style={[styles.input, multiline && styles.textArea, !editable && styles.inputDisabled]}
+        style={[styles.input, multiline && styles.textArea, tall && { height: 320 }, !editable && styles.inputDisabled]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

@@ -121,7 +121,7 @@ export interface EmployeeListItem {
   joining_date?: string;
   profile_photo_url?: string | null;
   account_exists?: boolean;
-  shift?: number | null;
+  shift?: string | null;
   shift_name?: string | null;
   annual_salary?: string | null;
 }
@@ -150,7 +150,7 @@ export interface EmployeeDetail {
   designation: string;
   employment_type: string;
   employment_type_label: string;
-  shift: number | null;
+  shift: string | null;
   shift_name: string | null;
   reporting_manager: string;
   status: string;
@@ -190,11 +190,21 @@ export interface RoleSummary {
 }
 
 export interface Shift {
-  id: number;
+  id: string;
   name: string;
+  code?: string;
   start_time: string;
   end_time: string;
+  start_time_display?: string;
+  end_time_display?: string;
+  late_grace_minutes?: number;
+  early_checkout_grace_minutes?: number;
+  early_checkout_penalty?: string;
+  min_hours_half_day?: string;
+  min_hours_full_day?: string;
   is_default?: boolean;
+  is_active?: boolean;
+  employee_count?: number;
 }
 
 export interface LeaveBalance {
@@ -460,4 +470,49 @@ export interface OrganizationInfo {
   max_employees: number | null;
   employee_count: number;
   active_employee_count: number;
+  invite_code: string;
+  api_key?: string;
+  can_manage_invite_code: boolean;
+  external_company_id?: string | null;
+  is_simplyjob_linked?: boolean;
+  plan_source?: string | null;
+  owner?: string | null;
+  email?: string;
+  phone?: string;
+  website?: string;
+}
+
+export interface Plan {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  monthly_price: string | number;
+  yearly_price: string | number;
+  max_employees: number;
+  included_employees: number;
+  direct_overage_price_per_employee: string | number | null;
+  simplyjob_overage_price_per_employee: string | number;
+  badge_text: string;
+  is_popular: boolean;
+  is_active: boolean;
+  requires_contact_sales: boolean;
+  features_list: string[];
+}
+
+export interface RoleDetail extends RoleSummary {
+  permissions: Record<string, ModulePermission>;
+}
+
+export interface SubAdmin {
+  id: string;
+  user_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  phone: string;
+  is_active: boolean;
+  custom_role_title: string;
+  permissions: Record<string, ModulePermission>;
 }

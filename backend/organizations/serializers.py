@@ -4,6 +4,20 @@ from .models import Organization
 from employees.models import Employee, EmployeeStatus
 from attendance.models import AttendanceRecord
 
+def can_manage_organization(user, organization) -> bool:
+    """Super Admin, the company's owner/HR admin, or anyone whose Role grants
+    Settings edit. (`is_staff` is set on every Sub-Admin, so it is not a
+    sufficient signal on its own.)"""
+    from accounts.permissions import check_user_module_permission
+
+    return bool(
+        user.is_superuser
+        or getattr(user, "role", "") in ["SUPER_ADMIN", "HR"]
+        or (organization is not None and organization.owner_id == user.id)
+        or check_user_module_permission(user, "settings", "edit")
+    )
+
+
 class OrganizationSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source="owner.get_full_name", read_only=True)
     owner_email = serializers.CharField(source="owner.email", read_only=True)
@@ -122,12 +136,15 @@ class OrganizationSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request is None or not request.user.is_authenticated:
             return False
-        return (
-            request.user.is_superuser
-            or getattr(request.user, "role", "") in ["SUPER_ADMIN", "HR"]
-            or getattr(request.user, "is_staff", False)
-            or obj.owner_id == request.user.id
-        )
+        return can_manage_organization(request.user, obj)
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        # The API key authenticates SimplyJob's server calls (e.g. sync-plan),
+        # so only people who may manage the company ever see it.
+        if not data.get("can_manage_invite_code"):
+            data.pop("api_key", None)
+        return data
 
     def get_employee_count(self, obj):
         return obj.employees.count()

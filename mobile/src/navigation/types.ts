@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
-import type { AdminAttendanceRecord, Holiday, PayrollRecord, Project } from "../types";
+import type { AdminAttendanceRecord, Holiday, PayrollRecord, Project, RoleDetail, Shift, SubAdmin } from "../types";
+import type { SectionKey } from "../screens/admin/settings/settingsSpec";
 
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<AdminTabParamList> | NavigatorScreenParams<TabParamList> | undefined;
@@ -31,6 +32,18 @@ export type RootStackParamList = {
   AdminPayroll: undefined;
   PayrollEdit: { payroll: PayrollRecord };
   Increments: undefined;
+  SettingsHome: undefined;
+  SettingsSection: { section: SectionKey };
+  Shifts: undefined;
+  ShiftForm: { shift?: Shift } | undefined;
+  ShiftAssign: { shift: Shift };
+  Roles: undefined;
+  RoleForm: { role?: RoleDetail } | undefined;
+  RoleMembers: { role: RoleDetail };
+  SubAdmins: undefined;
+  SubAdminForm: { subAdmin?: SubAdmin } | undefined;
+  Integrations: undefined;
+  Rulebook: undefined;
 };
 
 export type TabParamList = {

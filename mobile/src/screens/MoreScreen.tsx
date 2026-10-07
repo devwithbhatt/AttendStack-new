@@ -68,6 +68,11 @@ export default function MoreScreen() {
   if (admin) {
     companyRows.push({ icon: "credit-card", label: "Plans & Billing", onPress: () => navigation.navigate("PlansBilling") });
   }
+  const canSettings =
+    hasModulePermission(user, "settings", "view") || hasModulePermission(user, "subadmins", "view") || user?.role === "HR" || user?.role === "SUPER_ADMIN";
+  if (canSettings) {
+    companyRows.push({ icon: "settings", label: "Settings", sub: "Company, attendance rules, shifts, roles & more", onPress: () => navigation.navigate("SettingsHome") });
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
@@ -112,6 +117,8 @@ export default function MoreScreen() {
         <MenuRow icon="dollar-sign" label="My Salary" onPress={() => navigation.navigate("Payroll")} />
         <View style={styles.divider} />
         <MenuRow icon="gift" label="Holidays" onPress={() => navigation.navigate("Holidays")} />
+        <View style={styles.divider} />
+        <MenuRow icon="book-open" label="Company Rulebook" onPress={() => navigation.navigate("Rulebook")} />
       </View>
 
       {companyRows.length > 0 && (

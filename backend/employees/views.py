@@ -5,7 +5,7 @@ from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework import serializers
 
 from accounts.permissions import IsAdminOrHR
@@ -33,6 +33,10 @@ from .services import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def request_user_is_full_admin(user) -> bool:
+    return bool(user and user.is_authenticated and (user.is_superuser or user.is_admin_account))
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -284,9 +288,21 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             "leave_requests": LeaveRequestSerializer(requests, many=True, context={"request": request}).data,
         })
 
+    def _ensure_may_set_password(self, employee):
+        """Employees-module rights must not become an admin takeover: only a
+        full-access admin may set the password of an admin's login."""
+        if request_user_is_full_admin(self.request.user):
+            return
+        target = User.objects.filter(email__iexact=employee.email).first()
+        if target is not None and target.pk != self.request.user.pk and (
+            target.is_admin_account or target.role == UserRole.SUPER_ADMIN
+        ):
+            raise PermissionDenied("Only a full-access admin can reset an admin's password.")
+
     @action(detail=True, methods=["post"], url_path="create-password")
     def create_password(self, request, pk=None):
         employee = self.get_object()
+        self._ensure_may_set_password(employee)
         user_exists = User.objects.filter(email__iexact=employee.email).exists()
 
         if user_exists:
@@ -348,7 +364,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         role_id = request.data.get("role_id")
         if not role_id:
-            unassign_role_from_user(user)
+            unassign_role_from_user(user, acting_user=request.user)
             return Response({"detail": f"{employee.full_name} is now a plain Employee with no custom role."})
 
         role = Role.objects.filter(id=role_id).first()
@@ -364,6 +380,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="reset-password")
     def reset_password(self, request, pk=None):
         employee = self.get_object()
+        self._ensure_may_set_password(employee)
         user, employee_password = reset_employee_user_password(
             employee,
             password=request.data.get("password"),

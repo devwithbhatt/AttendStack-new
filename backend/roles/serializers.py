@@ -52,6 +52,15 @@ class RoleSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if "permissions" in self.initial_data:
             attrs["_permissions"] = validate_permission_matrix(self.initial_data["permissions"])
+        request = self.context.get("request")
+        acting = getattr(request, "user", None)
+        if acting is not None and acting.is_authenticated and not acting.is_admin_account:
+            from .services import ensure_can_grant
+            from rest_framework.exceptions import PermissionDenied
+
+            if self.instance is not None and acting.custom_role_id == self.instance.id:
+                raise PermissionDenied("You can't edit the role you hold. Ask a full-access admin.")
+            ensure_can_grant(acting, is_admin=bool(attrs.get("is_admin")), matrix=attrs.get("_permissions"))
         return attrs
 
     def create(self, validated_data):

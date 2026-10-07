@@ -16,3 +16,8 @@ const DEV_API_BASE_URL = "http://192.168.18.93:8001";
 const PROD_API_BASE_URL = "https://attendance.nextgenapplication.com";
 
 export const API_BASE_URL = __DEV__ ? DEV_API_BASE_URL : PROD_API_BASE_URL;
+
+// The web dashboard, for the few things that must happen in a browser
+// (e.g. paying for a plan through the Razorpay checkout). In development it
+// is the local Next.js server on port 3000.
+export const WEB_APP_URL = __DEV__ ? DEV_API_BASE_URL.replace(/:\d+$/, ":3000") : PROD_API_BASE_URL;

@@ -117,7 +117,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     def unassign(self, request):
         """Revert a user to a plain Employee account with no custom role."""
         target_user = _resolve_user(request.data)
-        unassign_role_from_user(target_user)
+        unassign_role_from_user(target_user, acting_user=request.user)
         return Response({"detail": f"{target_user.email} is now a regular Employee with no custom role."})
 
 

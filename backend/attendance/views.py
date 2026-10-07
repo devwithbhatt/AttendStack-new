@@ -1048,20 +1048,25 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 class ShiftViewSet(viewsets.ModelViewSet):
     serializer_class = ShiftSerializer
     permission_classes = [IsAuthenticated]
+    # Shifts are configured under Settings on the web dashboard.
+    permission_module = "settings"
+
+    def get_permissions(self):
+        # Everyone may read their company's shifts (employee forms list them);
+        # creating, editing, deleting and assigning need Settings permission.
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsAuthenticated()]
+        return [IsAdminOrReadOnly()]
 
     def _organization(self):
-        user = self.request.user
-        emp = getattr(user, "employee_profile", None)
-        if emp and emp.organization:
-            return emp.organization
-        return None
+        # `user.employee_profile` doesn't exist on this user model, so the old
+        # lookup always returned None and new shifts were saved company-less.
+        from organizations.services import resolve_organization_for_request
+
+        return resolve_organization_for_request(self.request)
 
     def get_queryset(self):
         org = self._organization()
-        if org is None:
-            from organizations.services import resolve_organization_for_request
-
-            org = resolve_organization_for_request(self.request)
         qs = Shift.objects.all()
         if org:
             qs = qs.filter(organization=org)
@@ -1071,6 +1076,8 @@ class ShiftViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = self._organization()
+        if org is None:
+            raise ValidationError({"detail": "Set up a company workspace before adding shifts."})
         if serializer.validated_data.get("is_default"):
             Shift.objects.filter(organization=org, is_default=True).update(is_default=False)
         serializer.save(organization=org)
@@ -1096,5 +1103,6 @@ class ShiftViewSet(viewsets.ModelViewSet):
         employee_ids = request.data.get("employee_ids", [])
         if not isinstance(employee_ids, list):
             return Response({"detail": "employee_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
-        updated = Employee.objects.filter(id__in=employee_ids).update(shift=shift)
+        # Only this shift's own company's staff — never another tenant's.
+        updated = Employee.objects.filter(id__in=employee_ids, organization=shift.organization).update(shift=shift)
         return Response({"status": "success", "message": f"Assigned {updated} employees to {shift.name}."})

@@ -508,8 +508,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 if not organization:
                     return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        user_role = getattr(request.user, "role", "")
-        if not (request.user.is_superuser or user_role in [UserRole.SUPER_ADMIN, UserRole.HR] or getattr(request.user, "is_staff", False) or organization.owner_id == request.user.id):
+        from .serializers import can_manage_organization
+
+        if not can_manage_organization(request.user, organization):
             raise PermissionDenied("Only the organization owner, HR, or Super Admin can regenerate its invite code.")
 
         from .models import generate_invite_code
@@ -541,8 +542,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 if not organization:
                     return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        user_role = getattr(request.user, "role", "")
-        if not (request.user.is_superuser or user_role in [UserRole.SUPER_ADMIN, UserRole.HR] or getattr(request.user, "is_staff", False) or organization.owner_id == request.user.id):
+        from .serializers import can_manage_organization
+
+        if not can_manage_organization(request.user, organization):
             raise PermissionDenied("Only the organization owner, HR, or Super Admin can regenerate the API key.")
 
         from .models import generate_api_key
@@ -588,12 +590,16 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
     def _process_plan_renewal(self, organization, user, request):
-        allowed_roles = [UserRole.SUPER_ADMIN, UserRole.HR, getattr(UserRole, "ADMIN", "ADMIN")]
-        is_authorized = (
-            user.is_superuser
-            or getattr(user, "role", "") in allowed_roles
-            or organization.owner_id == user.id
-            or organization.owner_id is None
+        from .serializers import can_manage_organization
+
+        # Platform admins may act on any company; everyone else only on
+        # their own (an HR account must never renew — or, via an ownerless
+        # company, take over — someone else's workspace).
+        is_platform_admin = user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN
+        own_org = self._find_user_organization(user)
+        is_own = own_org is not None and own_org.pk == organization.pk
+        is_authorized = is_platform_admin or (
+            is_own and (organization.owner_id is None or can_manage_organization(user, organization))
         )
         if not is_authorized:
             raise PermissionDenied("Only organization administrators or owners can renew subscriptions.")
@@ -632,9 +638,12 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         """Allows purchasing or renewing an AttendStack plan for the current user's workspace."""
         user = request.user
         org_id = request.data.get("organization_id")
-        organization = Organization.objects.filter(id=org_id).first() if org_id else self._find_user_organization(user)
-        if not organization:
-            organization = Organization.objects.first()
+        is_platform_admin = user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN
+        organization = (
+            Organization.objects.filter(id=org_id).first()
+            if org_id and is_platform_admin
+            else self._find_user_organization(user)
+        )
         if not organization:
             return Response({"detail": "No organization found to activate plan."}, status=status.HTTP_404_NOT_FOUND)
         return self._process_plan_renewal(organization, user, request)
