@@ -517,6 +517,38 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
     return {"created": created_count, "updated": updated_count, "skipped": skipped_count}
 
 
+def resync_company_holiday_date(organization, holiday_date: date) -> dict[str, int]:
+    """
+    Bring one company's attendance for one date in line with its holiday
+    calendar after a holiday is added, moved or deleted.
+
+    Only touches days the system marked by itself (no check-in/out, no leave
+    request): a removed holiday's "Auto-marked: Holiday" days are deleted and
+    re-marked the normal way (Sunday / Absent); a newly added holiday turns
+    auto-marked Absent days into Holiday. Other companies are never touched.
+    """
+    if organization is None or holiday_date is None:
+        return {"removed": 0, "converted": 0}
+    untouched = AttendanceRecord.objects.filter(
+        employee__organization=organization,
+        date=holiday_date,
+        check_in__isnull=True,
+        check_out__isnull=True,
+        leave_request__isnull=True,
+    )
+    removed = converted = 0
+    if Holiday.objects.filter(organization=organization, date=holiday_date).exists():
+        converted = untouched.filter(status=AttendanceStatus.ABSENT, notes__startswith="Auto-marked").update(
+            status=AttendanceStatus.HOLIDAY, is_paid=True, notes="Auto-marked: Holiday"
+        )
+        auto_mark_calendar_days(holiday_date.month, holiday_date.year)
+    else:
+        removed, _ = untouched.filter(status=AttendanceStatus.HOLIDAY, notes="Auto-marked: Holiday").delete()
+        auto_mark_calendar_days(holiday_date.month, holiday_date.year)
+        auto_mark_absent_employees(holiday_date, holiday_date)
+    return {"removed": removed, "converted": converted}
+
+
 # Starting date for enforcing auto-marked absences and payroll deductions.
 # Historical dates prior to this baseline remain intact and are never auto-marked absent.
 ABSENT_TRACKING_START_DATE = date(2026, 9, 16)

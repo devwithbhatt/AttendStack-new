@@ -139,3 +139,66 @@ class HolidayMultiTenantIsolationTests(APITestCase):
             "/", {"name": "Duplicate", "date": "2026-07-10", "type": HolidayType.FESTIVAL}, format="json",
         )
         self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+
+
+@override_settings(ROOT_URLCONF="holidays.urls")
+class HolidayAttendanceResyncTests(APITestCase):
+    """Deleting, moving or adding a holiday must update the days the system
+    already marked — for that company only."""
+
+    def setUp(self):
+        from attendance.models import AttendanceRecord, AttendanceStatus
+        from employees.models import Employee
+
+        self.AttendanceRecord, self.Status = AttendanceRecord, AttendanceStatus
+        self.org_a = Organization.objects.create(name="Resync Alpha")
+        self.org_b = Organization.objects.create(name="Resync Beta")
+        self.hr_a = User.objects.create_user(email="hr.resync@example.com", password="StrongPass123!", role=UserRole.HR)
+        self.org_a.owner = self.hr_a
+        self.org_a.save(update_fields=["owner"])
+
+        def emp(org, code, email, aadhaar):
+            return Employee.objects.create(
+                organization=org, employee_id=code, full_name=code, email=email, phone="9876543210",
+                aadhaar_number=aadhaar, department="Ops", designation="Associate", annual_salary=120000,
+                joining_date=date(2026, 1, 1),
+            )
+
+        self.emp_a = emp(self.org_a, "EMP-RS-A", "a@resync.test", "444455556661")
+        self.emp_b = emp(self.org_b, "EMP-RS-B", "b@resync.test", "444455556662")
+        self.day = date(2030, 3, 13)  # a future Wednesday
+        self.holiday = Holiday.objects.create(organization=self.org_a, name="Alpha Day", date=self.day)
+        for e in (self.emp_a, self.emp_b):
+            rec = AttendanceRecord(employee=e, date=self.day, status=AttendanceStatus.HOLIDAY, notes="Auto-marked: Holiday")
+            rec.save(auto_refresh_status=False)
+        self.client.force_authenticate(self.hr_a)
+
+    def test_deleting_holiday_clears_only_that_companys_auto_marked_days(self):
+        res = self.client.delete(f"/{self.holiday.pk}/")
+        self.assertIn(res.status_code, (200, 204))
+        self.assertFalse(self.AttendanceRecord.objects.filter(employee=self.emp_a, date=self.day, status=self.Status.HOLIDAY).exists())
+        # Another company's record is never touched.
+        self.assertTrue(self.AttendanceRecord.objects.filter(employee=self.emp_b, date=self.day, status=self.Status.HOLIDAY).exists())
+
+    def test_moving_holiday_clears_old_date(self):
+        res = self.client.put(f"/{self.holiday.pk}/", {"name": "Alpha Day", "date": "2030-03-20", "type": HolidayType.FESTIVAL}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertFalse(self.AttendanceRecord.objects.filter(employee=self.emp_a, date=self.day, status=self.Status.HOLIDAY).exists())
+        self.assertTrue(self.AttendanceRecord.objects.filter(employee=self.emp_a, date=date(2030, 3, 20), status=self.Status.HOLIDAY).exists())
+
+    def test_adding_holiday_converts_auto_marked_absence(self):
+        day = date(2030, 3, 27)
+        rec = self.AttendanceRecord(employee=self.emp_a, date=day, status=self.Status.ABSENT, notes="Auto-marked: Absent")
+        rec.save(auto_refresh_status=False)
+        res = self.client.post("/", {"name": "New Day", "date": "2030-03-27", "type": HolidayType.FESTIVAL}, format="json")
+        self.assertEqual(res.status_code, 201, res.data)
+        rec.refresh_from_db()
+        self.assertEqual(rec.status, self.Status.HOLIDAY)
+
+    def test_punched_day_is_never_touched(self):
+        from django.utils import timezone
+
+        rec = self.AttendanceRecord.objects.get(employee=self.emp_a, date=self.day)
+        self.AttendanceRecord.objects.filter(pk=rec.pk).update(check_in=timezone.now())
+        self.client.delete(f"/{self.holiday.pk}/")
+        self.assertTrue(self.AttendanceRecord.objects.filter(pk=rec.pk).exists())

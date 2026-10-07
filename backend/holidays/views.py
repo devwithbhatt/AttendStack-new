@@ -3,7 +3,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
+from django.db import transaction
+
 from attendance.permissions import IsAdminOrReadOnly
+from attendance.services import resync_company_holiday_date
 from .models import Holiday
 from .serializers import HolidaySerializer
 
@@ -66,14 +69,28 @@ class HolidayViewSet(viewsets.ModelViewSet):
                 "Could not determine which company to create this holiday for."
             )
         self._check_date_available(organization, serializer.validated_data["date"])
-        serializer.save(organization=organization)
+        with transaction.atomic():
+            holiday = serializer.save(organization=organization)
+            resync_company_holiday_date(organization, holiday.date)
 
     def perform_update(self, serializer):
         instance = serializer.instance
+        old_date = instance.date
         new_date = serializer.validated_data.get("date", instance.date)
         if new_date != instance.date:
             self._check_date_available(instance.organization, new_date, exclude_pk=instance.pk)
-        serializer.save()
+        with transaction.atomic():
+            holiday = serializer.save()
+            # Moving a holiday must undo the old date and mark the new one.
+            if old_date != holiday.date:
+                resync_company_holiday_date(holiday.organization, old_date)
+            resync_company_holiday_date(holiday.organization, holiday.date)
+
+    def perform_destroy(self, instance):
+        organization, holiday_date = instance.organization, instance.date
+        with transaction.atomic():
+            instance.delete()
+            resync_company_holiday_date(organization, holiday_date)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
