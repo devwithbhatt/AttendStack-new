@@ -94,16 +94,19 @@ class Shift(models.Model):
 
     @classmethod
     def get_default_shift(cls, organization=None):
-        """Returns default shift for organization or fallback active default, creating one if none exists."""
+        """Returns this organization's default shift, creating one from its
+        own settings if it has none. Never borrows another company's shift:
+        each company's attendance must follow only its own rules."""
         qs = cls.objects.filter(is_active=True)
         if organization:
-            org_default = qs.filter(organization=organization, is_default=True).first()
+            qs = qs.filter(organization=organization)
+            org_default = qs.filter(is_default=True).first()
             if org_default:
                 return org_default
-
-        system_default = qs.filter(is_default=True).first()
-        if system_default:
-            return system_default
+        else:
+            system_default = qs.filter(is_default=True).first()
+            if system_default:
+                return system_default
 
         # Auto-bootstrap default General Shift from SystemSettings if no default shift exists
         try:

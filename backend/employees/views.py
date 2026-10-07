@@ -162,8 +162,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         organization = None
 
         if user.is_superuser or getattr(user, 'role', '') == UserRole.SUPER_ADMIN:
-            # For superusers, assign the first organization as a default
-            organization = Organization.objects.first()
+            # The company the Super Admin is working in (?organization_id, or
+            # the one they own) — never just "the first company".
+            from organizations.services import resolve_organization_for_request
+
+            organization = resolve_organization_for_request(self.request)
         else:
             organization = self._organization_for_user()
 

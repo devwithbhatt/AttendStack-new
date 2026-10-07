@@ -138,3 +138,19 @@ class ShiftAndEarlyCheckoutTestCase(TestCase):
         payroll = calculate_attendance_payroll(self.emp2, 9, 2026)
         self.assertIn("Early Departure", payroll["deduction_details"])
         self.assertEqual(payroll["deduction_details"]["Early Departure"], "125.00")
+
+
+class CompanyShiftIsolationTests(TestCase):
+    """A company without its own shift must get its own default — never
+    another company's (Fitstack was silently using Bhatt Square's)."""
+
+    def test_company_without_shift_gets_its_own_default(self):
+        from organizations.models import Organization
+
+        first = Organization.objects.create(name="First Co")
+        second = Organization.objects.create(name="Second Co")
+        first_shift = Shift.get_default_shift(first)
+        second_shift = Shift.get_default_shift(second)
+        self.assertEqual(first_shift.organization_id, first.id)
+        self.assertEqual(second_shift.organization_id, second.id)
+        self.assertNotEqual(first_shift.pk, second_shift.pk)
