@@ -17,8 +17,8 @@ interface DashboardProps {
 const HOME_ROUTE = "/";
 
 const getRouteModuleInfo = (pathname: string): { moduleKey: string | null; title: string; adminOnly?: boolean } | null => {
-  if (pathname.startsWith("/sub-admins") || pathname.startsWith("/plans")) {
-    return { moduleKey: null, title: "Administrator Delegation & Plans", adminOnly: true };
+  if (pathname.startsWith("/plans")) {
+    return { moduleKey: null, title: "Plans & Billing", adminOnly: true };
   }
   if (pathname.startsWith("/salary")) {
     return { moduleKey: "salary_area", title: "Salary & Increments" };

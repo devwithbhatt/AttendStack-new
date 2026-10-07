@@ -36,8 +36,6 @@ import ShiftAssignScreen from "../screens/admin/settings/ShiftAssignScreen";
 import RolesScreen from "../screens/admin/settings/RolesScreen";
 import RoleFormScreen from "../screens/admin/settings/RoleFormScreen";
 import RoleMembersScreen from "../screens/admin/settings/RoleMembersScreen";
-import SubAdminsScreen from "../screens/admin/settings/SubAdminsScreen";
-import SubAdminFormScreen from "../screens/admin/settings/SubAdminFormScreen";
 import IntegrationsScreen from "../screens/admin/settings/IntegrationsScreen";
 import RulebookScreen from "../screens/RulebookScreen";
 import ConversationsScreen from "../screens/chat/ConversationsScreen";
@@ -108,8 +106,6 @@ export default function RootNavigator() {
           <Stack.Screen name="Roles" component={RolesScreen} options={{ title: "Roles & Permissions" }} />
           <Stack.Screen name="RoleForm" component={RoleFormScreen} options={{ title: "Role" }} />
           <Stack.Screen name="RoleMembers" component={RoleMembersScreen} options={{ title: "Role Members" }} />
-          <Stack.Screen name="SubAdmins" component={SubAdminsScreen} options={{ title: "Sub-Admins" }} />
-          <Stack.Screen name="SubAdminForm" component={SubAdminFormScreen} options={{ title: "Sub-Admin" }} />
           <Stack.Screen name="Integrations" component={IntegrationsScreen} options={{ title: "Invite Code & Integrations" }} />
           <Stack.Screen name="Rulebook" component={RulebookScreen} options={{ title: "Company Rulebook" }} />
           <Stack.Screen name="Conversations" component={ConversationsScreen} options={{ title: "Chat" }} />

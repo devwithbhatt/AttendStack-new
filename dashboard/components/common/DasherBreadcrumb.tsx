@@ -18,10 +18,6 @@ interface DasherBreadcrumbProps {
 }
 
 const ROUTE_LABELS: Record<string, string> = {
-  "sub-admins": "Roles & Sub-Admins",
-  "create": "Onboard Sub-Admin",
-  "new": "Onboard Sub-Admin",
-  "edit": "Edit Permissions",
   "employees": "Employees Directory",
   "add": "Add Employee",
   "attendance": "Attendance & Shifts",

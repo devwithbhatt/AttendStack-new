@@ -1,5 +1,5 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
-import type { AdminAttendanceRecord, Holiday, PayrollRecord, Project, RoleDetail, Shift, SubAdmin } from "../types";
+import type { AdminAttendanceRecord, Holiday, PayrollRecord, Project, RoleDetail, Shift } from "../types";
 import type { SectionKey } from "../screens/admin/settings/settingsSpec";
 
 export type RootStackParamList = {
@@ -40,8 +40,6 @@ export type RootStackParamList = {
   Roles: undefined;
   RoleForm: { role?: RoleDetail } | undefined;
   RoleMembers: { role: RoleDetail };
-  SubAdmins: undefined;
-  SubAdminForm: { subAdmin?: SubAdmin } | undefined;
   Integrations: undefined;
   Rulebook: undefined;
 };

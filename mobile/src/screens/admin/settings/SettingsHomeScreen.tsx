@@ -27,7 +27,6 @@ export default function SettingsHomeScreen() {
   const { user } = useAuth();
   const canSettings = hasModulePermission(user, "settings", "view");
   const canRoles = hasModulePermission(user, "subadmins", "view");
-  const isCompanyAdmin = user?.role === "HR" || user?.role === "SUPER_ADMIN";
 
   const section = (key: SectionKey): Item => {
     const s = SETTINGS_SECTIONS.find((x) => x.key === key)!;
@@ -58,7 +57,6 @@ export default function SettingsHomeScreen() {
       items: [
         ...(canSettings ? [section("leave"), section("increment")] : []),
         ...(canRoles ? [{ icon: "shield" as FeatherName, title: "Roles & Permissions", subtitle: "Who can see and change what", onPress: () => navigation.navigate("Roles") }] : []),
-        ...(isCompanyAdmin ? [{ icon: "user-check" as FeatherName, title: "Sub-Admins", subtitle: "Separate admin logins with custom access", onPress: () => navigation.navigate("SubAdmins") }] : []),
       ],
     },
     {

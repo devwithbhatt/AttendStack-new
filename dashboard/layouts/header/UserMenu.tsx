@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Dropdown, Image } from "react-bootstrap";
 import Link from "next/link";
-import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper, IconShieldLock } from "@tabler/icons-react";
+import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper } from "@tabler/icons-react";
 import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
@@ -128,16 +128,6 @@ const UserMenu = () => {
                 title: "Manage Employees",
                 link: "/employees",
                 icon: <IconUser size={18} strokeWidth={1.5} className="text-secondary" />,
-              },
-            ]
-          : []),
-        ...(isSuperAdmin || isHR
-          ? [
-              {
-                id: "admin-subadmins",
-                title: "Roles & Sub-Admins",
-                link: "/sub-admins",
-                icon: <IconShieldLock size={18} strokeWidth={1.5} className="text-secondary" />,
               },
             ]
           : []),
