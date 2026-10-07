@@ -16,6 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { colors, fonts, radii } from "../theme";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { ForgotPasswordStep } from "./ForgotPasswordStep";
 
 const RESEND_SECONDS = 60;
 
@@ -124,6 +125,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [forgot, setForgot] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -157,6 +160,18 @@ export default function LoginScreen() {
                   setError("");
                 }}
               />
+            ) : forgot ? (
+              <ForgotPasswordStep
+                initialEmail={email}
+                onBack={() => setForgot(false)}
+                onDone={(resetEmail) => {
+                  setEmail(resetEmail);
+                  setPassword("");
+                  setError("");
+                  setNotice("Password updated. Sign in with your new password.");
+                  setForgot(false);
+                }}
+              />
             ) : (
               <>
                 <View style={styles.logoWrap}>
@@ -165,6 +180,12 @@ export default function LoginScreen() {
                   <Text style={styles.subtitle}>Sign in to your account</Text>
                 </View>
 
+                {notice ? (
+                  <View style={styles.notice}>
+                    <Feather name="check-circle" size={14} color={colors.successSoftText} />
+                    <Text style={styles.noticeText}>{notice}</Text>
+                  </View>
+                ) : null}
                 <ErrorBanner message={error} style={{ marginBottom: 16 }} />
 
                 <Text style={styles.label}>Email address</Text>
@@ -197,7 +218,19 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <PrimaryButton title="Sign In" onPress={handleSubmit} loading={loading} style={{ marginTop: 24 }} />
+                <TouchableOpacity
+                  onPress={() => {
+                    setError("");
+                    setNotice("");
+                    setForgot(true);
+                  }}
+                  style={styles.forgot}
+                  hitSlop={8}
+                >
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+
+                <PrimaryButton title="Sign In" onPress={handleSubmit} loading={loading} style={{ marginTop: 16 }} />
 
                 <View style={styles.footer}>
                   <Text style={styles.footerText}>
@@ -215,6 +248,20 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
+  forgot: { alignSelf: "flex-end", marginTop: 10 },
+  forgotText: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.primaryDark },
+  notice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.successSoftBg,
+    borderWidth: 1,
+    borderColor: colors.successSoftBorder,
+    borderRadius: radii.md,
+    padding: 12,
+    marginBottom: 16,
+  },
+  noticeText: { flex: 1, fontSize: 12, fontFamily: fonts.medium, color: colors.successSoftText },
   overlay: {
     position: "absolute",
     top: 0,
