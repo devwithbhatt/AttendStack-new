@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, To
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { api, extractErrorMessage, unwrapList } from "../../api/client";
+import { extractErrorMessage, fetchAll } from "../../api/client";
 import { colors, fonts, radii, shadow } from "../../theme";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import type { EmployeeListItem } from "../../types";
@@ -24,8 +24,7 @@ export default function EmployeeCategoriesScreen() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const response = await api.get("/employees/", { params: { page_size: 200 } });
-      setEmployees(unwrapList<EmployeeListItem>(response.data));
+      setEmployees(await fetchAll<EmployeeListItem>("/employees/"));
     } catch (err) {
       setError(extractErrorMessage(err));
     }

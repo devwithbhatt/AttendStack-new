@@ -142,8 +142,16 @@ class SubAdminRBACTest(TestCase):
 
     def test_sub_admin_blocked_from_unauthorized_module_payroll(self):
         self.client.force_authenticate(user=self.sub_user)
+        from payroll.models import Payroll
+
+        Payroll.objects.create(employee=self.emp1, month=5, year=2026, basic_salary=10000, net_salary=10000)
         res = self.client.get("/api/v1/payroll/")
-        # Sub-Admin has payroll.view = False, so should be 403 Forbidden
+        # Sub-Admin has payroll.view = False: they may read their *own*
+        # payslips (self-service) but never anyone else's.
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rows = res.data.get("results", res.data)
+        self.assertEqual(rows, [])
+        res = self.client.post("/api/v1/payroll/generate/", {"month": 5, "year": 2026}, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_sub_admin_blocked_from_admin_only_subadmins_management(self):

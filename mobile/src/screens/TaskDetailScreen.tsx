@@ -1,6 +1,11 @@
-import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput } from "react-native";
+import React, { useCallback, useLayoutEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Linking, Alert } from "react-native";
 import { useFocusEffect, useRoute, useNavigation, RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useAuth } from "../context/AuthContext";
+import { ActionSheet, type ActionSheetOption } from "../components/ActionSheet";
+import { confirmAction, formatDisplayDate } from "../components/Form";
+import { hasModulePermission } from "../types";
 import { Feather } from "@expo/vector-icons";
 import { api, extractErrorMessage } from "../api/client";
 import { colors, fonts, radii, shadow } from "../theme";
@@ -15,8 +20,12 @@ type Route = RouteProp<RootStackParamList, "TaskDetail">;
 
 export default function TaskDetailScreen() {
   const route = useRoute<Route>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { taskId } = route.params;
+  const { user } = useAuth();
+  const canEdit = hasModulePermission(user, "tasks", "edit");
+  const canDelete = hasModulePermission(user, "tasks", "delete");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [task, setTask] = useState<Task | null>(null);
   const [choices, setChoices] = useState<TaskChoices | null>(null);
   const [status, setStatus] = useState("");
@@ -47,6 +56,39 @@ export default function TaskDetailScreen() {
       load().finally(() => setLoading(false));
     }, [load])
   );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: canEdit
+        ? () => (
+            <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={10}>
+              <Feather name="more-vertical" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )
+        : undefined,
+    });
+  }, [navigation, canEdit]);
+
+  const deleteTask = () =>
+    confirmAction(
+      "Delete task?",
+      `"${task?.title}" can't be restored.${task?.subtask_count ? ` Its ${task.subtask_count} subtask${task.subtask_count === 1 ? "" : "s"} will be deleted too.` : ""}`,
+      "Delete",
+      async () => {
+        try {
+          await api.delete(`/tasks/${taskId}/`);
+          navigation.goBack();
+        } catch (err) {
+          Alert.alert("Could not delete", extractErrorMessage(err));
+        }
+      }
+    );
+
+  const menu: ActionSheetOption[] = [
+    { key: "edit", label: "Edit task", icon: "edit-2", onPress: () => navigation.navigate("NewTask", { taskId }) },
+    ...(task && !task.parent ? [{ key: "sub", label: "Add subtask", icon: "corner-down-right" as const, onPress: () => navigation.navigate("NewTask", { parentId: taskId }) }] : []),
+    ...(canDelete ? [{ key: "delete", label: "Delete task", icon: "trash-2" as const, destructive: true, onPress: deleteTask }] : []),
+  ];
 
   const handleSave = async () => {
     setSaving(true);
@@ -79,8 +121,23 @@ export default function TaskDetailScreen() {
           <StatusBadge status={task.status} label={task.status_label} />
         </View>
         {task.project_name ? <Text style={styles.meta}>Project: {task.project_name}</Text> : null}
-        <Text style={styles.meta}>Assignee: {task.assignee_name}</Text>
-        {task.due_date ? <Text style={styles.meta}>Due: {task.due_date}</Text> : null}
+        {task.parent_title ? <Text style={styles.meta}>Subtask of: {task.parent_title}</Text> : null}
+        <Text style={styles.meta}>
+          Assignee{(task.assignee_names?.length ?? 0) > 1 ? "s" : ""}: {task.assignee_names?.length ? task.assignee_names.join(", ") : task.assignee_name}
+        </Text>
+        {task.start_date ? <Text style={styles.meta}>Starts: {formatDisplayDate(task.start_date)}</Text> : null}
+        {task.due_date ? <Text style={[styles.meta, task.is_overdue && { color: colors.danger }]}>Due: {formatDisplayDate(task.due_date)}{task.is_overdue ? " · overdue" : ""}</Text> : null}
+        {task.assigned_by_name ? <Text style={styles.meta}>Assigned by: {task.assigned_by_name}</Text> : null}
+        {task.attachment_url ? (
+          <TouchableOpacity onPress={() => Linking.openURL(task.attachment_url!)}>
+            <Text style={[styles.meta, { color: colors.primaryDark }]}>📎 {task.attachment_name || "Attachment"}</Text>
+          </TouchableOpacity>
+        ) : null}
+        {task.employee_attachment_url ? (
+          <TouchableOpacity onPress={() => Linking.openURL(task.employee_attachment_url!)}>
+            <Text style={[styles.meta, { color: colors.primaryDark }]}>📎 {task.employee_attachment_name || "Employee's file"}</Text>
+          </TouchableOpacity>
+        ) : null}
         {task.description ? <Text style={styles.description}>{task.description}</Text> : null}
         {task.admin_notes ? (
           <View style={styles.adminNoteBox}>
@@ -115,6 +172,7 @@ export default function TaskDetailScreen() {
       />
 
       <PrimaryButton title="Save Changes" onPress={handleSave} loading={saving} style={{ marginTop: 24, marginBottom: 40 }} />
+      <ActionSheet visible={menuOpen} title={task.title} options={menu} onClose={() => setMenuOpen(false)} />
     </ScrollView>
   );
 }

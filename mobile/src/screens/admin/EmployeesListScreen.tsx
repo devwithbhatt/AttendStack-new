@@ -1,22 +1,33 @@
 import React, { useCallback, useLayoutEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TextInput } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Image } from "react-native";
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { api, extractErrorMessage, unwrapList } from "../../api/client";
+import { api, extractErrorMessage, fetchAll } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import { colors, fonts, radii, shadow } from "../../theme";
 import { StatusBadge } from "../../components/Badge";
 import { ErrorBanner } from "../../components/ErrorBanner";
-import type { EmployeeListItem } from "../../types";
+import { ChipSelect, Fab, SearchBar } from "../../components/Form";
+import { EMPLOYEE_STATUSES } from "../../constants";
+import { hasModulePermission, type EmployeeListItem } from "../../types";
 import type { RootStackParamList } from "../../navigation/types";
 
 type Route = RouteProp<RootStackParamList, "Employees">;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const STATUS_FILTERS = [{ value: "", label: "All" }, ...EMPLOYEE_STATUSES];
 
 export default function EmployeesListScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const designation = route.params?.designation;
+  const { user } = useAuth();
+  const canEdit = hasModulePermission(user, "employees", "edit");
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
+  const [joinRequests, setJoinRequests] = useState(0);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -28,25 +39,33 @@ export default function EmployeesListScreen() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const response = await api.get("/employees/", { params: { page_size: 200 } });
-      setEmployees(unwrapList<EmployeeListItem>(response.data));
+      setEmployees(await fetchAll<EmployeeListItem>("/employees/"));
+      if (canEdit) {
+        const merge = await api.get<EmployeeListItem[]>("/employees/merge-requests/").catch(() => null);
+        setJoinRequests(merge?.data?.length ?? 0);
+      }
     } catch (err) {
       setError(extractErrorMessage(err));
     }
-  }, []);
+  }, [canEdit]);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
       load().finally(() => setLoading(false));
     }, [load])
   );
 
   const filtered = employees.filter((e) => {
     if (designation && (e.designation || "Unspecified") !== designation) return false;
+    if (status && e.status !== status) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return e.full_name?.toLowerCase().includes(q) || e.employee_id?.toLowerCase().includes(q) || e.department?.toLowerCase().includes(q);
+    return (
+      e.full_name?.toLowerCase().includes(q) ||
+      e.employee_id?.toLowerCase().includes(q) ||
+      e.department?.toLowerCase().includes(q) ||
+      e.email?.toLowerCase().includes(q)
+    );
   });
 
   if (loading) {
@@ -59,21 +78,24 @@ export default function EmployeesListScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchWrap}>
-        <Feather name="search" size={16} color={colors.muted} />
-        <TextInput
-          style={styles.search}
-          placeholder="Search by name, ID or department"
-          placeholderTextColor={colors.placeholder}
-          value={search}
-          onChangeText={setSearch}
-        />
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search by name, ID, email or department" style={{ marginHorizontal: 16, marginTop: 12 }} />
+      <View style={{ paddingLeft: 16, marginTop: 10 }}>
+        <ChipSelect scroll options={STATUS_FILTERS} value={status} onChange={setStatus} />
       </View>
+      {joinRequests > 0 ? (
+        <TouchableOpacity style={styles.banner} onPress={() => navigation.navigate("MergeRequests")}>
+          <Feather name="user-plus" size={16} color={colors.warningSoftText} />
+          <Text style={styles.bannerText}>
+            {joinRequests} join request{joinRequests > 1 ? "s" : ""} waiting for approval
+          </Text>
+          <Feather name="chevron-right" size={16} color={colors.warningSoftText} />
+        </TouchableOpacity>
+      ) : null}
       <ErrorBanner message={error} style={{ marginHorizontal: 16 }} />
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 96 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -84,6 +106,7 @@ export default function EmployeesListScreen() {
             }}
           />
         }
+        ListHeaderComponent={<Text style={styles.count}>{filtered.length} employee{filtered.length === 1 ? "" : "s"}</Text>}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Feather name="users" size={28} color={colors.muted} />
@@ -91,10 +114,14 @@ export default function EmployeesListScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.row}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{(item.full_name?.[0] || "?").toUpperCase()}</Text>
-            </View>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate("EmployeeDetail", { employeeId: item.id })} activeOpacity={0.7}>
+            {item.profile_photo_url ? (
+              <Image source={{ uri: item.profile_photo_url }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{(item.full_name?.[0] || "?").toUpperCase()}</Text>
+              </View>
+            )}
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.name}>{item.full_name}</Text>
               <Text style={styles.meta}>
@@ -102,9 +129,10 @@ export default function EmployeesListScreen() {
               </Text>
             </View>
             <StatusBadge status={item.status} label={item.status_label} />
-          </View>
+          </TouchableOpacity>
         )}
       />
+      {canEdit ? <Fab onPress={() => navigation.navigate("EmployeeForm", {})} icon="user-plus" /> : null}
     </View>
   );
 }
@@ -112,25 +140,20 @@ export default function EmployeesListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
-  searchWrap: {
+  banner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginTop: 4,
+    padding: 12,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
+    backgroundColor: colors.warningSoftBg,
+    borderWidth: 1,
+    borderColor: colors.warningSoftBorder,
   },
-  search: {
-    flex: 1,
-    paddingVertical: 10,
-    fontSize: 14,
-    fontFamily: fonts.regular,
-    color: colors.text,
-  },
+  bannerText: { flex: 1, fontFamily: fonts.semiBold, fontSize: 13, color: colors.warningSoftText },
+  count: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginBottom: 8 },
   empty: { alignItems: "center", marginTop: 60, gap: 10 },
   emptyText: { color: colors.muted, fontFamily: fonts.medium },
   row: {

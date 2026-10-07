@@ -66,7 +66,8 @@
           "photosPermission": "AttendStack needs photo library access to let you share photos and videos in chat.",
           "cameraPermission": "AttendStack needs camera access to let you share photos and videos in chat."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

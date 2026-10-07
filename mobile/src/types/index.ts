@@ -118,6 +118,119 @@ export interface EmployeeListItem {
   designation: string;
   status: string;
   status_label: string;
+  joining_date?: string;
+  profile_photo_url?: string | null;
+  account_exists?: boolean;
+  shift?: number | null;
+  shift_name?: string | null;
+  annual_salary?: string | null;
+}
+
+// ---- Admin: employees ----
+
+export interface EmployeeDetail {
+  id: string;
+  employee_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  date_of_birth: string | null;
+  aadhaar_number: string | null;
+  address: string;
+  profile_photo_url: string | null;
+  aadhaar_document_url: string | null;
+  pan_card_document_url: string | null;
+  cv_document_url: string | null;
+  account_exists: boolean;
+  emergency_contact_name: string;
+  emergency_contact_relationship: string;
+  emergency_contact_phone: string;
+  joining_date: string;
+  department: string;
+  designation: string;
+  employment_type: string;
+  employment_type_label: string;
+  shift: number | null;
+  shift_name: string | null;
+  reporting_manager: string;
+  status: string;
+  status_label: string;
+  status_end_date: string | null;
+  auto_transition_status: string | null;
+  auto_transition_status_label: string | null;
+  annual_salary: string | null;
+  casual_leave_days_override: number | null;
+  sick_leave_days_override: number | null;
+  override_increment_policy: boolean;
+  custom_increment_months: number | null;
+  custom_increment_type: "PERCENTAGE" | "FLAT_AMOUNT" | null;
+  custom_increment_value: string | null;
+  increment_status: "ENABLED" | "DISABLED";
+  last_increment_date: string | null;
+  next_increment_date: string | null;
+  pay_frequency: string;
+  pay_frequency_label: string;
+  bank_name: string;
+  bank_account_number: string;
+  ifsc_code: string;
+  tax_id: string;
+  pan_number: string;
+  pf_number: string;
+  uan_number: string;
+  esic_number: string;
+}
+
+export interface RoleSummary {
+  id: string;
+  name: string;
+  description: string;
+  is_admin: boolean;
+  is_system: boolean;
+  employee_count?: number;
+}
+
+export interface Shift {
+  id: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  is_default?: boolean;
+}
+
+export interface LeaveBalance {
+  leave_type: string;
+  label: string;
+  entitlement: number;
+  used: number;
+  remaining: number;
+}
+
+export interface LeavePolicy {
+  year: number;
+  joining_date: string;
+  is_prorated: boolean;
+  eligible_months: number;
+  casual_leave_days_override: number | null;
+  sick_leave_days_override: number | null;
+  company_casual_leave_days: number;
+  company_sick_leave_days: number;
+  balances: LeaveBalance[];
+  leave_requests: LeaveRequest[];
+}
+
+export interface AdminAttendanceRecord {
+  id: number | string;
+  employee_uuid: string;
+  employee_id: string;
+  employee_name: string;
+  employee_department: string;
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  total_hours: string | null;
+  status: string;
+  status_label: string;
+  notes: string | null;
 }
 
 export interface TodayOverviewEntry {
@@ -155,7 +268,9 @@ export interface Project {
   description: string;
   status: string;
   status_label: string;
+  owner?: string | null;
   owner_name: string | null;
+  start_date?: string | null;
   department: string;
   due_date: string | null;
   color: string;
@@ -179,10 +294,21 @@ export interface Task {
   status: "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
   status_label: string;
   due_date: string | null;
+  start_date?: string | null;
   employee_notes: string;
   admin_notes: string;
   is_overdue: boolean;
   created_at: string;
+  assignees?: string[];
+  assignee_names?: string[];
+  parent?: string | null;
+  parent_title?: string | null;
+  subtask_count?: number;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  employee_attachment_url?: string | null;
+  employee_attachment_name?: string | null;
+  assigned_by_name?: string | null;
 }
 
 export interface TaskSummary {
@@ -273,6 +399,29 @@ export interface PayrollRecord {
   payable_salary?: string;
   status: "PAID" | "PENDING" | string;
   paid_on: string | null;
+  modification_reason?: string | null;
+  is_modified_after_payment?: boolean;
+  attendance_summary?: Record<string, unknown> | null;
+}
+
+export interface AdminIncrement {
+  id: number;
+  employee: string;
+  employee_details: { id: string; full_name: string; employee_id: string };
+  due_date: string;
+  current_salary: string;
+  increment_type: "PERCENTAGE" | "FLAT_AMOUNT";
+  increment_type_display: string;
+  increment_value: string;
+  calculated_increment_amount: string;
+  new_salary: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "RESCHEDULED";
+  status_display: string;
+  rescheduled_date: string | null;
+  action_by_name: string | null;
+  notes: string;
+  cycle_display?: string;
+  is_custom?: boolean;
 }
 
 export interface EmployeeIncrement {

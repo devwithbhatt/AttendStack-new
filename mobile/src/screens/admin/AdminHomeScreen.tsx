@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, 
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { api, extractErrorMessage, unwrapList } from "../../api/client";
+import { api, extractErrorMessage, unwrapList, fetchAll } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { colors, fonts, radii, shadow } from "../../theme";
 import { ErrorBanner } from "../../components/ErrorBanner";
@@ -41,12 +41,12 @@ export default function AdminHomeScreen() {
       const [employeesRes, todayRes, leavesRes, tasksRes] = await Promise.all([
         api.get("/employees/", { params: { page_size: 200 } }),
         api.get<TodayOverviewEntry[]>("/attendance/today/"),
-        api.get("/attendance/leaves/"),
+        fetchAll<LeaveRequest>("/attendance/leaves/"),
         api.get("/tasks/", { params: { page_size: 100 } }),
       ]);
       const employees = unwrapList<EmployeeListItem>(employeesRes.data);
       const today = todayRes.data;
-      const leaves = unwrapList<LeaveRequest>(leavesRes.data);
+      const leaves = leavesRes;
 
       setTotalEmployees(Array.isArray(employeesRes.data) ? employees.length : (employeesRes.data as any).count ?? employees.length);
       setPresentToday(today.filter((e) => !!e.check_in).length);

@@ -451,3 +451,88 @@ class EmployeeIncrementMultiTenantIsolationTests(APITestCase):
         results = response.data.get("results", response.data)
         self.assertEqual(len(results), 0)
 
+
+@override_settings(ROOT_URLCONF="payroll.urls")
+class PayrollSelfServiceAndScopeTests(APITestCase):
+    """
+    Only the Payroll permission unlocks other people's payroll. A manager
+    whose Role lacks it still sees their *own* payslips and increment, a
+    manager with it sees the whole company (never another company), and
+    `?mine=true` narrows anyone to their own rows.
+    """
+
+    def setUp(self):
+        from roles.models import Role, RolePermission
+
+        self.org_a = Organization.objects.create(name="Scope Org Alpha")
+        self.org_b = Organization.objects.create(name="Scope Org Beta")
+
+        def employee(org, code, email, aadhaar):
+            return Employee.objects.create(
+                organization=org,
+                employee_id=code,
+                full_name=f"{code} Person",
+                email=email,
+                phone="9876543200",
+                aadhaar_number=aadhaar,
+                department="Ops",
+                designation="Associate",
+                annual_salary=120000,
+                joining_date=date(2026, 1, 1),
+            )
+
+        self.manager_emp = employee(self.org_a, "EMP-S-001", "manager@scope.test", "111122223331")
+        self.colleague = employee(self.org_a, "EMP-S-002", "colleague@scope.test", "111122223332")
+        self.outsider = employee(self.org_b, "EMP-S-003", "outsider@scope.test", "111122223333")
+        for emp in (self.manager_emp, self.colleague, self.outsider):
+            Payroll.objects.create(employee=emp, month=5, year=2026, basic_salary=10000, net_salary=10000)
+
+        no_payroll = Role.objects.create(organization=self.org_a, name="Ops Lead", is_admin=False)
+        RolePermission.objects.create(role=no_payroll, module="attendance", can_view=True)
+        payroll_role = Role.objects.create(organization=self.org_a, name="Payroll Officer", is_admin=False)
+        RolePermission.objects.create(role=payroll_role, module="payroll", can_view=True, can_edit=True)
+
+        self.manager = User.objects.create_user(
+            email="manager@scope.test", password="StrongPass123!", role=UserRole.SUB_ADMIN,
+            employee_id="EMP-S-001", custom_role=no_payroll,
+        )
+        self.payroll_officer = User.objects.create_user(
+            email="colleague@scope.test", password="StrongPass123!", role=UserRole.SUB_ADMIN,
+            employee_id="EMP-S-002", custom_role=payroll_role,
+        )
+
+    def _ids(self, response):
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK, response.data)
+        rows = response.data.get("results", response.data)
+        return {row["employee_details"]["id"] for row in rows}
+
+    def test_manager_without_payroll_permission_sees_only_own_payslips(self):
+        self.client.force_authenticate(self.manager)
+        self.assertEqual(self._ids(self.client.get("/")), {str(self.manager_emp.id)})
+
+    def test_payroll_officer_sees_company_but_not_other_companies(self):
+        self.client.force_authenticate(self.payroll_officer)
+        self.assertEqual(self._ids(self.client.get("/")), {str(self.manager_emp.id), str(self.colleague.id)})
+
+    def test_mine_narrows_payroll_officer_to_own_payslips(self):
+        self.client.force_authenticate(self.payroll_officer)
+        self.assertEqual(self._ids(self.client.get("/?mine=true")), {str(self.colleague.id)})
+
+    def test_summary_never_includes_other_companies(self):
+        self.client.force_authenticate(self.payroll_officer)
+        response = self.client.get("/summary/?month=5&year=2026")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK, response.data)
+        names = {row.get("employee_name") or row.get("full_name") or str(row) for row in response.data}
+        self.assertFalse(any("EMP-S-003" in name for name in names), names)
+        self.assertEqual(len(response.data), 2)
+
+    def test_manager_without_payroll_permission_cannot_edit_or_generate(self):
+        self.client.force_authenticate(self.manager)
+        response = self.client.post("/generate/", {"month": 6, "year": 2026}, format="json")
+        self.assertEqual(response.status_code, http_status.HTTP_403_FORBIDDEN)
+
+    def test_manager_without_payroll_permission_reads_own_increment(self):
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/increments/my-increment/")
+        self.assertNotEqual(response.status_code, http_status.HTTP_403_FORBIDDEN, response.data)
+

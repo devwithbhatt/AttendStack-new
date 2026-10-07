@@ -3,7 +3,9 @@ from decimal import Decimal
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from accounts.permissions import check_user_module_permission
 from attendance.permissions import IsAdminOrReadOnly
 from employees.models import Employee, EmployeeStatus
 from organizations.models import Organization
@@ -16,6 +18,13 @@ class PayrollViewSet(viewsets.ModelViewSet):
     serializer_class = PayrollSerializer
     permission_classes = [IsAdminOrReadOnly]
     permission_module = "payroll"
+
+    def get_permissions(self):
+        # Anyone may read their *own* payslips (get_queryset scopes the rows);
+        # everyone else's, and every write, needs the Payroll permission.
+        if self.action in ("list", "retrieve"):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -30,14 +39,17 @@ class PayrollViewSet(viewsets.ModelViewSet):
         if search:
             queryset = queryset.filter(employee__full_name__icontains=search)
 
-        # Enforce secure employee data isolation
+        # Enforce secure employee data isolation: only the Payroll permission
+        # unlocks other people's payroll. Everyone else — employees, and
+        # managers whose Role lacks it — sees their own; so does a manager on
+        # a self-service screen (?mine=true).
         user = self.request.user
-        if user.is_authenticated and getattr(user, 'role', '') not in ["SUPER_ADMIN", "HR", "SUB_ADMIN"] and not user.is_staff:
-            try:
-                employee = Employee.objects.get(email=user.email)
-                queryset = queryset.filter(employee=employee)
-            except Employee.DoesNotExist:
-                queryset = queryset.none()
+        own_only = (
+            self.request.query_params.get("mine") in ("1", "true", "True")
+            or not check_user_module_permission(user, "payroll", "view")
+        )
+        if user.is_authenticated and own_only:
+            queryset = queryset.filter(employee__email__iexact=user.email)
         elif user.is_authenticated:
             from organizations.services import resolve_organization_for_request
 
@@ -152,8 +164,14 @@ class PayrollViewSet(viewsets.ModelViewSet):
             )
 
         user = request.user
-        if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+        if user.is_authenticated and not check_user_module_permission(user, "payroll", "view"):
             employees = employees.filter(email__iexact=user.email)
+        else:
+            # Never another company's staff.
+            from organizations.services import resolve_organization_for_request
+
+            org = resolve_organization_for_request(request)
+            employees = employees.filter(organization=org) if org else employees.none()
 
         return Response([
             build_employee_payroll_summary(employee, month, year, request)
@@ -187,6 +205,12 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     permission_module = "payroll"
 
+    def get_permissions(self):
+        # Seeing one's own upcoming increment is self-service.
+        if self.action == "my_increment":
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         # Trigger auto-sync for active employees on listing
         try:
@@ -197,8 +221,9 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
 
-        # Employee role restriction
-        if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+        # Only the Payroll permission unlocks everyone's increments (so a
+        # Sub-Admin with it can manage them, as the web widget expects).
+        if user.is_authenticated and not check_user_module_permission(user, "payroll", "view"):
             try:
                 emp = Employee.objects.get(email=user.email)
                 queryset = queryset.filter(employee=emp)

@@ -192,13 +192,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                         f"{employee.email}. Please share the sign-in link with them manually."
                     )
 
-    def get_serializer_class(self):
-        if self.action == "list":
-            return EmployeeListSerializer
-        if self.action == "me":
-            return EmployeeProfileSerializer
-        return super().get_serializer_class()
-
     def get_current_employee(self):
         user = self.request.user
         employee = Employee.objects.filter(email__iexact=user.email).first()

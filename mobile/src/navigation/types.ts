@@ -1,12 +1,13 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
+import type { AdminAttendanceRecord, Holiday, PayrollRecord, Project } from "../types";
 
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<AdminTabParamList> | NavigatorScreenParams<TabParamList> | undefined;
   NewLeave: undefined;
-  AddHoliday: undefined;
+  AddHoliday: { holiday?: Holiday } | undefined;
   TaskDetail: { taskId: string };
-  NewTask: undefined;
-  NewProject: undefined;
+  NewTask: { taskId?: string; parentId?: string; projectId?: string } | undefined;
+  NewProject: { project?: Project } | undefined;
   Projects: undefined;
   Conversations: undefined;
   ChatThread: { conversationId: string; title: string };
@@ -20,6 +21,16 @@ export type RootStackParamList = {
   Employees: { designation?: string } | undefined;
   AttendanceOverview: { filter?: "present" | "absent" } | undefined;
   LeaveApprovals: undefined;
+  EmployeeDetail: { employeeId: string };
+  EmployeeForm: { employeeId?: string } | undefined;
+  EmployeeStatus: { employeeId: string; name: string };
+  EmployeeLeavePolicy: { employeeId: string; name: string };
+  MergeRequests: undefined;
+  AttendanceRecords: undefined;
+  AttendanceRecordForm: { record?: AdminAttendanceRecord; date?: string } | undefined;
+  AdminPayroll: undefined;
+  PayrollEdit: { payroll: PayrollRecord };
+  Increments: undefined;
 };
 
 export type TabParamList = {

@@ -38,6 +38,8 @@ export default function MoreScreen() {
   const canViewEmployees = hasModulePermission(user, "employees", "view");
   const canViewTasks = hasModulePermission(user, "tasks", "view");
   const canViewAttendance = hasModulePermission(user, "attendance", "view");
+  const canViewPayroll = hasModulePermission(user, "payroll", "view");
+  const canViewHolidays = hasModulePermission(user, "holidays", "edit");
   // Full admins already have a Leaves tab; managers reach approvals from here.
   const canReviewLeaves = !admin && hasModulePermission(user, "leaves", "view");
 
@@ -45,12 +47,20 @@ export default function MoreScreen() {
   const companyRows: Array<React.ComponentProps<typeof MenuRow>> = [];
   if (canViewAttendance) {
     companyRows.push({ icon: "clock", label: "Today's Attendance", sub: "Who's in, who's absent", onPress: () => navigation.navigate("AttendanceOverview") });
+    companyRows.push({ icon: "calendar", label: "Attendance Records", sub: "Any day or month · mark & correct", onPress: () => navigation.navigate("AttendanceRecords") });
   }
   if (canReviewLeaves) {
     companyRows.push({ icon: "file-text", label: "Leave Approvals", sub: "Review team leave requests", onPress: () => navigation.navigate("LeaveApprovals") });
   }
   if (canViewEmployees) {
     companyRows.push({ icon: "users", label: "Employees", sub: "Browse by role", onPress: () => navigation.navigate("EmployeeCategories") });
+  }
+  if (canViewPayroll) {
+    companyRows.push({ icon: "dollar-sign", label: "Payroll", sub: "Generate, review & mark paid", onPress: () => navigation.navigate("AdminPayroll") });
+    companyRows.push({ icon: "trending-up", label: "Salary Increments", sub: "Approve, reschedule or edit hikes", onPress: () => navigation.navigate("Increments") });
+  }
+  if (canViewHolidays) {
+    companyRows.push({ icon: "gift", label: "Manage Holidays", sub: "Add, edit or remove holidays", onPress: () => navigation.navigate("Holidays") });
   }
   if (canViewTasks) {
     companyRows.push({ icon: "briefcase", label: "Projects", sub: "View all projects & progress", onPress: () => navigation.navigate("Projects") });
@@ -99,7 +109,7 @@ export default function MoreScreen() {
       <View style={styles.card}>
         <MenuRow icon="calendar" label="Attendance History" onPress={() => navigation.navigate("AttendanceHistory")} />
         <View style={styles.divider} />
-        <MenuRow icon="dollar-sign" label="Salary & Payroll" onPress={() => navigation.navigate("Payroll")} />
+        <MenuRow icon="dollar-sign" label="My Salary" onPress={() => navigation.navigate("Payroll")} />
         <View style={styles.divider} />
         <MenuRow icon="gift" label="Holidays" onPress={() => navigation.navigate("Holidays")} />
       </View>

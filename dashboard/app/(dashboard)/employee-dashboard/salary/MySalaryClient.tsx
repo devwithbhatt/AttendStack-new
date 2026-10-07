@@ -77,7 +77,7 @@ const MySalaryClient = () => {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch(BASE_URL, { headers: authHeaders() });
+      const res = await fetch(`${BASE_URL}?mine=true`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to load your payroll history.");
       const data = await res.json();
       setPayrolls(Array.isArray(data) ? data : data.results || []);

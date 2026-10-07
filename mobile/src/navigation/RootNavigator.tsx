@@ -18,6 +18,16 @@ import EmployeeCategoriesScreen from "../screens/admin/EmployeeCategoriesScreen"
 import EmployeesListScreen from "../screens/admin/EmployeesListScreen";
 import AdminAttendanceScreen from "../screens/admin/AdminAttendanceScreen";
 import AdminLeaveScreen from "../screens/admin/AdminLeaveScreen";
+import EmployeeDetailScreen from "../screens/admin/EmployeeDetailScreen";
+import EmployeeFormScreen from "../screens/admin/EmployeeFormScreen";
+import EmployeeStatusScreen from "../screens/admin/EmployeeStatusScreen";
+import EmployeeLeavePolicyScreen from "../screens/admin/EmployeeLeavePolicyScreen";
+import MergeRequestsScreen from "../screens/admin/MergeRequestsScreen";
+import AttendanceRecordsScreen from "../screens/admin/AttendanceRecordsScreen";
+import AttendanceRecordFormScreen from "../screens/admin/AttendanceRecordFormScreen";
+import AdminPayrollScreen from "../screens/admin/AdminPayrollScreen";
+import PayrollEditScreen from "../screens/admin/PayrollEditScreen";
+import IncrementsScreen from "../screens/admin/IncrementsScreen";
 import ConversationsScreen from "../screens/chat/ConversationsScreen";
 import ChatThreadScreen from "../screens/chat/ChatThreadScreen";
 import NewChatScreen from "../screens/chat/NewChatScreen";
@@ -58,7 +68,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Holidays" component={HolidaysScreen} options={{ title: "Holidays" }} />
           <Stack.Screen name="AddHoliday" component={AddHolidayScreen} options={{ title: "Add Holiday" }} />
           <Stack.Screen name="AttendanceHistory" component={AttendanceHistoryScreen} options={{ title: "Attendance History" }} />
-          <Stack.Screen name="Payroll" component={PayrollScreen} options={{ title: "Salary & Payroll" }} />
+          <Stack.Screen name="Payroll" component={PayrollScreen} options={{ title: "My Salary" }} />
           <Stack.Screen name="TaskDetail" component={TaskDetailScreen} options={{ title: "Task" }} />
           <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: "New Task" }} />
           <Stack.Screen name="Projects" component={ProjectsScreen} options={{ title: "Projects" }} />
@@ -68,6 +78,16 @@ export default function RootNavigator() {
           <Stack.Screen name="Employees" component={EmployeesListScreen} options={{ title: "Employees" }} />
           <Stack.Screen name="AttendanceOverview" component={AdminAttendanceScreen} options={{ title: "Today's Attendance" }} />
           <Stack.Screen name="LeaveApprovals" component={AdminLeaveScreen} options={{ title: "Leave Approvals" }} />
+          <Stack.Screen name="EmployeeDetail" component={EmployeeDetailScreen} options={{ title: "Employee" }} />
+          <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} options={{ title: "Employee" }} />
+          <Stack.Screen name="EmployeeStatus" component={EmployeeStatusScreen} options={{ title: "Change Status" }} />
+          <Stack.Screen name="EmployeeLeavePolicy" component={EmployeeLeavePolicyScreen} options={{ title: "Leave Policy" }} />
+          <Stack.Screen name="MergeRequests" component={MergeRequestsScreen} options={{ title: "Join Requests" }} />
+          <Stack.Screen name="AttendanceRecords" component={AttendanceRecordsScreen} options={{ title: "Attendance Records" }} />
+          <Stack.Screen name="AttendanceRecordForm" component={AttendanceRecordFormScreen} options={{ title: "Attendance" }} />
+          <Stack.Screen name="AdminPayroll" component={AdminPayrollScreen} options={{ title: "Payroll" }} />
+          <Stack.Screen name="PayrollEdit" component={PayrollEditScreen} options={{ title: "Edit Payroll" }} />
+          <Stack.Screen name="Increments" component={IncrementsScreen} options={{ title: "Salary Increments" }} />
           <Stack.Screen name="Conversations" component={ConversationsScreen} options={{ title: "Chat" }} />
           <Stack.Screen
             name="ChatThread"

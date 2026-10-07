@@ -86,6 +86,20 @@ export function unwrapList<T>(data: T[] | { results: T[] }): T[] {
   return Array.isArray(data) ? data : data.results;
 }
 
+/** Every row of a list endpoint, following DRF `next` links. Some endpoints
+ * (e.g. /employees/) ignore `page_size` and always return 20 per page. */
+export async function fetchAll<T>(url: string, params: Record<string, unknown> = {}, maxPages = 50): Promise<T[]> {
+  const rows: T[] = [];
+  let page = 1;
+  for (; page <= maxPages; page++) {
+    const { data } = await api.get<T[] | { results: T[]; next: string | null }>(url, { params: { page_size: 100, ...params, page } });
+    if (Array.isArray(data)) return data;
+    rows.push(...data.results);
+    if (!data.next) break;
+  }
+  return rows;
+}
+
 export function extractErrorMessage(err: unknown, fallback = "Something went wrong. Please try again."): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data;
@@ -93,8 +107,13 @@ export function extractErrorMessage(err: unknown, fallback = "Something went wro
     if (data && typeof data === "object") {
       const firstKey = Object.keys(data)[0];
       const firstVal = firstKey ? data[firstKey] : null;
-      if (Array.isArray(firstVal) && typeof firstVal[0] === "string") return firstVal[0];
-      if (typeof firstVal === "string") return firstVal;
+      const message = Array.isArray(firstVal) && typeof firstVal[0] === "string" ? firstVal[0] : typeof firstVal === "string" ? firstVal : null;
+      if (message) {
+        // Name the field ("Aadhaar number: …") so a long form says *which* input is wrong.
+        if (firstKey === "non_field_errors" || firstKey === "detail" || /^\d+$/.test(firstKey)) return message;
+        const field = firstKey.replace(/_/g, " ");
+        return `${field.charAt(0).toUpperCase()}${field.slice(1)}: ${message}`;
+      }
     }
     if (err.message === "Network Error") {
       return "Can't reach the server. Check that the backend is running and reachable on your network.";

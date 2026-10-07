@@ -537,3 +537,38 @@ class EmployeeMultiTenantIsolationTests(APITestCase):
         self.assertEqual(response.status_code, http_status.HTTP_200_OK)
         emails = [e["email"] for e in response.data["results"]]
         self.assertEqual(emails, ["beta.emp@example.com"])
+
+
+class EmployeeDirectoryPrivacyTests(APITestCase):
+    """A plain employee may list colleagues (chat, task pickers) but must
+    never see salaries or status internals — only the Employees permission
+    unlocks the full list serializer."""
+
+    def setUp(self):
+        org = Organization.objects.create(name="Directory Privacy Org")
+        for code, email, aadhaar in (("EMP-DP-001", "dp.one@example.com", "222233334441"), ("EMP-DP-002", "dp.two@example.com", "222233334442")):
+            Employee.objects.create(
+                organization=org,
+                employee_id=code,
+                full_name=f"{code} Person",
+                email=email,
+                phone="9876543201",
+                aadhaar_number=aadhaar,
+                department="Ops",
+                designation="Associate",
+                annual_salary=480000,
+                joining_date=date(2026, 1, 1),
+            )
+        self.employee_user = get_user_model().objects.create_user(
+            email="dp.one@example.com", password="StrongPass123!", employee_id="EMP-DP-001"
+        )
+
+    def test_plain_employee_list_has_no_salary(self):
+        self.client.force_authenticate(self.employee_user)
+        response = self.client.get("/api/v1/employees/")
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        rows = response.data.get("results", response.data)
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertNotIn("annual_salary", row)
+
