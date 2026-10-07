@@ -87,7 +87,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
-        if self.action in ["check_in", "check_out"]:
+        # Self-service: anyone with an employee profile — including a manager
+        # whose Role has no Attendance permission — punches and reads their
+        # own attendance. Module permissions gate everyone *else's* records.
+        if self.action in ["check_in", "check_out", "me", "me_today"]:
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -262,6 +265,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="today")
     def today(self, request):
+        # Organisation-wide overview: managers only (module permission is
+        # checked by IsAdminOrReadOnly); a plain employee sees only their own.
+        if getattr(request.user, "role", "") == UserRole.EMPLOYEE:
+            raise PermissionDenied("You do not have permission to view everyone's attendance.")
         today = timezone.localdate()
         auto_mark_calendar_days(today.month, today.year)
         auto_mark_absent_employees(today, today)
@@ -643,6 +650,29 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "No employee profile is linked to this user account."})
         return employee
 
+    def _own_employee(self):
+        """The requesting user's own Employee profile, or None if they have none."""
+        try:
+            return self._current_employee()
+        except ValidationError:
+            return None
+
+    def _is_self_service(self, user, employee):
+        """
+        Whether this request should follow the plain employee rules. Always
+        true for employees. A manager with only partial module permissions
+        (e.g. a Sub-Admin with an "HR" role) is also an employee for their
+        *own* leave: they can always request, edit or withdraw it, but can
+        never approve it themselves. Only a full-access admin may.
+        `employee=None` means "no employee chosen", i.e. a request for oneself.
+        """
+        if not self._is_admin_or_hr(user):
+            return True
+        if user.is_admin_account:
+            return False
+        own = self._own_employee()
+        return own is not None and (employee is None or employee.pk == own.pk)
+
     def _ensure_leave_eligible(self, employee):
         if employee.status_on(timezone.localdate()) not in ATTENDANCE_ELIGIBLE_STATUSES:
             raise PermissionDenied(
@@ -801,15 +831,22 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         
-        # Isolation: Employees only see their own leave requests
-        if user.is_authenticated and not self._is_admin_or_hr(user):
+        # Isolation: Employees only see their own leave requests. So does a
+        # manager on a self-service screen (?mine=true), and a Sub-Admin
+        # without Leaves view permission — they still have their own leaves.
+        own_only = (
+            not self._is_admin_or_hr(user)
+            or self.request.query_params.get("mine") in ("1", "true", "True")
+            or (
+                getattr(user, 'role', '') == UserRole.SUB_ADMIN
+                and not check_user_module_permission(user, "leaves", "view")
+            )
+        )
+        if user.is_authenticated and own_only:
             queryset = queryset.filter(
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
         elif user.is_authenticated:
-            if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
-                if not check_user_module_permission(user, "leaves", "view"):
-                    return queryset.none()
             from organizations.services import resolve_organization_for_request
 
             org = resolve_organization_for_request(self.request)
@@ -910,25 +947,23 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
-            if not check_user_module_permission(user, "leaves", "edit"):
-                raise PermissionDenied("You do not have permission to create leave requests.")
-
-        employee = (
-            self._current_employee()
-            if not self._is_admin_or_hr(user)
-            else serializer.validated_data.get("employee")
-        )
-        if employee is None:
-            raise ValidationError({"employee": "Choose an employee for this leave request."})
-
-        if not self._is_admin_or_hr(user):
+        self_service = self._is_self_service(user, serializer.validated_data.get("employee"))
+        if self_service:
+            employee = self._current_employee()
             self._ensure_leave_eligible(employee)
+        else:
+            if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+                if not check_user_module_permission(user, "leaves", "edit"):
+                    raise PermissionDenied("You do not have permission to create leave requests.")
+            # A full-access admin who picks no employee is applying for themselves.
+            employee = serializer.validated_data.get("employee") or self._own_employee()
+            if employee is None:
+                raise ValidationError({"employee": "Choose an employee for this leave request."})
 
         with transaction.atomic():
             employee = Employee.objects.select_for_update().get(pk=employee.pk)
             self._validate_monthly_policy(serializer, employee)
-            if not self._is_admin_or_hr(user):
+            if self_service:
                 self._raise_if_leave_overlaps(
                     employee,
                     serializer.validated_data["start_date"],
@@ -947,10 +982,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         user = self.request.user
-        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+        self_service = self._is_self_service(user, serializer.instance.employee)
+        if not self_service and user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
             if not check_user_module_permission(user, "leaves", "edit"):
                 raise PermissionDenied("You do not have permission to modify leave requests.")
-        
+
         with transaction.atomic():
             # Store original values before saving to detect critical changes
             original_leave_type = serializer.instance.leave_type
@@ -964,7 +1000,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             self._validate_monthly_policy(serializer, employee)
 
             # If user is Employee, they cannot update status or admin_notes.
-            if not self._is_admin_or_hr(user):
+            if self_service:
                 self._ensure_leave_eligible(employee)
                 forbidden_fields = {"employee", "status", "admin_notes"}
                 if forbidden_fields.intersection(self.request.data.keys()):
@@ -992,16 +1028,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         user = self.request.user
-        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
-            if not check_user_module_permission(user, "leaves", "delete"):
-                raise PermissionDenied("You do not have permission to delete leave requests.")
-        elif not self._is_admin_or_hr(user):
+        if self._is_self_service(user, instance.employee):
             employee = self._current_employee()
             self._ensure_leave_eligible(employee)
             if instance.employee_id != employee.id:
                 raise PermissionDenied("You can only delete your own leave requests.")
             if instance.status != LeaveStatus.PENDING:
                 raise ValidationError({"detail": "Only pending leave requests can be deleted by employees."})
+        elif user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "delete"):
+                raise PermissionDenied("You do not have permission to delete leave requests.")
 
         with transaction.atomic():
             instance.status = LeaveStatus.REJECTED

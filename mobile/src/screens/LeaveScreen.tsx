@@ -21,7 +21,7 @@ export default function LeaveScreen() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const response = await api.get("/attendance/leaves/");
+      const response = await api.get("/attendance/leaves/", { params: { mine: true } });
       setLeaves(unwrapList<LeaveRequest>(response.data));
     } catch (err) {
       setError(extractErrorMessage(err));

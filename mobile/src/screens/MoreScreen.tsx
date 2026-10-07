@@ -37,7 +37,27 @@ export default function MoreScreen() {
   const admin = isFullAdmin(user);
   const canViewEmployees = hasModulePermission(user, "employees", "view");
   const canViewTasks = hasModulePermission(user, "tasks", "view");
-  const showCompanySection = admin || canViewEmployees || canViewTasks;
+  const canViewAttendance = hasModulePermission(user, "attendance", "view");
+  // Full admins already have a Leaves tab; managers reach approvals from here.
+  const canReviewLeaves = !admin && hasModulePermission(user, "leaves", "view");
+
+  // Exactly what the web dashboard grants this account, module by module.
+  const companyRows: Array<React.ComponentProps<typeof MenuRow>> = [];
+  if (canViewAttendance) {
+    companyRows.push({ icon: "clock", label: "Today's Attendance", sub: "Who's in, who's absent", onPress: () => navigation.navigate("AttendanceOverview") });
+  }
+  if (canReviewLeaves) {
+    companyRows.push({ icon: "file-text", label: "Leave Approvals", sub: "Review team leave requests", onPress: () => navigation.navigate("LeaveApprovals") });
+  }
+  if (canViewEmployees) {
+    companyRows.push({ icon: "users", label: "Employees", sub: "Browse by role", onPress: () => navigation.navigate("EmployeeCategories") });
+  }
+  if (canViewTasks) {
+    companyRows.push({ icon: "briefcase", label: "Projects", sub: "View all projects & progress", onPress: () => navigation.navigate("Projects") });
+  }
+  if (admin) {
+    companyRows.push({ icon: "credit-card", label: "Plans & Billing", onPress: () => navigation.navigate("PlansBilling") });
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
@@ -84,25 +104,16 @@ export default function MoreScreen() {
         <MenuRow icon="gift" label="Holidays" onPress={() => navigation.navigate("Holidays")} />
       </View>
 
-      {showCompanySection && (
+      {companyRows.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Company</Text>
           <View style={styles.card}>
-            {canViewEmployees && (
-              <>
-                <MenuRow icon="users" label="Employees" sub="Browse by role" onPress={() => navigation.navigate("EmployeeCategories")} />
-                {(canViewTasks || admin) && <View style={styles.divider} />}
-              </>
-            )}
-            {canViewTasks && (
-              <>
-                <MenuRow icon="briefcase" label="Projects" sub="View all projects & progress" onPress={() => navigation.navigate("Projects")} />
-                {admin && <View style={styles.divider} />}
-              </>
-            )}
-            {admin && (
-              <MenuRow icon="credit-card" label="Plans & Billing" onPress={() => navigation.navigate("PlansBilling")} />
-            )}
+            {companyRows.map((row, i) => (
+              <React.Fragment key={row.label}>
+                {i > 0 && <View style={styles.divider} />}
+                <MenuRow {...row} />
+              </React.Fragment>
+            ))}
           </View>
         </>
       )}

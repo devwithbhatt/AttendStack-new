@@ -7,7 +7,8 @@ import { colors, fonts, radii, shadow, softTone } from "../../theme";
 import { StatusBadge } from "../../components/Badge";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import { PrimaryButton } from "../../components/PrimaryButton";
-import type { LeaveRequest } from "../../types";
+import { useAuth } from "../../context/AuthContext";
+import { hasModulePermission, type LeaveRequest } from "../../types";
 
 const FILTERS: Array<{ key: LeaveRequest["status"] | "ALL"; label: string }> = [
   { key: "PENDING", label: "Pending" },
@@ -17,6 +18,8 @@ const FILTERS: Array<{ key: LeaveRequest["status"] | "ALL"; label: string }> = [
 ];
 
 export default function AdminLeaveScreen() {
+  const { user } = useAuth();
+  const canDecide = hasModulePermission(user, "leaves", "edit");
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("PENDING");
   const [loading, setLoading] = useState(true);
@@ -119,7 +122,8 @@ export default function AdminLeaveScreen() {
             </Text>
             {item.reason ? <Text style={styles.reason}>{item.reason}</Text> : null}
 
-            {item.status === "PENDING" && (
+            {/* Nobody approves their own leave — the backend refuses it too. */}
+            {item.status === "PENDING" && canDecide && item.employee_id !== user?.employee_id && (
               <View style={styles.actionsRow}>
                 <PrimaryButton
                   title="Approve"

@@ -19,6 +19,7 @@ export type RootStackParamList = {
   EmployeeCategories: undefined;
   Employees: { designation?: string } | undefined;
   AttendanceOverview: { filter?: "present" | "absent" } | undefined;
+  LeaveApprovals: undefined;
 };
 
 export type TabParamList = {

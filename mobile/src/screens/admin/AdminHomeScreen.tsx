@@ -9,6 +9,7 @@ import { colors, fonts, radii, shadow } from "../../theme";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import { StatCard } from "../../components/StatCard";
 import { Badge } from "../../components/Badge";
+import { AttendanceCard } from "../../components/AttendanceCard";
 import type { EmployeeListItem, LeaveRequest, Task, TodayOverviewEntry } from "../../types";
 import type { RootStackParamList } from "../../navigation/types";
 
@@ -32,6 +33,7 @@ export default function AdminHomeScreen() {
   const [pendingLeaves, setPendingLeaves] = useState(0);
   const [absentToday, setAbsentToday] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     setError("");
@@ -93,6 +95,7 @@ export default function AdminHomeScreen() {
           refreshing={refreshing}
           onRefresh={async () => {
             setRefreshing(true);
+            setRefreshKey((k) => k + 1);
             await load();
             setRefreshing(false);
           }}
@@ -107,7 +110,7 @@ export default function AdminHomeScreen() {
           <View>
             <Text style={styles.greeting}>Hi, {user?.first_name || "there"} 👋</Text>
             <Text style={styles.subGreeting}>
-              {user?.role} · {new Date().toDateString()}
+              {user?.custom_role_title || user?.role} · {new Date().toDateString()}
             </Text>
           </View>
         </View>
@@ -115,6 +118,13 @@ export default function AdminHomeScreen() {
           <Feather name="log-out" size={18} color={colors.danger} />
         </TouchableOpacity>
       </View>
+
+      {/* An admin who is also on the payroll checks in like everyone else. */}
+      {user?.employee_id ? (
+        <View style={{ marginBottom: 20 }}>
+          <AttendanceCard refreshKey={refreshKey} />
+        </View>
+      ) : null}
 
       <ErrorBanner message={error} style={{ marginBottom: 16 }} />
 

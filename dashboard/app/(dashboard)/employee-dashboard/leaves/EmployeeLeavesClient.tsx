@@ -117,7 +117,7 @@ const EmployeeLeavesClient = () => {
     }
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/?page_size=100`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/?mine=true&page_size=100`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

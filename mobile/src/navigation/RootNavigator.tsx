@@ -17,6 +17,7 @@ import PlansBillingScreen from "../screens/admin/PlansBillingScreen";
 import EmployeeCategoriesScreen from "../screens/admin/EmployeeCategoriesScreen";
 import EmployeesListScreen from "../screens/admin/EmployeesListScreen";
 import AdminAttendanceScreen from "../screens/admin/AdminAttendanceScreen";
+import AdminLeaveScreen from "../screens/admin/AdminLeaveScreen";
 import ConversationsScreen from "../screens/chat/ConversationsScreen";
 import ChatThreadScreen from "../screens/chat/ChatThreadScreen";
 import NewChatScreen from "../screens/chat/NewChatScreen";
@@ -66,6 +67,7 @@ export default function RootNavigator() {
           <Stack.Screen name="EmployeeCategories" component={EmployeeCategoriesScreen} options={{ title: "Employees" }} />
           <Stack.Screen name="Employees" component={EmployeesListScreen} options={{ title: "Employees" }} />
           <Stack.Screen name="AttendanceOverview" component={AdminAttendanceScreen} options={{ title: "Today's Attendance" }} />
+          <Stack.Screen name="LeaveApprovals" component={AdminLeaveScreen} options={{ title: "Leave Approvals" }} />
           <Stack.Screen name="Conversations" component={ConversationsScreen} options={{ title: "Chat" }} />
           <Stack.Screen
             name="ChatThread"

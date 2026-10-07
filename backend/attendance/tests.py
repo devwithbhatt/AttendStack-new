@@ -784,3 +784,99 @@ class MultiTenantIsolationApiTests(APITestCase):
         results = response.data["results"] if isinstance(response.data, dict) else response.data
         names = [s["name"] for s in results]
         self.assertEqual(names, ["Beta Shift"])
+
+
+class PartialManagerSelfServiceApiTests(APITestCase):
+    """
+    A Sub-Admin whose Role grants only some modules (e.g. an "HR" role with
+    Leaves access but no Attendance access) is still an employee: they punch
+    in, read their own attendance and request their own leave like anyone
+    else, and can never approve their own leave.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from organizations.models import Organization
+        from roles.models import Role, RolePermission
+
+        User = get_user_model()
+        self.org = Organization.objects.create(name="Partial Manager Org")
+        role = Role.objects.create(organization=self.org, name="HR", is_admin=False)
+        RolePermission.objects.create(role=role, module="leaves", can_view=True, can_edit=True)
+
+        self.manager_employee = create_employee(
+            email="partial.manager@example.com", employee_id="EMP-PM-001", aadhaar_number="123456789101"
+        )
+        self.colleague = create_employee(
+            email="colleague@example.com", employee_id="EMP-PM-002", aadhaar_number="123456789102"
+        )
+        Employee.objects.filter(pk__in=[self.manager_employee.pk, self.colleague.pk]).update(organization=self.org)
+
+        self.manager = User.objects.create_user(
+            email="partial.manager@example.com",
+            password="StrongPass123!",
+            employee_id="EMP-PM-001",
+            role="SUB_ADMIN",
+            custom_role=role,
+        )
+        self.colleague_leave = LeaveRequest.objects.create(
+            employee=self.colleague,
+            start_date=date(2026, 7, 6),
+            end_date=date(2026, 7, 6),
+            leave_type="CASUAL",
+            reason="Colleague request",
+            status=LeaveStatus.PENDING,
+        )
+        self.client.force_authenticate(self.manager)
+
+    def _request_own_leave(self):
+        return self.client.post(
+            reverse("attendance:leaves-list"),
+            {"start_date": "2026-07-13", "end_date": "2026-07-13", "leave_type": "CASUAL", "reason": "Own request"},
+        )
+
+    def test_manager_can_request_own_leave_without_choosing_employee(self):
+        response = self._request_own_leave()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        leave = LeaveRequest.objects.get(reason="Own request")
+        self.assertEqual(leave.employee, self.manager_employee)
+        self.assertEqual(leave.status, LeaveStatus.PENDING)
+
+    def test_manager_cannot_approve_own_leave(self):
+        self._request_own_leave()
+        leave = LeaveRequest.objects.get(reason="Own request")
+        response = self.client.patch(
+            reverse("attendance:leaves-detail", args=[leave.pk]), {"status": LeaveStatus.APPROVED}
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        leave.refresh_from_db()
+        self.assertEqual(leave.status, LeaveStatus.PENDING)
+
+    def test_manager_can_still_approve_colleague_leave(self):
+        response = self.client.patch(
+            reverse("attendance:leaves-detail", args=[self.colleague_leave.pk]), {"status": LeaveStatus.APPROVED}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.colleague_leave.refresh_from_db()
+        self.assertEqual(self.colleague_leave.status, LeaveStatus.APPROVED)
+
+    def test_mine_filter_limits_list_to_own_leaves(self):
+        self._request_own_leave()
+        all_reasons = {row["reason"] for row in self.client.get(reverse("attendance:leaves-list")).data["results"]}
+        self.assertEqual(all_reasons, {"Own request", "Colleague request"})
+        mine = self.client.get(reverse("attendance:leaves-list"), {"mine": "true"}).data["results"]
+        self.assertEqual([row["reason"] for row in mine], ["Own request"])
+
+    def test_manager_without_attendance_permission_reads_own_today(self):
+        response = self.client.get(reverse("attendance:attendance-me-today"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_plain_employee_cannot_read_organisation_today(self):
+        from django.contrib.auth import get_user_model
+
+        employee_user = get_user_model().objects.create_user(
+            email="colleague@example.com", password="StrongPass123!", employee_id="EMP-PM-002"
+        )
+        self.client.force_authenticate(employee_user)
+        response = self.client.get(reverse("attendance:attendance-today"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

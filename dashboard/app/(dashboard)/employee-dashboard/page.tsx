@@ -236,7 +236,7 @@ const EmployeeDashboard = () => {
 
       const [attendanceRes, leavesRes, payrollRes, holidaysRes] = await Promise.all([
         fetch(`${apiEndpoint}/api/v1/attendance/me/?date_from=${weekStart.toISOString().slice(0, 10)}`, { headers }),
-        fetch(`${apiEndpoint}/api/v1/attendance/leaves/`, { headers }),
+        fetch(`${apiEndpoint}/api/v1/attendance/leaves/?mine=true`, { headers }),
         fetch(`${apiEndpoint}/api/v1/payroll/`, { headers }),
         fetch(`${apiEndpoint}/api/v1/holidays/`, { headers }),
       ]);
