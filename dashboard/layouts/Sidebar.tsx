@@ -78,11 +78,17 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
 
     const filtered = DashboardMenu.filter((item) => {
       if (item.grouptitle) return true;
+      // A Role flagged Full Access (e.g. "Admin") gets exactly what the
+      // company owner gets — every page, including Plans & Billing.
+      if (isFullAccess) return true;
       if (item.adminOnly) {
         return isSuperAdmin || isPrimaryHR;
       }
       if (isSubAdmin) {
         if (item.logout) return true;
+        // Chat is never permission-gated (every employee has it), and the
+        // Rulebook is readable by everyone.
+        if (item.moduleKey === "chat" || item.link === "/system/rulebook") return true;
         // A restricted manager has no Admin Dashboard overview — their "home"
         // is the Employee Dashboard, added back in separately below.
         if (item.link === "/dashboard") return !isRestrictedManager;

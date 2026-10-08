@@ -163,7 +163,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
       // Employee Dashboard, never the full Admin Dashboard overview.
       if (isRestrictedManager) {
         const routeInfo = getRouteModuleInfo(pathname);
-        if (routeInfo) {
+        if (routeInfo && routeInfo.moduleKey !== "chat") {
           if (routeInfo.adminOnly) {
             router.replace("/employee-dashboard");
             return;
@@ -209,7 +209,8 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
   let isAccessDenied = false;
   let deniedTitle = "";
 
-  if (isSubAdmin && routeInfo) {
+  // Full-access roles see everything; chat is open to everyone.
+  if (isSubAdmin && !isAdminUser && routeInfo && routeInfo.moduleKey !== "chat") {
     if (routeInfo.adminOnly) {
       isAccessDenied = true;
       deniedTitle = routeInfo.title;
