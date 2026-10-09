@@ -1,1 +1,4 @@
 *.log
+
+# Local SMTP secret for noreply@bhattsquare.com (read by backend via EMAIL_HOST_PASSWORD_FILE; never commit)
+noreply_smtp.txt

@@ -172,6 +172,12 @@ EMAIL_HOST = config("EMAIL_HOST", default="")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+# Alternatively keep the SMTP password in its own file (one line, outside git)
+# and point EMAIL_HOST_PASSWORD_FILE at it — used when EMAIL_HOST_PASSWORD is blank.
+EMAIL_HOST_PASSWORD_FILE = config("EMAIL_HOST_PASSWORD_FILE", default="")
+if EMAIL_HOST_PASSWORD_FILE and not EMAIL_HOST_PASSWORD:
+    with open(EMAIL_HOST_PASSWORD_FILE, encoding="utf-8") as _password_file:
+        EMAIL_HOST_PASSWORD = _password_file.read().strip()
 # Gmail (and most providers) use either STARTTLS on 587 (EMAIL_USE_TLS) or
 # implicit TLS/SSL on 465 (EMAIL_USE_SSL) — never both at once.
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
