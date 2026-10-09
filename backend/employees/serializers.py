@@ -85,10 +85,13 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
         return self._absolute_file_url(obj.cv_document)
 
     def _absolute_file_url(self, file_field):
-        if not file_field:
-            return None
-        request = self.context.get("request")
-        return request.build_absolute_uri(file_field.url) if request else file_field.url
+        # Sensitive documents (Aadhaar/PAN/CV) are returned as short-lived
+        # signed URLs so they cannot be fetched from /media/ without a token;
+        # profile photos and other display assets stay public. See
+        # attendstack_backend.media_signing.
+        from attendstack_backend.media_signing import build_media_url
+
+        return build_media_url(self.context.get("request"), file_field)
 
     def validate_aadhaar_document(self, value):
         return _validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "Aadhaar document")
@@ -372,8 +375,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         }
 
     def _absolute_file_url(self, file_field):
-        if not file_field:
-            return None
-        request = self.context.get("request")
-        url = file_field.url
-        return request.build_absolute_uri(url) if request else url
+        # Sign sensitive documents (Aadhaar/PAN/CV); display assets stay public.
+        from attendstack_backend.media_signing import build_media_url
+
+        return build_media_url(self.context.get("request"), file_field)

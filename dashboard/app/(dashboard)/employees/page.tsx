@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const EmployeesPage = () => {
   return (
     <Fragment>
-      <div className="px-lg-4 pt-2">
+      <div>
         <DasherBreadcrumb />
       </div>
       <EmployeePageClient />

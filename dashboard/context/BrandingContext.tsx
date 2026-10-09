@@ -5,6 +5,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 export interface CompanyInfo {
   companyLogo: string | null;
   companyName: string | null;
+  inviteCode: string | null;
   companyAddress: string | null;
   companyEmail: string | null;
   companyPhone: string | null;
@@ -38,6 +39,7 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 export const BrandingProvider = ({ children }: { children: ReactNode }) => {
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [companyAddress, setCompanyAddress] = useState<string | null>(null);
   const [companyEmail, setCompanyEmail] = useState<string | null>(null);
   const [companyPhone, setCompanyPhone] = useState<string | null>(null);
@@ -67,6 +69,7 @@ export const BrandingProvider = ({ children }: { children: ReactNode }) => {
         const data = await response.json();
         if (data.company_logo !== undefined) setCompanyLogo(data.company_logo);
         if (data.company_name !== undefined) setCompanyName(data.company_name);
+        if (data.organization_invite_code !== undefined) setInviteCode(data.organization_invite_code);
         if (data.company_address !== undefined) setCompanyAddress(data.company_address);
         if (data.company_email !== undefined) setCompanyEmail(data.company_email);
         if (data.company_phone !== undefined) setCompanyPhone(data.company_phone);
@@ -98,6 +101,7 @@ export const BrandingProvider = ({ children }: { children: ReactNode }) => {
         setCompanyLogo,
         companyName,
         setCompanyName,
+        inviteCode,
         companyAddress,
         setCompanyAddress,
         companyEmail,

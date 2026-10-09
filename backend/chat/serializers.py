@@ -120,11 +120,11 @@ class AttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'file_url', 'created_at']
 
     def get_file_url(self, obj):
+        # Chat attachments are private to the conversation; return a short-lived
+        # signed URL so they cannot be fetched from /media/ without a token.
         if obj.file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.file.url)
-            return obj.file.url
+            from attendstack_backend.media_signing import build_media_url
+            return build_media_url(self.context.get('request'), obj.file)
         return None
 
 

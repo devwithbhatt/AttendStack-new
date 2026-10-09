@@ -70,8 +70,6 @@ export const EmployeeDashboardMenu: MenuItemType[] = [
     title: "Chat & Messages",
     link: "/chat",
     icon: <IconMessage size={18} strokeWidth={1.5} />,
-    badge: "Beta",
-    badgecolor: "primary",
   },
   {
     id: uuid(),

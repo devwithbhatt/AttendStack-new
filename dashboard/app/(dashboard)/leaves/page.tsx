@@ -4,7 +4,7 @@ import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 const AdminLeavesPage = () => {
   return (
     <>
-      <div className="px-lg-4 pt-2">
+      <div>
         <DasherBreadcrumb />
       </div>
       <AdminLeavesClient />

@@ -25,6 +25,7 @@ import {
   IconActivity,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
+import { useBranding } from "context/BrandingContext";
 import { Spinner, Alert, Badge, Card, Button, Row, Col } from "react-bootstrap";
 import EmployeeIncrementWidget from "components/EmployeeIncrementWidget";
 import {
@@ -186,6 +187,7 @@ const showLocationEnablePopup = async (reason: "blocked" | "unavailable" | "prom
 
 const EmployeeDashboard = () => {
   const { employee, isLoading, error } = useCurrentEmployee();
+  const { companyName, inviteCode } = useBranding();
 
   const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState<any>(null);
@@ -617,7 +619,8 @@ const EmployeeDashboard = () => {
                 </Badge>
               </div>
               <p className="employee-designation-line text-secondary fw-medium mb-3">
-                {employee.designation} <span className="mx-1 text-muted">-</span> {employee.department} <span className="mx-1 text-muted">-</span> Bhatt Square Pvt Ltd
+                {employee.designation} <span className="mx-1 text-muted">-</span> {employee.department} <span className="mx-1 text-muted">-</span> {companyName || "Bhatt Square Pvt Ltd"}
+                {inviteCode ? <span className="text-primary fw-semibold ms-1">({inviteCode})</span> : null}
               </p>
 
               <div className="employee-contact-grid text-muted small">

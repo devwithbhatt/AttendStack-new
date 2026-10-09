@@ -31,6 +31,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "dashboard": "Dashboard",
   "employee-dashboard": "Employee Portal",
   "plans": "Subscription Plans",
+  "live-monitoring": "Live Monitoring",
   "super-admin": "Super Admin",
   "admins": "Company Administrators",
 };
@@ -64,8 +65,8 @@ const DasherBreadcrumb: React.FC<DasherBreadcrumbProps> = ({ items, className = 
   return (
     <div className={`page-breadcrumb py-2 mb-3 ${className}`}>
       <Breadcrumb className="mb-0 align-items-center flex-wrap" listProps={{ className: "mb-0 align-items-center d-flex flex-wrap p-0 bg-transparent" }}>
-        <Breadcrumb.Item linkAs="span" className="d-flex align-items-center">
-          <Link href="/" className="text-secondary text-decoration-none d-inline-flex align-items-center gap-1 small fw-medium hover-primary">
+        <Breadcrumb.Item linkAs="span" className="d-inline-flex align-items-center">
+          <Link href="/" className="text-secondary text-decoration-none d-inline-flex align-items-center gap-1 small fw-medium hover-primary" style={{ lineHeight: 1 }}>
             <IconHome size={15} className="text-primary" />
             <span>Dashboard</span>
           </Link>
@@ -79,12 +80,12 @@ const DasherBreadcrumb: React.FC<DasherBreadcrumbProps> = ({ items, className = 
                 <IconChevronRight size={13} />
               </span>
               {isLast ? (
-                <Breadcrumb.Item active as="span" className="text-dark fw-semibold small active-breadcrumb">
+                <Breadcrumb.Item active as="span" className="text-dark fw-semibold small active-breadcrumb d-inline-flex align-items-center" style={{ lineHeight: 1 }}>
                   {item.label}
                 </Breadcrumb.Item>
               ) : (
-                <Breadcrumb.Item linkAs="span">
-                  <Link href={item.href!} className="text-secondary text-decoration-none small fw-medium hover-primary">
+                <Breadcrumb.Item linkAs="span" className="d-inline-flex align-items-center">
+                  <Link href={item.href!} className="text-secondary text-decoration-none small fw-medium hover-primary d-inline-flex align-items-center" style={{ lineHeight: 1 }}>
                     {item.label}
                   </Link>
                 </Breadcrumb.Item>

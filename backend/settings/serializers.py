@@ -14,11 +14,19 @@ class SettingsChangeLogSerializer(serializers.ModelSerializer):
 
 
 class SystemSettingsSerializer(serializers.ModelSerializer):
+    # The organisation's public ID (invite code, e.g. ORG-XXXXXXXX). Shown in
+    # the dashboard next to the company name so staff know what to enter when
+    # signing in to the Live Monitoring agent.
+    organization_invite_code = serializers.SerializerMethodField()
+
     class Meta:
         model = SystemSettings
         fields = "__all__"
         read_only_fields = ["organization", "created_at", "updated_at"]
-        
+
+    def get_organization_invite_code(self, obj):
+        return obj.organization.invite_code if obj.organization_id else None
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Format time fields to HH:MM for frontend

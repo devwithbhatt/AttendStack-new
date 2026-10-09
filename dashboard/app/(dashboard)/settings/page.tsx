@@ -145,7 +145,7 @@ interface OrganizationAccess {
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState("company");
-  const { companyLogo, setCompanyLogo, refreshBranding } = useBranding();
+  const { companyLogo, setCompanyLogo, refreshBranding, inviteCode } = useBranding();
 
   // Whether the signed-in user can edit the Settings module — drives whether
   // the form fields below are interactive or shown read-only.
@@ -1285,9 +1285,17 @@ const SettingsPage = () => {
                       {/* Left Column: Brand Identity & Legal Profile */}
                       <Col lg={7}>
                         <Card className="border shadow-sm h-100">
-                          <Card.Header className="bg-transparent py-3">
-                            <h5 className="fw-bold mb-0 text-dark">Brand Identity & Legal Profile</h5>
-                            <small className="text-muted">Primary company information used across payslips, documents, and notifications.</small>
+                          <Card.Header className="bg-transparent py-3 d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                              <h5 className="fw-bold mb-0 text-dark">Brand Identity & Legal Profile</h5>
+                              <small className="text-muted">Primary company information used across payslips, documents, and notifications.</small>
+                            </div>
+                            {inviteCode ? (
+                              <div className="text-end">
+                                <div className="text-muted" style={{ fontSize: "0.7rem", letterSpacing: "0.03em" }}>ORGANIZATION ID</div>
+                                <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold" style={{ fontSize: "0.85rem" }}>{inviteCode}</span>
+                              </div>
+                            ) : null}
                           </Card.Header>
                           <Card.Body>
                             <Row className="g-3">
