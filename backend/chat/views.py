@@ -678,6 +678,10 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
         org_employees = Employee.objects.filter(organization=org)
         if not include_inactive:
             org_employees = org_employees.filter(status='ACTIVE')
+        else:
+            # Terminated staff can't access AttendStack at all, so they're
+            # left out of the directory entirely; Inactive ones stay listed.
+            org_employees = org_employees.exclude(status='TERMINATED')
         org_employee_emails = org_employees.values_list('email', flat=True)
 
         # Base queryset: employees in the same organization, excluding self and superadmins/admins
