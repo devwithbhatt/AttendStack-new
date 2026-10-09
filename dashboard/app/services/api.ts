@@ -1,6 +1,7 @@
 
 import axios from 'axios';
 import { handleError } from './errorHandler';
+import { refreshAccessToken } from '../../helper/authSession';
 
 const rawApiEndpoint = (process.env.NEXT_PUBLIC_API_ENDPOINT || '').trim();
 const API_ROOT = rawApiEndpoint.replace(/\/api$/, '').replace(/\/+$/, '');
@@ -43,9 +44,19 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error?.response?.status === 401) {
-      clearSessionAndGoHome();
+  async (error) => {
+    const original = error?.config;
+    if (error?.response?.status === 401 && original && !original._retriedAfterRefresh) {
+      // The access token expired: get a new one and replay the request once.
+      original._retriedAfterRefresh = true;
+      const outcome = await refreshAccessToken();
+      if (outcome.status === 'refreshed') {
+        original.headers = { ...(original.headers || {}), Authorization: `Bearer ${outcome.access}` };
+        return apiClient(original);
+      }
+      if (outcome.status === 'invalid') {
+        clearSessionAndGoHome();
+      }
     }
     return Promise.reject(error);
   }

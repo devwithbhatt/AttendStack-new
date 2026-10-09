@@ -39,20 +39,29 @@ export function setOnAuthFailure(handler: () => void) {
   onAuthFailure = handler;
 }
 
-let refreshPromise: Promise<string | null> | null = null;
+type RefreshOutcome = { status: "refreshed"; access: string } | { status: "invalid" } | { status: "offline" };
+let refreshPromise: Promise<RefreshOutcome> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+/** Swap the refresh token for a new access token. The server rotates refresh
+ * tokens (the old one stops working once used), so the new one must be saved
+ * too — otherwise the *next* refresh fails and the user is signed out. Only an
+ * invalid refresh token signs the user out; no network just fails this request. */
+async function refreshAccessToken(): Promise<RefreshOutcome> {
   const refresh = await tokenStorage.getRefresh();
-  if (!refresh) return null;
+  if (!refresh) return { status: "invalid" };
   try {
     const response = await axios.post(`${API_BASE_URL}/api/v1/accounts/login/refresh/`, {
       refresh,
     });
     const newAccess = response.data.access as string;
     await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccess);
-    return newAccess;
-  } catch {
-    return null;
+    if (response.data.refresh) {
+      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, response.data.refresh as string);
+    }
+    return { status: "refreshed", access: newAccess };
+  } catch (err) {
+    const code = axios.isAxiosError(err) ? err.response?.status : undefined;
+    return code === 400 || code === 401 ? { status: "invalid" } : { status: "offline" };
   }
 }
 
@@ -68,15 +77,17 @@ api.interceptors.response.use(
           refreshPromise = null;
         });
       }
-      const newAccess = await refreshPromise;
+      const outcome = await refreshPromise;
 
-      if (newAccess) {
-        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+      if (outcome.status === "refreshed") {
+        originalRequest.headers.Authorization = `Bearer ${outcome.access}`;
         return api(originalRequest);
       }
 
-      await tokenStorage.clear();
-      onAuthFailure?.();
+      if (outcome.status === "invalid") {
+        await tokenStorage.clear();
+        onAuthFailure?.();
+      }
     }
     return Promise.reject(error);
   }

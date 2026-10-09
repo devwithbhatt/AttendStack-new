@@ -129,7 +129,6 @@ import {
 
 // Redux for sidebar control & Branding context
 import { useAppDispatch } from "store/store";
-import { setCollapsed } from "store/slices/appSlice";
 import { useBranding } from "context/BrandingContext";
 
 // Avatar colors – solid, professional palette
@@ -961,15 +960,14 @@ function ChatPageContent() {
   const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
   const [showScrollBottom, setShowScrollBottom] = useState<boolean>(false);
 
-  // Collapse the main sidebar when chat page mounts, restore on unmount
-  useEffect(() => {
-    dispatch(setCollapsed({ value: "collapsed" }));
-    document.querySelector("html")?.setAttribute("class", "collapsed");
-    return () => {
-      dispatch(setCollapsed({ value: "expanded" }));
-      document.querySelector("html")?.setAttribute("class", "expanded");
-    };
-  }, [dispatch]);
+  // The sidebar keeps whatever state the user chose — chat no longer collapses it.
+
+  // Marking a conversation read also refreshes the sidebar's unread badge
+  // right away (it otherwise updates on the 12-second background poll).
+  const markReadAndRefreshBadge = (conversationId: string) =>
+    markConversationAsRead(conversationId)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["global_conversations_notifications"] }))
+      .catch(() => undefined);
 
   // Load current user and fetch profile photo
   useEffect(() => {
@@ -1224,7 +1222,7 @@ function ChatPageContent() {
     queryFn: async () => {
       if (!activeConversationId) return [];
       const res = await fetchMessages(activeConversationId);
-      markConversationAsRead(activeConversationId);
+      markReadAndRefreshBadge(activeConversationId);
       closeConversationNotifications(activeConversationId);
       const fetchedIds = (res.results || []).map((m: any) => m.id).filter(Boolean);
       if (fetchedIds.length > 0) {
@@ -1316,7 +1314,7 @@ function ChatPageContent() {
             // If the user is actively viewing this exact conversation right now, mark as read immediately & do not notify
             if (isDocVisible) {
               markMessageAsNotified(newMsg.id);
-              markConversationAsRead(activeConversationId);
+              markReadAndRefreshBadge(activeConversationId);
               closeConversationNotifications(activeConversationId);
               playMessageChime();
             } else {
@@ -1405,7 +1403,7 @@ function ChatPageContent() {
   useEffect(() => {
     const handleWindowFocusOrVisible = () => {
       if (typeof document !== "undefined" && !document.hidden && activeConversationId) {
-        markConversationAsRead(activeConversationId);
+        markReadAndRefreshBadge(activeConversationId);
         closeConversationNotifications(activeConversationId);
         queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
           old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
@@ -1431,7 +1429,7 @@ function ChatPageContent() {
     setShowInChatSearch(false);
     setInChatMessageQuery("");
     setReplyingTo(null);
-    markConversationAsRead(conv.id);
+    markReadAndRefreshBadge(conv.id);
     closeConversationNotifications(conv.id);
     queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
       old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))

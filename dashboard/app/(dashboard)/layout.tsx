@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from 'next/navigation';
 
 import { BrandingProvider } from "context/BrandingContext";
+import { getTokenExpiryMs, refreshAccessToken, REFRESH_LEAD_MS } from "helper/authSession";
 import Header from "layouts/header/Header";
 import Sidebar from "layouts/Sidebar";
 import PlanExpiryAlertBanner from "components/PlanExpiryAlertBanner";
@@ -56,16 +57,6 @@ const clearSession = () => {
   localStorage.removeItem("user");
 };
 
-const getTokenExpiryMs = (token: string) => {
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-};
 
 const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
   const pathname = usePathname();
@@ -119,20 +110,38 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
       return;
     }
 
-    const expiresAt = getTokenExpiryMs(token);
-    if (expiresAt && expiresAt <= Date.now()) {
-      clearSession();
-      router.replace(HOME_ROUTE);
-      return;
-    }
-
+    // Stay signed in: swap the refresh token for a new access token shortly
+    // before it expires (immediately if it already has, e.g. after sleep).
+    // Only an invalid refresh token ends the session; offline just retries.
     let expiryTimer: number | undefined;
-    if (expiresAt) {
-      expiryTimer = window.setTimeout(() => {
+    let cancelled = false;
+    const scheduleRefresh = (accessToken: string | null) => {
+      const exp = getTokenExpiryMs(accessToken);
+      if (!exp) return;
+      window.clearTimeout(expiryTimer);
+      expiryTimer = window.setTimeout(runRefresh, Math.max(exp - Date.now() - REFRESH_LEAD_MS, 0));
+    };
+    const runRefresh = async () => {
+      const outcome = await refreshAccessToken();
+      if (cancelled) return;
+      if (outcome.status === "refreshed") {
+        scheduleRefresh(outcome.access);
+      } else if (outcome.status === "invalid") {
         clearSession();
         router.replace(HOME_ROUTE);
-      }, Math.max(expiresAt - Date.now(), 0));
-    }
+      } else {
+        window.clearTimeout(expiryTimer);
+        expiryTimer = window.setTimeout(runRefresh, 60_000);
+      }
+    };
+    // Coming back to the tab (or waking the laptop): catch up if needed.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const exp = getTokenExpiryMs(localStorage.getItem("authToken"));
+      if (exp && exp - Date.now() <= REFRESH_LEAD_MS) runRefresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    scheduleRefresh(token);
 
     try {
       const parsedUser = JSON.parse(storedUser);
@@ -197,9 +206,9 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
     }
 
     return () => {
-      if (expiryTimer) {
-        window.clearTimeout(expiryTimer);
-      }
+      cancelled = true;
+      window.clearTimeout(expiryTimer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [pathname, router]);
 
@@ -263,7 +272,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
           </div>
           {!isChatPage && (
             <footer className='custom-container mt-auto pt-3 pb-1 text-muted small border-top' style={{ borderColor: '#f1f5f9' }}>
-              <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer" className="text-primary fw-medium text-decoration-none">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.7.10</span></span>
+              <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer" className="text-primary fw-medium text-decoration-none">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.7.11</span></span>
             </footer>
           )}
         </div>

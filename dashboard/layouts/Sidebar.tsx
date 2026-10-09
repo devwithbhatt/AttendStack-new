@@ -24,6 +24,8 @@ import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 // import required routes
 import { IconBuildingSkyscraper, IconLock, IconLayoutDashboard } from "@tabler/icons-react";
 import { getAssetPath } from "helper/assetPath";
+import { useQuery } from "@tanstack/react-query";
+import { fetchConversations, Conversation } from "helper/chatApi";
 import { DashboardMenu } from "routes/DashboardRoute";
 import { EmployeeDashboardMenu } from "routes/EmployeeDashboardRoute";
 
@@ -64,6 +66,20 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   const [adminStatus, setAdminStatus] = useState<AdminLiveStatus | null>(null);
 
   const currentUser = propUser || localUser;
+
+  // Unread chat messages, for the badge on "Chat & Messages". Same query key
+  // and options as GlobalChatNotificationListener, so it reuses that poll's
+  // cached result instead of making extra requests.
+  const { data: chatConversations = [] } = useQuery<Conversation[]>({
+    queryKey: ["global_conversations_notifications"],
+    queryFn: fetchConversations,
+    refetchInterval: 12000,
+    refetchIntervalInBackground: true,
+    staleTime: 5000,
+  });
+  const chatUnread = Array.isArray(chatConversations)
+    ? chatConversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)
+    : 0;
 
   const menuItems = useMemo(() => {
     if (!isMounted) return [];
@@ -248,7 +264,21 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
         className={`nav-link ${isactive ? "active" : ""}`}
         onClick={onNavigate}
       >
-        {item.icon && <span className="nav-icon">{item.icon}</span>}
+        {item.icon && (
+          <span className="nav-icon position-relative">
+            {item.icon}
+            {item.link === "/chat" && chatUnread > 0 ? (
+              <span
+                className="position-absolute badge rounded-pill bg-danger"
+                style={{ top: "-7px", right: "-10px", fontSize: "10px", padding: "2px 5px", lineHeight: 1.2 }}
+                aria-label={`${chatUnread} unread messages`}
+                title={`${chatUnread} unread message${chatUnread === 1 ? "" : "s"}`}
+              >
+                {chatUnread > 99 ? "99+" : chatUnread}
+              </span>
+            ) : null}
+          </span>
+        )}
         <span className="text">{item.name || item.title}</span>
         {isLocked ? (
           <Badge
