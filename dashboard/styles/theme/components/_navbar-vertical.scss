@@ -492,3 +492,23 @@ html.expanded #content .navbar-glass {
     }
   }
 }
+// Chat unread indicator: count after the label; a dot on the icon when the
+// sidebar is minimised (label hidden).
+.sidebar-unread-dot {
+  display: none;
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--#{$prefix}danger);
+}
+html.collapsed #miniSidebar {
+  .sidebar-unread-count {
+    display: none;
+  }
+  .sidebar-unread-dot {
+    display: block;
+  }
+}

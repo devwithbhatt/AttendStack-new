@@ -267,19 +267,21 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
         {item.icon && (
           <span className="nav-icon position-relative">
             {item.icon}
-            {item.link === "/chat" && chatUnread > 0 ? (
-              <span
-                className="position-absolute badge rounded-pill bg-danger"
-                style={{ top: "-7px", right: "-10px", fontSize: "10px", padding: "2px 5px", lineHeight: 1.2 }}
-                aria-label={`${chatUnread} unread messages`}
-                title={`${chatUnread} unread message${chatUnread === 1 ? "" : "s"}`}
-              >
-                {chatUnread > 99 ? "99+" : chatUnread}
-              </span>
-            ) : null}
+            {/* Minimised sidebar hides the label, so a dot on the icon stands in for the count. */}
+            {item.link === "/chat" && chatUnread > 0 ? <span className="sidebar-unread-dot" aria-hidden="true" /> : null}
           </span>
         )}
         <span className="text">{item.name || item.title}</span>
+        {item.link === "/chat" && chatUnread > 0 ? (
+          <span
+            className="sidebar-unread-count badge rounded-pill bg-danger ms-2"
+            style={{ fontSize: "10px", padding: "3px 6px", verticalAlign: "middle" }}
+            aria-label={`${chatUnread} unread messages`}
+            title={`${chatUnread} unread message${chatUnread === 1 ? "" : "s"}`}
+          >
+            {chatUnread > 99 ? "99+" : chatUnread}
+          </span>
+        ) : null}
         {isLocked ? (
           <Badge
             bg="warning-subtle"
