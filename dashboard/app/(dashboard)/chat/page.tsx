@@ -108,6 +108,7 @@ import {
   UserMinimal,
   ReactionSummary,
   fetchConversations,
+  listCompanyPeople,
   fetchMessages,
   sendMessageWithAttachments,
   createDirectChat,
@@ -504,7 +505,7 @@ function ChatPageContent() {
 
   // Search, Filter and Modal states
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [convFilter, setConvFilter] = useState<"all" | "direct" | "group">("all");
+  const [convFilter, setConvFilter] = useState<"all" | "new" | "group">("all");
   const [showDirectModal, setShowDirectModal] = useState<boolean>(false);
   const [showGroupModal, setShowGroupModal] = useState<boolean>(false);
   const [userSearchResults, setUserSearchResults] = useState<UserMinimal[]>([]);
@@ -2146,6 +2147,47 @@ function ChatPageContent() {
     },
   });
 
+  // "New Chat" tab: the whole company directory, active and inactive.
+  const { data: companyPeople = [], isLoading: loadingCompanyPeople } = useQuery({
+    queryKey: ["chat-company-people"],
+    queryFn: listCompanyPeople,
+    enabled: convFilter === "new",
+  });
+
+  const isPersonInactive = (u: UserMinimal) =>
+    u.is_active === false || ["INACTIVE", "TERMINATED"].includes(String(u.status || "").toUpperCase());
+
+  const filteredCompanyPeople = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return companyPeople
+      .filter((u) => {
+        if (!q) return true;
+        return [u.name, u.email, u.designation, u.department].some((v) => (v || "").toLowerCase().includes(q));
+      })
+      .sort((a, b) => Number(isPersonInactive(a)) - Number(isPersonInactive(b)) || (a.name || "").localeCompare(b.name || ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyPeople, searchQuery]);
+
+  const findDirectConversationWith = (user: UserMinimal) =>
+    conversations.find((c) => {
+      if (c.type !== "DIRECT") return false;
+      if (c.other_user && String(c.other_user.id) === String(user.id)) return true;
+      return Boolean(c.members?.some((m) => String(m.user?.id) === String(user.id)));
+    });
+
+  const handlePickPerson = (user: UserMinimal) => {
+    if (isPersonInactive(user) && !findDirectConversationWith(user)) {
+      Swal.fire({
+        icon: "info",
+        title: "Can't start a new chat",
+        text: `${user.name} is inactive and can't sign in to read messages. Earlier conversations with them stay available.`,
+        confirmButtonColor: "#00a76f",
+      });
+      return;
+    }
+    handleStartDirectChat(user);
+  };
+
   const handleStartDirectChat = (user: UserMinimal) => {
     const existingConv = conversations.find((c) => {
       if (c.type !== "DIRECT") return false;
@@ -2223,7 +2265,6 @@ function ChatPageContent() {
 
       const matchesSearch = (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
-      if (convFilter === "direct") return c.type === "DIRECT";
       if (convFilter === "group") return c.type === "GROUP";
       return true;
     });
@@ -3109,11 +3150,11 @@ function ChatPageContent() {
               </button>
               <button
                 type="button"
-                className={`btn btn-sm flex-fill rounded-2 fw-semibold py-1 ${convFilter === "direct" ? "bg-white text-primary shadow-xs" : "text-muted border-0"}`}
+                className={`btn btn-sm flex-fill rounded-2 fw-semibold py-1 ${convFilter === "new" ? "bg-white text-primary shadow-xs" : "text-muted border-0"}`}
                 style={{ fontSize: "12px" }}
-                onClick={() => setConvFilter("direct")}
+                onClick={() => setConvFilter("new")}
               >
-                Direct
+                New Chat
               </button>
               <button
                 type="button"
@@ -3130,7 +3171,7 @@ function ChatPageContent() {
               <Search size={15} className="chat-search-icon" />
               <input
                 type="text"
-                placeholder="Search conversations..."
+                placeholder={convFilter === "new" ? "Search people..." : "Search conversations..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -3144,7 +3185,50 @@ function ChatPageContent() {
 
           {/* Conversation List */}
           <div className="chat-conv-list">
-            {loadingConversations ? (
+            {convFilter === "new" ? (
+              loadingCompanyPeople ? (
+                <div className="chat-empty-state">
+                  <Spinner animation="border" variant="primary" size="sm" />
+                  <p className="mt-2">Loading people...</p>
+                </div>
+              ) : filteredCompanyPeople.length === 0 ? (
+                <div className="chat-empty-state">
+                  <div className="chat-empty-icon">
+                    <MessageSquare size={28} />
+                  </div>
+                  <h6>No one found</h6>
+                  <p>{searchQuery ? "Try a different name or department." : "No colleagues have app access yet."}</p>
+                </div>
+              ) : (
+                filteredCompanyPeople.map((person) => {
+                  const inactive = isPersonInactive(person);
+                  return (
+                    <div
+                      key={person.id}
+                      onClick={() => handlePickPerson(person)}
+                      className="chat-conv-item"
+                      style={inactive ? { opacity: 0.6 } : undefined}
+                      title={inactive ? "Inactive" : `Message ${person.name}`}
+                    >
+                      <SafeAvatar src={person.profile_photo_url || person.avatar || null} name={person.name || person.email} size={42} />
+                      <div className="flex-grow-1 min-w-0 ms-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="fw-semibold text-truncate" style={{ fontSize: "14px" }}>{person.name}</span>
+                          {inactive ? (
+                            <span className="badge rounded-pill bg-secondary-subtle text-secondary" style={{ fontSize: "10px" }}>
+                              {String(person.status || "Inactive").charAt(0) + String(person.status || "Inactive").slice(1).toLowerCase()}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-muted text-truncate" style={{ fontSize: "12px" }}>
+                          {[person.designation, person.department].filter(Boolean).join(" · ") || person.email}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )
+            ) : loadingConversations ? (
               <div className="chat-empty-state">
                 <Spinner animation="border" variant="primary" size="sm" />
                 <p className="mt-2">Loading chats...</p>

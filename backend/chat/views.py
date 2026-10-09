@@ -653,6 +653,16 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = UserMinimalSerializer
 
+    def _include_inactive(self):
+        # "New Chat" directory: everyone in the company, active or not.
+        return self.request.query_params.get('include_inactive') in ('1', 'true', 'True')
+
+    def paginate_queryset(self, queryset):
+        # The directory is one company's staff — return it whole.
+        if self._include_inactive():
+            return None
+        return super().paginate_queryset(queryset)
+
     def get_queryset(self):
         user = self.request.user
         org = get_user_organization(user)
@@ -661,17 +671,20 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
         if not org:
             return User.objects.none()
 
-        # Get all active employee emails strictly within the user's organization
-        org_employee_emails = Employee.objects.filter(
-            organization=org,
-            status='ACTIVE'
-        ).values_list('email', flat=True)
+        include_inactive = self._include_inactive()
 
-        # Base queryset: Active employees in the same organization, excluding self and superadmins/admins
-        queryset = User.objects.filter(
-            is_active=True,
-            email__in=org_employee_emails
-        ).exclude(
+        # Employee emails strictly within the user's organization (active only,
+        # unless the full directory was asked for)
+        org_employees = Employee.objects.filter(organization=org)
+        if not include_inactive:
+            org_employees = org_employees.filter(status='ACTIVE')
+        org_employee_emails = org_employees.values_list('email', flat=True)
+
+        # Base queryset: employees in the same organization, excluding self and superadmins/admins
+        queryset = User.objects.filter(email__in=org_employee_emails)
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+        queryset = queryset.exclude(
             id=user.id
         ).exclude(
             role='SUPER_ADMIN'

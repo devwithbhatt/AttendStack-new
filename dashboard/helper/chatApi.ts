@@ -145,6 +145,12 @@ export const createGroupChat = async (name: string, memberIds: string[]): Promis
   return response.data;
 };
 
+/** Everyone in the company — active and inactive — for the "New Chat" tab. */
+export const listCompanyPeople = async (): Promise<UserMinimal[]> => {
+  const response = await apiClient.get(`/api/v1/chat/users/?include_inactive=true`);
+  return response.data.results || response.data;
+};
+
 export const searchUsers = async (query: string): Promise<UserMinimal[]> => {
   const response = await apiClient.get(`/api/v1/chat/users/?search=${encodeURIComponent(query)}`);
   return response.data.results || response.data;
