@@ -44,6 +44,9 @@ const getRouteModuleInfo = (pathname: string): { moduleKey: string | null; title
   if (pathname.startsWith("/settings")) {
     return { moduleKey: "settings", title: "Company Settings" };
   }
+  if (pathname.startsWith("/live-monitoring")) {
+    return { moduleKey: "monitoring", title: "Live Monitoring" };
+  }
   return null;
 };
 

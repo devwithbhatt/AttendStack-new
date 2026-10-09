@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AttendStack — Live Monitoring (Admin test)</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --bad:#ef4444; --line:#334155; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--fg); font-size:13px; }
+  button { padding:9px 14px; border:0; border-radius:8px; background:var(--accent); color:#0b1220; font-weight:600; font-size:13px; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+  .on { background:var(--ok); box-shadow:0 0 6px var(--ok);} .off{ background:var(--muted);}
+  .err { color:var(--bad); font-size:13px; margin-top:8px; min-height:16px; }
+  video { width:100%; border-radius:10px; background:#000; border:1px solid var(--line); }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal.show{ display:flex; }
+  .modalInner{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; width:100%; max-width:900px; }
+  .modalHead{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .ro { font-size:11px; color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:2px 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Live Monitoring <span class="ro">READ-ONLY</span></h1>
+  <div class="sub">Admin test console. The real version lives inside the AttendStack dashboard.</div>
+
+  <div class="card">
+    <label>Admin access token (JWT)</label>
+    <input id="jwt" type="text" placeholder="paste the access token you were given">
+    <div style="margin-top:10px;display:flex;gap:8px;">
+      <button id="loadBtn">Load devices</button>
+      <button id="saveJwt" class="ghost">Remember token</button>
+    </div>
+    <div class="err" id="loadErr"></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>Employee</th><th>Device</th><th>Status</th><th>Last active</th><th></th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" style="color:var(--muted)">Load devices to begin.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modalInner">
+    <div class="modalHead">
+      <div id="watching" style="font-weight:600;"></div>
+      <button id="closeBtn" class="ghost">Stop watching</button>
+    </div>
+    <video id="remote" autoplay playsinline></video>
+    <div class="err" id="watchErr"></div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const WS  = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+function $(id){ return document.getElementById(id); }
+function jwt(){ return $("jwt").value.trim(); }
+
+if(localStorage.getItem("asmon_jwt")) $("jwt").value = localStorage.getItem("asmon_jwt");
+$("saveJwt").onclick = ()=> localStorage.setItem("asmon_jwt", jwt());
+
+$("loadBtn").onclick = loadDevices;
+async function loadDevices(){
+  $("loadErr").textContent = "";
+  try{
+    const r = await fetch(API + "/api/v1/monitoring/devices/", { headers:{ Authorization:"Bearer "+jwt() } });
+    if(!r.ok){ $("loadErr").textContent = "Failed ("+r.status+"). Check the token / admin role."; return; }
+    const list = await r.json();
+    const rows = list.results || list;
+    $("rows").innerHTML = rows.length ? "" : "<tr><td colspan=5 style='color:var(--muted)'>No registered devices.</td></tr>";
+    rows.forEach(d=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML = `<td>${d.employee_name||""}</td><td>${d.device_name||d.id}</td>
+        <td><span class="dot ${d.is_online?'on':'off'}"></span>${d.is_online?'Online':'Offline'}</td>
+        <td style="color:var(--muted)">${d.last_active_at? new Date(d.last_active_at).toLocaleString():'—'}</td>
+        <td></td>`;
+      const btn=document.createElement("button");
+      btn.textContent="Watch Live"; btn.disabled=!d.is_online;
+      btn.onclick=()=>watch(d);
+      tr.lastElementChild.appendChild(btn);
+      $("rows").appendChild(tr);
+    });
+  }catch(e){ $("loadErr").textContent = "Network error: " + e.message; }
+}
+
+let ws=null, pc=null;
+async function watch(device){
+  $("watchErr").textContent="";
+  $("watching").textContent = "Watching: " + (device.employee_name||"") + " — " + (device.device_name||device.id);
+  $("modal").classList.add("show");
+  ws = new WebSocket(WS + "/ws/monitor/view/" + device.id + "/?token=" + encodeURIComponent(jwt()));
+  let iceServers=[];
+  ws.onmessage = async (ev)=>{
+    const msg = JSON.parse(ev.data);
+    if(msg.type==="ready"){ iceServers = msg.ice_servers||[]; }
+    else if(msg.type==="offer"){
+      pc = new RTCPeerConnection({ iceServers });
+      pc.ontrack = (e)=>{ $("remote").srcObject = e.streams[0]; };
+      pc.onicecandidate = (e)=>{ if(e.candidate && ws) ws.send(JSON.stringify({action:"ice", session:msg.session, payload:e.candidate.toJSON()})); };
+      await pc.setRemoteDescription(msg.payload);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({action:"answer", session:msg.session, payload:{type:answer.type, sdp:answer.sdp}}));
+    }
+    else if(msg.type==="ice" && pc && msg.payload){ try{ await pc.addIceCandidate(msg.payload); }catch(_){} }
+  };
+  ws.onclose = ()=>{ $("watchErr").textContent = $("watchErr").textContent || "Stream ended / employee went offline."; };
+  ws.onerror = ()=>{ $("watchErr").textContent = "Connection error (not authorised, or device offline)."; };
+}
+
+$("closeBtn").onclick = ()=>{
+  $("modal").classList.remove("show");
+  if(ws){ try{ws.close();}catch(_){} ws=null; }
+  if(pc){ try{pc.close();}catch(_){} pc=null; }
+  $("remote").srcObject=null;
+  loadDevices();
+};
+</script>
+</body>
+</html>

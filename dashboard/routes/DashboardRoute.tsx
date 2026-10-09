@@ -21,6 +21,7 @@ import {
   IconShieldCheck,
   IconCreditCard,
   IconShieldLock,
+  IconDeviceDesktop,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -89,8 +90,6 @@ export const DashboardMenu: MenuItemType[] = [
     featureKey: "allows_chat",
     requiresPro: true,
     icon: <IconMessage size={20} strokeWidth={1.5} />,
-    badge: "Beta",
-    badgecolor: "primary",
   },
   {
     id: uuid(),
@@ -116,6 +115,14 @@ export const DashboardMenu: MenuItemType[] = [
     moduleKey: "leaves",
     featureKey: "allows_leaves",
     icon: <IconCalendarTime size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Live Monitoring",
+    link: "/live-monitoring",
+    // Granted per Role in Settings -> Assign Role (full admins always have it).
+    moduleKey: "monitoring",
+    icon: <IconDeviceDesktop size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

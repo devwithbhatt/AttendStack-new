@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AttendStack Monitor — Agent</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --bad:#ef4444; --line:#334155; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  .wrap { max-width:460px; margin:0 auto; padding:40px 16px; }
+  h1 { font-size:20px; margin:0 0 4px; text-align:center; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:20px; text-align:center; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:24px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
+  input[type=text],input[type=email],input[type=password]{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--fg); font-size:14px; }
+  .consent { display:flex; gap:8px; align-items:flex-start; margin-top:16px; font-size:13px; color:var(--fg); }
+  button { margin-top:20px; width:100%; padding:11px; border:0; border-radius:8px; background:var(--accent); color:#0b1220; font-weight:600; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .err { color:var(--bad); font-size:13px; margin-top:10px; min-height:16px; }
+  .banner { background:#0b1220; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--muted); margin-top:16px; }
+  .hidden { display:none; }
+  /* Active (post-sign-in) state */
+  .active { text-align:center; }
+  .shield { width:64px; height:64px; margin:4px auto 14px; border-radius:50%; background:rgba(34,197,94,.12); display:flex; align-items:center; justify-content:center; }
+  .shield .dot { width:16px; height:16px; border-radius:50%; background:var(--ok); box-shadow:0 0 14px var(--ok); }
+  .active h2 { font-size:17px; margin:0 0 6px; }
+  .active p { color:var(--muted); font-size:13px; margin:4px 0; }
+  .who { color:var(--fg); font-weight:600; }
+  .statusline { font-size:12px; margin-top:14px; color:var(--muted); }
+  .statusline.live { color:var(--ok); }
+  .testnote { margin-top:18px; font-size:11px; color:var(--muted); border-top:1px solid var(--line); padding-top:12px; }
+  .link { color:var(--muted); font-size:11px; cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AttendStack Monitor</h1>
+  <div class="sub">Employee agent (browser test build). In production this is the background desktop app.</div>
+
+  <!-- Sign in (first launch only) -->
+  <div class="card" id="loginCard">
+    <div style="font-weight:600;margin-bottom:4px;">Sign in to activate monitoring</div>
+    <div class="sub" style="text-align:left;margin:4px 0 0;">You only do this once on this computer.</div>
+    <label>Organisation ID</label>
+    <input id="org" type="text" placeholder="ORG-XXXXXXXX" autocomplete="off">
+    <label>Login Email</label>
+    <input id="email" type="email" placeholder="you@company.com" autocomplete="username">
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
+    <label class="consent"><input id="consent" type="checkbox"> I understand my screen may be monitored during work hours on this company computer.</label>
+    <button id="signinBtn">Sign in</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <!-- Active (after sign-in: no controls, runs automatically) -->
+  <div class="card active hidden" id="activeCard">
+    <div class="shield"><div class="dot"></div></div>
+    <h2>Monitoring is active</h2>
+    <p>Signed in as <span class="who" id="who"></span></p>
+    <p>This computer is registered. You don't need to sign in again.</p>
+    <div class="statusline" id="statusline">Connecting…</div>
+    <div class="banner">In the real desktop app this window closes to a tray icon and keeps running in the background — it also starts automatically when the computer starts.</div>
+    <div class="testnote">
+      <div><b>Test build note:</b> because this is a browser, when your admin starts watching, the browser will ask you which screen/window to share. The desktop app captures the full screen silently with no prompt.</div>
+      <div style="margin-top:8px;"><span class="link" id="forget">Forget this device (test reset)</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const WS  = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+const LS = { token:"asmon_device_token", id:"asmon_device_id", fp:"asmon_fingerprint", who:"asmon_who" };
+
+function $(id){ return document.getElementById(id); }
+function fingerprint(){
+  let fp = localStorage.getItem(LS.fp);
+  if(!fp){ fp = "web-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now()+"-"+Math.random()); localStorage.setItem(LS.fp, fp); }
+  return fp;
+}
+
+let ws=null, pc=null, localStream=null, heartbeat=null, iceServers=[], reconnectDelay=1000;
+
+function showActive(){
+  $("loginCard").classList.add("hidden");
+  $("activeCard").classList.remove("hidden");
+  $("who").textContent = localStorage.getItem(LS.who) || "";
+}
+function setStatus(text, live){
+  $("statusline").textContent = text;
+  $("statusline").className = "statusline" + (live ? " live" : "");
+}
+
+// ---- Sign in = register + immediately go online. No manual controls. ----
+$("signinBtn").onclick = async () => {
+  $("loginErr").textContent = "";
+  const btn = $("signinBtn"); btn.disabled = true; btn.textContent = "Signing in…";
+  const body = {
+    organization_id: $("org").value.trim(),
+    email: $("email").value.trim(),
+    password: $("password").value,
+    device_fingerprint: fingerprint(),
+    device_name: (navigator.platform||"PC") + " · browser agent",
+    platform: "windows",
+    consent_acknowledged: $("consent").checked
+  };
+  try{
+    const r = await fetch(API + "/api/v1/monitoring/devices/register/", {
+      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
+    });
+    const data = await r.json();
+    if(!r.ok){ $("loginErr").textContent = data.detail || Object.values(data)[0] || "Sign in failed."; btn.disabled=false; btn.textContent="Sign in"; return; }
+    localStorage.setItem(LS.token, data.device_token);
+    localStorage.setItem(LS.id, data.device_id);
+    localStorage.setItem(LS.who, data.employee_name || body.email);
+    showActive();
+    connect();           // auto-online — that's all the employee does
+  }catch(e){ $("loginErr").textContent = "Network error: " + e.message; btn.disabled=false; btn.textContent="Sign in"; }
+};
+
+$("forget").onclick = () => {
+  stop(); [LS.token,LS.id,LS.who].forEach(k=>localStorage.removeItem(k));
+  $("activeCard").classList.add("hidden"); $("loginCard").classList.remove("hidden");
+  $("signinBtn").disabled=false; $("signinBtn").textContent="Sign in";
+};
+
+// ---- Signalling: always-on while registered, auto-reconnect ----
+function connect(){
+  const token = localStorage.getItem(LS.token);
+  if(!token) return;
+  setStatus("Connecting…", false);
+  ws = new WebSocket(WS + "/ws/monitor/agent/?device_token=" + encodeURIComponent(token));
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    setStatus("● Online — available for monitoring", true);
+    heartbeat = setInterval(()=>{ try{ ws.send(JSON.stringify({action:"heartbeat", active:true})); }catch(_){} }, 20000);
+  };
+  ws.onmessage = async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if(msg.type === "ready"){ iceServers = msg.ice_servers || []; }
+    else if(msg.type === "viewer_joined"){ setStatus("● Admin is viewing your screen", true); await startStream(msg.session); }
+    else if(msg.type === "viewer_left"){ setStatus("● Online — available for monitoring", true); stopStream(); }
+    else if(msg.type === "answer" && pc){ await pc.setRemoteDescription(msg.payload); }
+    else if(msg.type === "ice" && pc && msg.payload){ try{ await pc.addIceCandidate(msg.payload); }catch(_){} }
+  };
+  ws.onclose = () => {
+    clearInterval(heartbeat); stopStream();
+    if(localStorage.getItem(LS.token)){
+      setStatus("Reconnecting…", false);
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay*2, 15000);
+    } else { setStatus("Offline", false); }
+  };
+  ws.onerror = () => {};
+}
+
+function stop(){ const t=ws; ws=null; if(t){ try{t.close();}catch(_){} } clearInterval(heartbeat); stopStream(); }
+
+async function startStream(session){
+  try{
+    localStream = await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate: 10 }, audio:false });
+  }catch(e){ setStatus("Screen share was blocked/cancelled", false); return; }
+  pc = new RTCPeerConnection({ iceServers });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  // If the employee stops the browser share from the native bar, drop cleanly.
+  localStream.getVideoTracks()[0].addEventListener("ended", stopStream);
+  pc.onicecandidate = (e) => { if(e.candidate && ws) ws.send(JSON.stringify({action:"ice", session, payload:e.candidate.toJSON()})); };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  ws.send(JSON.stringify({action:"offer", session, payload:{type:offer.type, sdp:offer.sdp}}));
+}
+
+function stopStream(){
+  if(pc){ try{pc.close();}catch(_){} pc=null; }
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+}
+
+// Boot: already registered → go straight to active + online, no interaction.
+if(localStorage.getItem(LS.token)){ showActive(); connect(); }
+</script>
+</body>
+</html>

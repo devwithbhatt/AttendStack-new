@@ -59,6 +59,7 @@ LOCAL_APPS = [
     "tasks",
     "chat",
     "roles",
+    "monitoring",
 ]
 
 INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -215,6 +216,15 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    # Named rate limits (opt-in per view via ScopedRateThrottle). No global
+    # throttle is enabled; only views that set throttle_scope use these.
+    "DEFAULT_THROTTLE_RATES": {
+        # Per-IP cap on device registration. Generous enough for a whole
+        # office to register in a day from one NAT'd IP, tight enough to blunt
+        # password brute-forcing (the endpoint also returns only generic errors
+        # and requires a valid org invite code).
+        "monitor_register": "30/hour",
+    },
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],
@@ -333,10 +343,26 @@ else:
     }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# LIVE MONITORING — WebRTC ICE (STUN/TURN)
+# Video streams peer-to-peer (never through this server). TURN is only used as a
+# fallback relay on restrictive networks; leave TURN_* blank to run on STUN only.
+# ──────────────────────────────────────────────────────────────────────────────
+STUN_HOST = config("STUN_HOST", default="")            # e.g. "turn.example.com:3478"; blank = public Google STUN
+TURN_HOST = config("TURN_HOST", default="")            # e.g. "turn.example.com:3478"
+TURN_SHARED_SECRET = config("TURN_SHARED_SECRET", default="")  # coturn use-auth-secret
+
+# ──────────────────────────────────────────────────────────────────────────────
 # MEDIA FILES (LOCAL DEV & S3 READY)
 # ──────────────────────────────────────────────────────────────────────────────
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Signed-URL protection for sensitive media (Aadhaar/PAN/CV docs, chat files).
+# Must match the secret in nginx's `secure_link_md5` directive for the
+# protected /media/ locations. Blank (local dev) => URLs returned unsigned and
+# served directly; set in production where nginx enforces the signature.
+MEDIA_SIGNING_SECRET = config("MEDIA_SIGNING_SECRET", default="")
+MEDIA_SIGNED_TTL = config("MEDIA_SIGNED_TTL", default=86400, cast=int)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SIMPLYJOB INTEGRATION

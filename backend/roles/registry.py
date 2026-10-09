@@ -18,6 +18,7 @@ MODULE_REGISTRY = [
     {"key": "holidays", "label": "Holidays", "description": "Company holiday calendar"},
     {"key": "payroll", "label": "Salary & Payroll", "description": "Payroll records and salary increments"},
     {"key": "tasks", "label": "Projects & Tasks", "description": "Projects and task management"},
+    {"key": "monitoring", "label": "Live Monitoring", "description": "View: watch employees' work-computer screens live and see the activity log. Edit: remove devices."},
     # Chat & Messages is intentionally NOT permission-gated — every employee
     # has full access to it regardless of role, so it's excluded from the
     # Role & Permission Management UI entirely.
