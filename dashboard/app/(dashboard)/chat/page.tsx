@@ -2151,7 +2151,7 @@ function ChatPageContent() {
   const { data: companyPeople = [], isLoading: loadingCompanyPeople } = useQuery({
     queryKey: ["chat-company-people"],
     queryFn: listCompanyPeople,
-    enabled: convFilter === "new",
+    enabled: convFilter === "new" || showGroupModal,
   });
 
   const isPersonInactive = (u: UserMinimal) =>
@@ -2167,6 +2167,17 @@ function ChatPageContent() {
       .sort((a, b) => Number(isPersonInactive(a)) - Number(isPersonInactive(b)) || (a.name || "").localeCompare(b.name || ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyPeople, searchQuery]);
+
+  // Create Group Chat: every active colleague, filtered by the box above.
+  const [groupMemberQuery, setGroupMemberQuery] = useState("");
+  const groupCandidates = useMemo(() => {
+    const q = groupMemberQuery.trim().toLowerCase();
+    return companyPeople
+      .filter((u) => !isPersonInactive(u))
+      .filter((u) => !q || [u.name, u.email, u.designation, u.department].some((v) => (v || "").toLowerCase().includes(q)))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyPeople, groupMemberQuery]);
 
   const findDirectConversationWith = (user: UserMinimal) =>
     conversations.find((c) => {
@@ -2241,8 +2252,7 @@ function ChatPageContent() {
     setShowGroupModal(true);
     setGroupName("");
     setSelectedGroupMembers([]);
-    setUserQuery("");
-    handleSearchUsers("");
+    setGroupMemberQuery("");
   };
 
   // Filter conversations
@@ -3087,14 +3097,6 @@ function ChatPageContent() {
                     <PlusCircle size={18} />
                   </Dropdown.Toggle>
                   <Dropdown.Menu className="shadow-lg border rounded-3 py-1 dropdown-menu-end" style={{ minWidth: "190px", zIndex: 1060 }}>
-                    <Dropdown.Item
-                      className="d-flex align-items-center gap-2 text-dark px-3 py-2 small fw-semibold"
-                      onClick={openDirectModal}
-                    >
-                      <User size={15} className="text-primary" />
-                      <span>Direct Message</span>
-                    </Dropdown.Item>
-
                     {userRole !== "EMPLOYEE" && (
                       <Dropdown.Item
                         className="d-flex align-items-center gap-2 text-dark px-3 py-2 small fw-semibold"
@@ -3240,7 +3242,7 @@ function ChatPageContent() {
                 </div>
                 <h6>No conversations yet</h6>
                 <p>Start a new chat with your team members</p>
-                <Button variant="outline-primary" size="sm" className="rounded-pill px-3 mt-2" onClick={openDirectModal}>
+                <Button variant="outline-primary" size="sm" className="rounded-pill px-3 mt-2" onClick={() => setConvFilter("new")}>
                   Start Chat
                 </Button>
               </div>
@@ -3920,7 +3922,7 @@ function ChatPageContent() {
                   variant="primary"
                   className="rounded-pill px-4 border-0 shadow-sm"
                   style={{ backgroundColor: "#6366f1" }}
-                  onClick={openDirectModal}
+                  onClick={() => setConvFilter("new")}
                 >
                   <PlusCircle size={18} className="me-2" /> Start New Chat
                 </Button>
@@ -4094,12 +4096,35 @@ function ChatPageContent() {
                 <Search size={16} className="text-muted" />
               </InputGroup.Text>
               <Form.Control
-                placeholder="Search team members to add..."
+                placeholder="Filter by name or department..."
                 className="bg-transparent border-0 shadow-none small"
-                value={userQuery}
-                onChange={(e) => handleSearchUsers(e.target.value)}
+                value={groupMemberQuery}
+                onChange={(e) => setGroupMemberQuery(e.target.value)}
               />
             </InputGroup>
+            <div className="d-flex justify-content-between align-items-center mt-2 small">
+              <span className="text-muted">
+                {selectedGroupMembers.length} selected{groupCandidates.length ? ` of ${groupCandidates.length}` : ""}
+              </span>
+              <div className="d-flex gap-3">
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-decoration-none fw-semibold"
+                  onClick={() =>
+                    setSelectedGroupMembers((prev) => [...prev, ...groupCandidates.filter((u) => !prev.some((m) => m.id === u.id))])
+                  }
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-decoration-none text-muted"
+                  onClick={() => setSelectedGroupMembers([])}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
           </Form.Group>
 
           {/* Selected Members Badges */}
@@ -4125,15 +4150,15 @@ function ChatPageContent() {
             </div>
           )}
 
-          {userSearchLoading ? (
+          {loadingCompanyPeople ? (
             <div className="text-center py-4">
               <Spinner animation="border" size="sm" variant="primary" />
             </div>
-          ) : activeUserSearchResults.length === 0 ? (
+          ) : groupCandidates.length === 0 ? (
             <p className="text-muted text-center py-3 mb-0 small">No active team members found.</p>
           ) : (
-            <div className="list-group" style={{ maxHeight: "220px", overflowY: "auto" }}>
-              {activeUserSearchResults.map((user) => {
+            <div className="list-group" style={{ maxHeight: "300px", overflowY: "auto" }}>
+              {groupCandidates.map((user) => {
                 const isSelected = selectedGroupMembers.some((m) => m.id === user.id);
                 return (
                   <div
@@ -4149,6 +4174,7 @@ function ChatPageContent() {
                     }}
                   >
                     <div className="d-flex align-items-center gap-3">
+                      <Form.Check type="checkbox" checked={isSelected} readOnly className="flex-shrink-0 m-0" />
                       <SafeAvatar
                         src={user.avatar || user.profile_photo_url}
                         name={user.name || user.email}
@@ -4157,18 +4183,12 @@ function ChatPageContent() {
                         className="flex-shrink-0"
                       />
                       <div>
-                        <div className="d-flex align-items-center gap-2">
-                          <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
-                          <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-0.5" style={{ fontSize: "9px" }}>
-                            Active
-                          </span>
-                        </div>
+                        <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
                         <small className="text-muted" style={{ fontSize: "11px" }}>
-                          {user.email}
+                          {[user.designation, user.department].filter(Boolean).join(" · ") || user.email}
                         </small>
                       </div>
                     </div>
-                    <Form.Check type="checkbox" checked={isSelected} readOnly />
                   </div>
                 );
               })}
