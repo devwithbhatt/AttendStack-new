@@ -168,6 +168,21 @@ EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",
 )
+# Development-only backends print every email (sign-in codes included) to the
+# logs, or silently drop it. Refuse to start a production server with one.
+_DEV_EMAIL_BACKENDS = {
+    "django.core.mail.backends.console.EmailBackend",
+    "django.core.mail.backends.filebased.EmailBackend",
+    "django.core.mail.backends.locmem.EmailBackend",
+    "django.core.mail.backends.dummy.EmailBackend",
+}
+if not DEBUG and EMAIL_BACKEND in _DEV_EMAIL_BACKENDS:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        f"EMAIL_BACKEND is the development backend {EMAIL_BACKEND!r} while DEBUG is off. "
+        "Set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend for production."
+    )
 EMAIL_HOST = config("EMAIL_HOST", default="")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
@@ -176,8 +191,10 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 # and point EMAIL_HOST_PASSWORD_FILE at it — used when EMAIL_HOST_PASSWORD is blank.
 EMAIL_HOST_PASSWORD_FILE = config("EMAIL_HOST_PASSWORD_FILE", default="")
 if EMAIL_HOST_PASSWORD_FILE and not EMAIL_HOST_PASSWORD:
-    with open(EMAIL_HOST_PASSWORD_FILE, encoding="utf-8") as _password_file:
-        EMAIL_HOST_PASSWORD = _password_file.read().strip()
+    from .secret_files import read_secret_file
+
+    # Missing/unreadable/empty file -> clear startup error (no silent blank password).
+    EMAIL_HOST_PASSWORD = read_secret_file(EMAIL_HOST_PASSWORD_FILE, "EMAIL_HOST_PASSWORD_FILE")
 # Gmail (and most providers) use either STARTTLS on 587 (EMAIL_USE_TLS) or
 # implicit TLS/SSL on 465 (EMAIL_USE_SSL) — never both at once.
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)

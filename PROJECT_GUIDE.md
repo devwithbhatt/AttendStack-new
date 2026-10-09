@@ -526,12 +526,17 @@ For SMTP email, update `backend/.env`:
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-EMAIL_USE_TLS=True
-DEFAULT_FROM_EMAIL=AttendStack <your-email@gmail.com>
+EMAIL_HOST=mail.bhattsquare.com
+EMAIL_PORT=465
+EMAIL_USE_SSL=True
+EMAIL_USE_TLS=False
+EMAIL_HOST_USER=noreply@bhattsquare.com
+# Keep the password out of .env: one line in a git-ignored file
+EMAIL_HOST_PASSWORD=
+EMAIL_HOST_PASSWORD_FILE=/path/to/noreply_smtp.txt
+DEFAULT_FROM_EMAIL=AttendStack <noreply@bhattsquare.com>
+# noreply@ cannot receive mail: replies and footer contact go here
+PASSWORD_RESET_SUPPORT_EMAIL=support@bhattsquare.com
 ```
 
 ---

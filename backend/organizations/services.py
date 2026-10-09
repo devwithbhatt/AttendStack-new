@@ -11,6 +11,14 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+def mask_code(code) -> str:
+    """For logs only. An invite code lets anyone self-register as an active
+    employee of the company, so it is a credential and never logged in full —
+    just enough of it to tell codes apart while debugging."""
+    code = str(code or "")
+    return f"{code[:4]}…{code[-2:]}" if len(code) > 6 else "***"
+
+
 def sync_invite_code_to_simplyjob(organization) -> dict:
     """
     Synchronizes an organization's new invite code to SimplyJob.
@@ -60,7 +68,10 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
                     )
                 conn.commit()
                 results["db_updated"] = (cur.rowcount > 0)
-                logger.info("Direct SimplyJob DB updated (%d rows) with code %s", cur.rowcount, attendstack_invite_code)
+                logger.info(
+                    "Direct SimplyJob DB updated (%d rows) for organization %s, invite code %s",
+                    cur.rowcount, attendstack_org_id, mask_code(attendstack_invite_code),
+                )
             conn.close()
         except Exception as exc:
             logger.warning("Direct SimplyJob DB sync error: %s", exc)

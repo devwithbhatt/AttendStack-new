@@ -1063,12 +1063,12 @@ class SalesLeadCreateView(APIView):
 
         try:
             from django.conf import settings
-            from django.core.mail import send_mail
+            from django.core.mail import EmailMessage
 
             sales_email = getattr(settings, "SALES_TEAM_EMAIL", None) or settings.DEFAULT_FROM_EMAIL
-            send_mail(
+            EmailMessage(
                 subject=f"New Sales Enquiry — {lead.plan_name or 'AttendStack'} — {lead.company_name}",
-                message=(
+                body=(
                     f"Full Name: {lead.full_name}\n"
                     f"Company Email: {lead.company_email}\n"
                     f"Company Name: {lead.company_name}\n"
@@ -1079,9 +1079,11 @@ class SalesLeadCreateView(APIView):
                     f"Message:\n{lead.message}"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[sales_email],
-                fail_silently=True,
-            )
+                to=[sales_email],
+                # The sender (noreply@) can't receive mail, so "Reply" must
+                # reach the prospect directly.
+                reply_to=[lead.company_email] if lead.company_email else None,
+            ).send(fail_silently=True)
         except Exception:
             logging.getLogger(__name__).exception("Failed to email sales lead notification for lead %s", lead.id)
 
