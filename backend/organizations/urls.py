@@ -10,6 +10,12 @@ from .views import (
     OrganizationDirectorySyncView,
     SalesLeadCreateView,
 )
+from .billing_views import (
+    CreateCheckoutView,
+    VerifyCheckoutView,
+    RazorpayWebhookView,
+    PaymentHistoryView,
+)
 
 router = DefaultRouter()
 router.register(r"organizations", OrganizationViewSet)
@@ -25,5 +31,10 @@ urlpatterns = [
     path("organizations/employee-sync-status/", OrganizationEmployeesSyncStatusView.as_view(), name="organization-employees-sync-status"),
     path("organizations/directory-sync/", OrganizationDirectorySyncView.as_view(), name="organization-directory-sync"),
     path("sales-leads/", SalesLeadCreateView.as_view(), name="sales-lead-create"),
+    # Billing / Razorpay checkout
+    path("billing/checkout/create/", CreateCheckoutView.as_view(), name="billing-checkout-create"),
+    path("billing/checkout/verify/", VerifyCheckoutView.as_view(), name="billing-checkout-verify"),
+    path("billing/webhooks/razorpay/", RazorpayWebhookView.as_view(), name="billing-webhook-razorpay"),
+    path("billing/payments/", PaymentHistoryView.as_view(), name="billing-payment-history"),
     path("", include(router.urls)),
 ]

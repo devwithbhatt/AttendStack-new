@@ -1,4 +1,5 @@
 import secrets
+import uuid
 from django.conf import settings
 from django.db import models, transaction, IntegrityError
 from django.utils import timezone
@@ -196,6 +197,61 @@ class Plan(models.Model):
 
     def __str__(self):
         return f"{self.name} (₹{self.monthly_price}/mo)"
+
+
+class Payment(models.Model):
+    class Status(models.TextChoices):
+        CREATED = "created", "Created"
+        PAID = "paid", "Paid"
+        FAILED = "failed", "Failed"
+        REFUNDED = "refunded", "Refunded"
+
+    reference = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="payments"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="payments"
+    )
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="payments")
+    billing_cycle = models.CharField(max_length=10, choices=[("monthly", "Monthly"), ("yearly", "Yearly")])
+    employee_count = models.IntegerField(default=0)
+    currency = models.CharField(max_length=3, default="INR")
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    taxable_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
+    gst_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    provider = models.CharField(max_length=20, default="razorpay")
+    provider_order_id = models.CharField(max_length=64, blank=True, db_index=True)
+    provider_payment_id = models.CharField(max_length=64, blank=True, unique=True, null=True)
+    provider_signature = models.CharField(max_length=128, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.CREATED)
+    failure_reason = models.TextField(blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Payment {self.reference} — ₹{self.amount} ({self.status})"
+
+
+class WebhookEvent(models.Model):
+    event_id = models.CharField(max_length=128, unique=True)
+    event_type = models.CharField(max_length=64)
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_type} — {self.event_id}"
 
 
 class SalesLead(models.Model):

@@ -244,8 +244,6 @@ export default function AttendStackPlansPage() {
     }
   };
 
-  const RAZORPAY_KEY = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TGQiUKzQNg3tGH";
-
   const loadRazorpayScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
       if (typeof window === "undefined") {
@@ -265,153 +263,169 @@ export default function AttendStackPlansPage() {
     });
   };
 
-  const processBackendActivation = async (razorpayPaymentId?: string) => {
-    if (!selectedPlanForCheckout) return;
-
-    const durationDays = isYearly ? 365 : 30;
-    setIsActivating(true);
-
-    try {
-      const endpoint = organization?.id
-        ? `${BASE_URL}/organizations/${organization.id}/renew-plan/`
-        : `${BASE_URL}/organizations/renew-plan/`;
-
-      const res = await fetch(endpoint, {
+  const verifyCheckoutWithRetry = async (
+    payload: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },
+    retries = 3
+  ): Promise<any> => {
+    for (let i = 0; i < retries; i++) {
+      const res = await fetch(`${BASE_URL}/billing/checkout/verify/`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({
-          organization_id: organization?.id,
-          plan_name: selectedPlanForCheckout.name,
-          duration_days: durationDays,
-          max_employees: selectedPlanForCheckout.max_employees,
-          plan_source: "ATTENDSTACK_DIRECT",
-          provider_payment_id: razorpayPaymentId || "pay_mock_direct_activation",
-        }),
+        body: JSON.stringify(payload),
       });
-
+      if (res.status === 503 && i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+        continue;
+      }
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.error || errData.message || "Plan activation failed.");
+        throw new Error(errData.detail || "Payment verification failed.");
       }
-
-      const updated = await res.json();
-      setOrganization(updated);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("organization", JSON.stringify(updated));
-      }
-      const planName = selectedPlanForCheckout.name;
-      const newInvoiceNumber = `SJ-2026-${String(Math.floor(100000 + Math.random() * 900000))}`;
-      const newInvoiceData = {
-        invoice_number: newInvoiceNumber,
-        plan_name: planName,
-        subtotal: checkoutDetails?.basePrice || 499,
-        taxable_amount: checkoutDetails?.taxable || 499,
-        gst_rate: 18,
-        gst_amount: checkoutDetails?.gst || 90,
-        amount: checkoutDetails?.total || 589,
-        created_at: new Date(),
-        paid_at: new Date(),
-        provider: "Razorpay",
-        provider_payment_id: razorpayPaymentId || "pay_TRa39fwdvMtbOp",
-        provider_order_id: "order_TRa2mALbLAbc5B",
-        subscription_id: String(updated.id || 13),
-        service_period_start: new Date(),
-        service_period_end: new Date(Date.now() + durationDays * 86400000),
-        status: "paid",
-      };
-
-      // Auto-generate and download official Tax Invoice PDF matching SimplyJob format
-      try {
-        await downloadPaymentInvoice(
-          {
-            ...newInvoiceData,
-            billing_name: invoiceProfile.billing_name || updated.name,
-            billing_address: invoiceProfile.billing_address || updated.location,
-            billing_state: invoiceProfile.billing_state || "Uttar Pradesh",
-            billing_state_code: invoiceProfile.gstin ? invoiceProfile.gstin.slice(0, 2) : "09",
-            contact_phone: invoiceProfile.contact_phone || updated.phone,
-            gstin: invoiceProfile.gstin,
-          },
-          updated
-        );
-      } catch (pdfErr) {
-        console.warn("Auto-invoice generation warning:", pdfErr);
-      }
-
-      setSelectedPlanForCheckout(null);
-
-      Swal.fire({
-        icon: "success",
-        title: "Payment Verified & Plan Activated!",
-        html: `
-          <div style="font-size: 14px; text-align: left;">
-            <p class="mb-2">Your <strong>${planName}</strong> is now active for <strong>${durationDays} days</strong>.</p>
-            ${razorpayPaymentId ? `<p style="font-family: monospace; font-size: 12px; color: #475569;" class="mb-2">Razorpay Ref: ${razorpayPaymentId}</p>` : ""}
-            <div style="color: #166534; background: #dcfce7; padding: 10px 12px; border-radius: 8px; border: 1px solid #bbf7d0;" class="mb-2">
-              ✓ <strong>Tax Invoice ${newInvoiceNumber}</strong> generated and downloaded automatically.<br />
-              ✓ Real-time workforce tracking, geofencing & SimplyJob candidate sync are active!
-            </div>
-            <small class="text-muted">You can also access and re-download all past invoices from the <strong>Payment History</strong> tab.</small>
-          </div>
-        `,
-        confirmButtonText: "Done",
-        confirmButtonColor: "#0d6efd",
-      });
-    } catch (err: any) {
-      Swal.fire("Activation Error", err.message || "Could not complete activation.", "error");
-    } finally {
-      setIsActivating(false);
+      return res.json();
     }
   };
 
   const handleConfirmCheckout = async () => {
     if (!organization?.id || !selectedPlanForCheckout || !checkoutDetails) return;
 
-    const isLoaded = await loadRazorpayScript();
+    setIsActivating(true);
 
-    if (isLoaded && (window as any).Razorpay) {
-      try {
-        const options = {
-          key: RAZORPAY_KEY,
-          amount: Math.round(checkoutDetails.total * 100),
-          currency: "INR",
-          name: "AttendStack Suite",
-          description: `${selectedPlanForCheckout.name} Subscription (${isYearly ? "Annual" : "Monthly"})`,
-          image: "/images/brand/logo/logo.png",
-          prefill: {
-            name: invoiceProfile.billing_name || organization.name || "Bhatt Square Pvt. Ltd.",
-            contact: invoiceProfile.contact_phone || organization.phone || "+91 98765 43210",
-          },
-          theme: {
-            color: "#0d6efd",
-          },
-          handler: async (response: any) => {
-            await processBackendActivation(response.razorpay_payment_id);
-          },
-          modal: {
-            ondismiss: () => {
-              setIsActivating(false);
-            },
-          },
-        };
+    try {
+      // Step 1: Create a server-side Razorpay order
+      const createRes = await fetch(`${BASE_URL}/billing/checkout/create/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          plan_id: selectedPlanForCheckout.id,
+          billing_cycle: isYearly ? "yearly" : "monthly",
+          employee_count: selectedPlanForCheckout.max_employees,
+        }),
+      });
 
-        const rzp = new (window as any).Razorpay(options);
-        rzp.on("payment.failed", (response: any) => {
-          Swal.fire({
-            icon: "error",
-            title: "Payment Cancelled or Failed",
-            text: response.error?.description || "Razorpay transaction was not completed.",
-          });
-        });
-        rzp.open();
-        return;
-      } catch (err) {
-        console.warn("Razorpay popup fallback:", err);
+      if (!createRes.ok) {
+        const errData = await createRes.json().catch(() => ({}));
+        throw new Error(errData.detail || "Could not create checkout order.");
       }
-    }
 
-    // Direct fallback if script blocked
-    await processBackendActivation();
+      const checkout = await createRes.json();
+
+      // Step 2: Load Razorpay and open checkout with server-provided params
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded || !(window as any).Razorpay) {
+        throw new Error("Payment gateway could not be loaded. Please disable ad blockers and try again.");
+      }
+
+      const rzp = new (window as any).Razorpay({
+        key: checkout.key,
+        amount: checkout.amount,
+        currency: checkout.currency,
+        name: checkout.name,
+        description: checkout.description,
+        order_id: checkout.order_id,
+        image: "/images/brand/logo/logo.png",
+        prefill: checkout.prefill,
+        theme: { color: "#0d6efd" },
+        handler: async (response: any) => {
+          // Step 3: Verify the payment server-side
+          try {
+            const verifyData = await verifyCheckoutWithRetry({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            const updatedOrg = verifyData.organization;
+            setOrganization(updatedOrg);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("organization", JSON.stringify(updatedOrg));
+            }
+
+            const durationDays = isYearly ? 365 : 30;
+            const planName = selectedPlanForCheckout.name;
+            const payment = verifyData.payment;
+            const newInvoiceNumber = `AS-2026-${String(Math.floor(100000 + Math.random() * 900000))}`;
+            const newInvoiceData = {
+              invoice_number: newInvoiceNumber,
+              plan_name: planName,
+              subtotal: parseFloat(payment.subtotal),
+              taxable_amount: parseFloat(payment.subtotal) - parseFloat(payment.discount),
+              gst_rate: parseFloat(payment.gst_rate),
+              gst_amount: parseFloat(payment.gst_amount),
+              amount: parseFloat(payment.amount),
+              created_at: new Date(),
+              paid_at: new Date(payment.paid_at),
+              provider: "Razorpay",
+              provider_payment_id: payment.provider_payment_id,
+              provider_order_id: payment.provider_order_id,
+              subscription_id: String(updatedOrg.id || 13),
+              service_period_start: new Date(),
+              service_period_end: new Date(Date.now() + durationDays * 86400000),
+              status: "paid",
+            };
+
+            try {
+              await downloadPaymentInvoice(
+                {
+                  ...newInvoiceData,
+                  billing_name: invoiceProfile.billing_name || updatedOrg.name,
+                  billing_address: invoiceProfile.billing_address || updatedOrg.location,
+                  billing_state: invoiceProfile.billing_state || "Uttar Pradesh",
+                  billing_state_code: invoiceProfile.gstin ? invoiceProfile.gstin.slice(0, 2) : "09",
+                  contact_phone: invoiceProfile.contact_phone || updatedOrg.phone,
+                  gstin: invoiceProfile.gstin,
+                },
+                updatedOrg
+              );
+            } catch (pdfErr) {
+              console.warn("Auto-invoice generation warning:", pdfErr);
+            }
+
+            setSelectedPlanForCheckout(null);
+
+            Swal.fire({
+              icon: "success",
+              title: "Payment Verified & Plan Activated!",
+              html: `
+                <div style="font-size: 14px; text-align: left;">
+                  <p class="mb-2">Your <strong>${planName}</strong> is now active for <strong>${durationDays} days</strong>.</p>
+                  <p style="font-family: monospace; font-size: 12px; color: #475569;" class="mb-2">Razorpay Ref: ${payment.provider_payment_id}</p>
+                  <div style="color: #166534; background: #dcfce7; padding: 10px 12px; border-radius: 8px; border: 1px solid #bbf7d0;" class="mb-2">
+                    ✓ <strong>Tax Invoice ${newInvoiceNumber}</strong> generated and downloaded automatically.<br />
+                    ✓ Real-time workforce tracking, geofencing & SimplyJob candidate sync are active!
+                  </div>
+                  <small class="text-muted">You can also access and re-download all past invoices from the <strong>Payment History</strong> tab.</small>
+                </div>
+              `,
+              confirmButtonText: "Done",
+              confirmButtonColor: "#0d6efd",
+            });
+          } catch (verifyErr: any) {
+            Swal.fire("Verification Error", verifyErr.message || "Could not verify payment.", "error");
+          } finally {
+            setIsActivating(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsActivating(false);
+          },
+        },
+      });
+
+      rzp.on("payment.failed", (response: any) => {
+        setIsActivating(false);
+        Swal.fire({
+          icon: "error",
+          title: "Payment Cancelled or Failed",
+          text: response.error?.description || "Razorpay transaction was not completed.",
+        });
+      });
+
+      rzp.open();
+    } catch (err: any) {
+      setIsActivating(false);
+      Swal.fire("Checkout Error", err.message || "Could not complete checkout.", "error");
+    }
   };
 
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState<string | null>(null);

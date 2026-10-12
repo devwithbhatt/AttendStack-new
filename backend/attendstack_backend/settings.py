@@ -27,6 +27,8 @@ if not DEBUG and SECRET_KEY == "unsafe-secret-key":
 
 ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
 
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # ──────────────────────────────────────────────────────────────────────────────
 # APPLICATION DEFINITION
 # ──────────────────────────────────────────────────────────────────────────────
@@ -60,6 +62,7 @@ LOCAL_APPS = [
     "chat",
     "roles",
     "monitoring",
+    "platform_monitoring",
 ]
 
 INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -247,6 +250,9 @@ REST_FRAMEWORK = {
         # password brute-forcing (the endpoint also returns only generic errors
         # and requires a valid org invite code).
         "monitor_register": "30/hour",
+        # Same idea for the Super Admin platform monitor app's sign-in (per
+        # IP); accounts also lock for 15 minutes after 5 wrong attempts.
+        "platform_monitor_signin": "30/hour",
     },
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
@@ -393,6 +399,13 @@ MEDIA_SIGNED_TTL = config("MEDIA_SIGNED_TTL", default=86400, cast=int)
 SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
 SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyjob.in/api/companies/webhooks/attendstack/sync-invite-code/")
 SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# RAZORPAY PAYMENT GATEWAY
+# ──────────────────────────────────────────────────────────────────────────────
+RAZORPAY_KEY_ID = config("RAZORPAY_KEY_ID", default="")
+RAZORPAY_KEY_SECRET = config("RAZORPAY_KEY_SECRET", default="")
+RAZORPAY_WEBHOOK_SECRET = config("RAZORPAY_WEBHOOK_SECRET", default="")
 
 
 
