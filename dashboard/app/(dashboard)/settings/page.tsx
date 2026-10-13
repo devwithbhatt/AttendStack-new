@@ -891,9 +891,9 @@ const SettingsPage = () => {
         title: "New Organization Code Generated",
         html: `
           <div style="text-align: left; font-size: 14px;">
-            <p>Your new AttendStack Organization Code is: <strong style="font-family: monospace; font-size: 16px; color: #0d6efd;">${newCode}</strong></p>
+            <p>Your new ZuperHR Organization Code is: <strong style="font-family: monospace; font-size: 16px; color: #0d6efd;">${newCode}</strong></p>
             <p style="color: #dc3545; font-weight: 600;">⚠️ Previous codes are now expired and invalid.</p>
-            <p><strong>Action Required:</strong> If your company is connected with <strong>SimplyJob</strong>, please copy this new code and update it in your SimplyJob <em>"Hired & AttendStack"</em> workspace so hired candidates can be onboarded.</p>
+            <p><strong>Action Required:</strong> If your company is connected with <strong>SimplyJob</strong>, please copy this new code and update it in your SimplyJob <em>"Hired & ZuperHR"</em> workspace so hired candidates can be onboarded.</p>
           </div>
         `,
         confirmButtonText: "I Understand & Will Update SimplyJob",
@@ -916,7 +916,7 @@ const SettingsPage = () => {
       Swal.fire({
         icon: "success",
         title: "API Key Copied!",
-        text: "Paste this API Key into SimplyJob to connect your AttendStack organization workspace.",
+        text: "Paste this API Key into SimplyJob to connect your ZuperHR organization workspace.",
         timer: 2500,
         showConfirmButton: false,
       });
@@ -2774,7 +2774,7 @@ const SettingsPage = () => {
                       <div>
                         <div className="fw-semibold">How Company Increment Policy Works</div>
                         <div className="small text-secondary">
-                          When enabled, AttendStack automatically tracks employee joining dates or last increment dates and schedules upcoming increments every <strong>{incrementSettings.defaultIncrementMonths} months</strong> with a <strong>{incrementSettings.defaultIncrementType === "PERCENTAGE" ? `${incrementSettings.defaultIncrementValue}%` : `₹${incrementSettings.defaultIncrementValue}`}</strong> raise. Admins can accept, reject, or reschedule due increments on the dashboard.
+                          When enabled, ZuperHR automatically tracks employee joining dates or last increment dates and schedules upcoming increments every <strong>{incrementSettings.defaultIncrementMonths} months</strong> with a <strong>{incrementSettings.defaultIncrementType === "PERCENTAGE" ? `${incrementSettings.defaultIncrementValue}%` : `₹${incrementSettings.defaultIncrementValue}`}</strong> raise. Admins can accept, reject, or reschedule due increments on the dashboard.
                         </div>
                       </div>
                     </Alert>
@@ -2873,7 +2873,7 @@ const SettingsPage = () => {
                       <div>
                         <h4 className="fw-bold mb-1">API Key & External Integrations</h4>
                         <p className="text-secondary small mb-0">
-                          Connect AttendStack with SimplyJob and other external platforms using your secure organization API Key.
+                          Connect ZuperHR with SimplyJob and other external platforms using your secure organization API Key.
                         </p>
                       </div>
                       <Badge bg={organizationAccess?.api_key ? "success" : "warning"} className="px-3 py-2 fs-6">
@@ -2888,10 +2888,10 @@ const SettingsPage = () => {
                           <Card.Body>
                             <h5 className="fw-bold mb-2 d-flex align-items-center gap-2">
                               <IconKey size={20} className="text-primary" />
-                              AttendStack Integration API Key
+                              ZuperHR Integration API Key
                             </h5>
                             <p className="text-muted small mb-4">
-                              Use this private key in SimplyJob (under <strong>Hired & AttendStack Invites</strong>) to link your workforce and sync employee invitations automatically.
+                              Use this private key in SimplyJob (under <strong>Hired & ZuperHR Invites</strong>) to link your workforce and sync employee invitations automatically.
                             </p>
 
                             {isLoadingOrganizationAccess ? (
@@ -2965,12 +2965,12 @@ const SettingsPage = () => {
 
                             <h6 className="fw-bold mb-3 d-flex align-items-center gap-2">
                               <IconLink size={18} className="text-primary" />
-                              How to connect SimplyJob with AttendStack
+                              How to connect SimplyJob with ZuperHR
                             </h6>
                             <div className="bg-light p-3 rounded small text-secondary">
                               <ol className="mb-0 ps-3">
-                                <li className="mb-1">Click <strong>Copy Key</strong> above to copy your unique AttendStack API Key.</li>
-                                <li className="mb-1">Open <strong>SimplyJob</strong> and navigate to <strong>Hired Employees & AttendStack</strong>.</li>
+                                <li className="mb-1">Click <strong>Copy Key</strong> above to copy your unique ZuperHR API Key.</li>
+                                <li className="mb-1">Open <strong>SimplyJob</strong> and navigate to <strong>Hired Employees & ZuperHR</strong>.</li>
                                 <li className="mb-1">Click <strong>Connect with API Key</strong> and paste the key.</li>
                                 <li>SimplyJob will instantly connect, auto-fetch your Organization Code (<strong>{organizationAccess?.invite_code || "ORG-XXXXXX"}</strong>), and enable 1-click candidate invites!</li>
                               </ol>
@@ -2990,7 +2990,7 @@ const SettingsPage = () => {
                                 Organization Code (Org ID)
                               </h5>
                               <p className="text-muted small mb-3">
-                                Unique company identifier managed in AttendStack and synchronized with SimplyJob.
+                                Unique company identifier managed in ZuperHR and synchronized with SimplyJob.
                               </p>
 
                               {organizationAccess ? (
@@ -3059,7 +3059,7 @@ const SettingsPage = () => {
                                 </div>
                                 <div className="d-flex justify-content-between py-1 border-bottom">
                                   <span className="text-muted small">Plan Source:</span>
-                                  <span className="small">{organizationAccess?.plan_source === "SIMPLYJOB" ? "SimplyJob Integrated" : "AttendStack Direct"}</span>
+                                  <span className="small">{organizationAccess?.plan_source === "SIMPLYJOB" ? "SimplyJob Integrated" : "ZuperHR Direct"}</span>
                                 </div>
                                 <div className="d-flex justify-content-between py-1 border-bottom">
                                   <span className="text-muted small">Max Capacity:</span>

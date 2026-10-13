@@ -1,10 +1,10 @@
-# AttendStack Project Guide
+# ZuperHR Project Guide
 
 ## 1. Project Name
 
-**AttendStack - HR, Attendance, Leave, and Payroll Management System**
+**ZuperHR - HR, Attendance, Leave, and Payroll Management System**
 
-AttendStack is a full-stack web application built to manage employee attendance, HR operations, leave requests, holidays, payroll, and company-level attendance rules. It has a Django REST API backend and a Next.js dashboard frontend.
+ZuperHR is a full-stack web application built to manage employee attendance, HR operations, leave requests, holidays, payroll, and company-level attendance rules. It has a Django REST API backend and a Next.js dashboard frontend.
 
 This document can be used to explain the project in interviews, demos, project reviews, or handover discussions.
 
@@ -12,7 +12,7 @@ This document can be used to explain the project in interviews, demos, project r
 
 ## 2. Main Topic Of The Project
 
-The main topic of AttendStack is **employee attendance and HR management automation**.
+The main topic of ZuperHR is **employee attendance and HR management automation**.
 
 The system helps an organization manage:
 
@@ -30,7 +30,7 @@ The system helps an organization manage:
 
 In simple words:
 
-> AttendStack is an HRMS-style attendance platform where employees can mark attendance and request leaves, while admins or HR can manage employees, attendance records, holidays, payroll, and company rules from a dashboard.
+> ZuperHR is an HRMS-style attendance platform where employees can mark attendance and request leaves, while admins or HR can manage employees, attendance records, holidays, payroll, and company rules from a dashboard.
 
 ---
 
@@ -82,7 +82,7 @@ In simple words:
 The project is divided into two main applications:
 
 ```text
-AttendStack/
+ZuperHR/
   backend/       Django REST API
   dashboard/     Next.js frontend dashboard
 ```
@@ -91,7 +91,7 @@ AttendStack/
 
 ```text
 backend/
-  attendstack_backend/   Main Django project settings and URLs
+  zuperhr_backend/   Main Django project settings and URLs
   accounts/              Authentication, roles, profile, password reset OTP
   organizations/         Organization management
   employees/             Employee CRUD, employee profile, status, password setup
@@ -353,7 +353,7 @@ For simple local development, PostgreSQL and Redis are optional because the back
 Open a terminal in the project root:
 
 ```powershell
-cd C:\Bhatt-projects\AttendStack
+cd C:\Bhatt-projects\ZuperHR
 ```
 
 Go to the backend folder:
@@ -389,8 +389,8 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
-DEFAULT_FROM_EMAIL=AttendStack <no-reply@attendstack.com>
-PASSWORD_RESET_SUPPORT_EMAIL=support@attendstack.com
+DEFAULT_FROM_EMAIL=ZuperHR <no-reply@zuperhr.com>
+PASSWORD_RESET_SUPPORT_EMAIL=support@zuperhr.com
 ```
 
 Run database migrations:
@@ -436,7 +436,7 @@ http://127.0.0.1:8000/api/v1/
 Open another terminal and go to the dashboard folder:
 
 ```powershell
-cd C:\Bhatt-projects\AttendStack\dashboard
+cd C:\Bhatt-projects\ZuperHR\dashboard
 ```
 
 Install frontend dependencies:
@@ -472,7 +472,7 @@ You need two terminals.
 ### Terminal 1 - Backend
 
 ```powershell
-cd C:\Bhatt-projects\AttendStack\backend
+cd C:\Bhatt-projects\ZuperHR\backend
 .\venv\Scripts\Activate.ps1
 python manage.py runserver
 ```
@@ -480,7 +480,7 @@ python manage.py runserver
 ### Terminal 2 - Frontend
 
 ```powershell
-cd C:\Bhatt-projects\AttendStack\dashboard
+cd C:\Bhatt-projects\ZuperHR\dashboard
 npm run dev
 ```
 
@@ -503,7 +503,7 @@ To use PostgreSQL locally, add these values in `backend/.env`:
 ```env
 DEBUG=True
 USE_POSTGRES_LOCALLY=True
-DATABASE_URL=postgres://postgres:your_password@localhost:5432/attendstack
+DATABASE_URL=postgres://postgres:your_password@localhost:5432/zuperhr
 ```
 
 Then run:
@@ -534,7 +534,7 @@ EMAIL_HOST_USER=noreply@bhattsquare.com
 # Keep the password out of .env: one line in a git-ignored file
 EMAIL_HOST_PASSWORD=
 EMAIL_HOST_PASSWORD_FILE=/path/to/noreply_smtp.txt
-DEFAULT_FROM_EMAIL=AttendStack <noreply@bhattsquare.com>
+DEFAULT_FROM_EMAIL=ZuperHR <noreply@bhattsquare.com>
 # noreply@ cannot receive mail: replies and footer contact go here
 PASSWORD_RESET_SUPPORT_EMAIL=support@bhattsquare.com
 ```
@@ -595,7 +595,7 @@ DEBUG=False
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 CORS_ALLOWED_ORIGINS=https://your-domain.com
 DATABASE_URL=postgres://user:password@host:5432/database
-STATIC_ROOT=/var/www/attendstack/static/
+STATIC_ROOT=/var/www/zuperhr/static/
 ```
 
 Frontend production environment:
@@ -634,11 +634,11 @@ The dashboard includes pages for:
 
 Here is a short explanation:
 
-> AttendStack is a full-stack HR and attendance management system. I built it using Django REST Framework for the backend and Next.js with TypeScript for the frontend. The system supports role-based access for Super Admin, HR, and Employee users. Employees can check in and check out, apply for leaves, view attendance reports, and see salary details. Admin and HR users can manage employees, attendance records, holidays, payroll, and company rules. The backend uses JWT authentication, custom user roles, attendance automation rules, password reset OTP, IP/geolocation audit data, and configurable system settings.
+> ZuperHR is a full-stack HR and attendance management system. I built it using Django REST Framework for the backend and Next.js with TypeScript for the frontend. The system supports role-based access for Super Admin, HR, and Employee users. Employees can check in and check out, apply for leaves, view attendance reports, and see salary details. Admin and HR users can manage employees, attendance records, holidays, payroll, and company rules. The backend uses JWT authentication, custom user roles, attendance automation rules, password reset OTP, IP/geolocation audit data, and configurable system settings.
 
 Here is a more detailed explanation:
 
-> The main problem this project solves is manual attendance and HR record management. Instead of tracking attendance, leaves, holidays, and salary manually, AttendStack centralizes everything in one dashboard. The backend is modular, with separate Django apps for accounts, organizations, employees, attendance, holidays, payroll, and settings. The frontend is built with Next.js and provides different dashboard experiences for admin/HR users and employees. The project also includes production server configuration using Nginx, Gunicorn, PM2, and SSL.
+> The main problem this project solves is manual attendance and HR record management. Instead of tracking attendance, leaves, holidays, and salary manually, ZuperHR centralizes everything in one dashboard. The backend is modular, with separate Django apps for accounts, organizations, employees, attendance, holidays, payroll, and settings. The frontend is built with Next.js and provides different dashboard experiences for admin/HR users and employees. The project also includes production server configuration using Nginx, Gunicorn, PM2, and SSL.
 
 ---
 
@@ -770,4 +770,4 @@ Possible future improvements:
 
 ## 21. Final One-Line Description
 
-**AttendStack is a full-stack HRMS and attendance management system built with Django REST Framework and Next.js, designed to manage employees, attendance, leaves, holidays, payroll, and company rules with role-based access.**
+**ZuperHR is a full-stack HRMS and attendance management system built with Django REST Framework and Next.js, designed to manage employees, attendance, leaves, holidays, payroll, and company rules with role-based access.**

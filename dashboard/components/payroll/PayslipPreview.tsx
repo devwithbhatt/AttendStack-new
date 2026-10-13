@@ -102,7 +102,7 @@ const PayslipPreview = ({ payroll }: PayslipPreviewProps) => {
 
   // Merge company details from backend payroll object and BrandingContext
   const companyDetails = payroll.company_details || {};
-  const companyName = companyDetails.company_name || branding.companyName || "AttendStack";
+  const companyName = companyDetails.company_name || branding.companyName || "ZuperHR";
   const companyAddress = companyDetails.company_address || branding.companyAddress || "";
   const companyEmail = companyDetails.company_email || branding.companyEmail || "";
   const companyPhone = companyDetails.company_phone || branding.companyPhone || "";
@@ -356,7 +356,7 @@ const PayslipPreview = ({ payroll }: PayslipPreviewProps) => {
         <div className="footer-bottom-line">
           <span>{companyEmail ? `Contact: ${companyEmail}` : "HR & Payroll Department"}</span>
           <span>Confidential Document</span>
-          <span>Generated via AttendStack</span>
+          <span>Generated via ZuperHR</span>
         </div>
       </div>
 

@@ -83,7 +83,7 @@ interface PlanItem {
   features_list: string[];
 }
 
-export default function AttendStackPlansPage() {
+export default function ZuperHRPlansPage() {
   const [organization, setOrganization] = useState<any>(null);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +196,7 @@ export default function AttendStackPlansPage() {
   // set via the link-simplyjob endpoint) — not the old `plan_source` string,
   // which the client could set to anything via renew-plan. This is what
   // gates the cheaper per-seat rate, so it can't be spoofed by just typing a
-  // promo code on AttendStack directly.
+  // promo code on ZuperHR directly.
   const isPurchasedOnSimplyJob = organization?.is_simplyjob_linked === true;
   const employeeCount = organization?.active_employee_count ?? organization?.employee_count ?? 4;
   const currentPlan = plans.find((p) => p.name === organization?.plan_name);
@@ -559,7 +559,7 @@ export default function AttendStackPlansPage() {
               </div>
               <div className={styles.heroMetricBody}>
                 <small>PURCHASE CHANNEL</small>
-                <strong>{isPurchasedOnSimplyJob ? "SimplyJob Bundle" : "AttendStack Direct"}</strong>
+                <strong>{isPurchasedOnSimplyJob ? "SimplyJob Bundle" : "ZuperHR Direct"}</strong>
               </div>
             </div>
 
@@ -637,7 +637,7 @@ export default function AttendStackPlansPage() {
                       </Badge>
                     ) : (
                       <Badge bg="primary-subtle" className="text-primary border border-primary-subtle px-2.5 py-1 rounded-pill d-inline-flex align-items-center gap-1">
-                        <IconShieldCheck size={13} /> AttendStack Direct
+                        <IconShieldCheck size={13} /> ZuperHR Direct
                       </Badge>
                     )}
                   </div>
@@ -655,7 +655,7 @@ export default function AttendStackPlansPage() {
                   <div className={styles.activeStatItem}>
                     <small>CHANNEL</small>
                     <strong>
-                      {isPurchasedOnSimplyJob ? "SimplyJob" : "AttendStack"}
+                      {isPurchasedOnSimplyJob ? "SimplyJob" : "ZuperHR"}
                     </strong>
                   </div>
                   <div className={styles.activeStatItem}>
@@ -687,7 +687,7 @@ export default function AttendStackPlansPage() {
                   <div className="d-flex align-items-start gap-2">
                     <IconBuildingStore size={18} className="text-primary flex-shrink-0 mt-0.5" />
                     <div>
-                      <strong>SimplyJob Recruitment Bundle Detected:</strong> Your AttendStack workspace operates under your SimplyJob hiring plan with standard core features.
+                      <strong>SimplyJob Recruitment Bundle Detected:</strong> Your ZuperHR workspace operates under your SimplyJob hiring plan with standard core features.
                       You can <strong>upgrade directly below</strong> to unlock GPS Geofencing, Office IP Restriction Shield, and Automated Monthly Payroll Reports without disrupting candidate invites!
                     </div>
                   </div>
@@ -758,7 +758,7 @@ export default function AttendStackPlansPage() {
           <div className={styles.sectionHeading}>
             <div>
               <h2>Available Subscription Plans</h2>
-              <p>Choose an AttendStack plan below to upgrade, renew, or expand your employee seat capacity.</p>
+              <p>Choose an ZuperHR plan below to upgrade, renew, or expand your employee seat capacity.</p>
             </div>
 
             <div className="d-inline-flex align-items-center bg-light p-1 rounded-pill border shadow-sm">
@@ -963,7 +963,7 @@ export default function AttendStackPlansPage() {
                   </div>
                   <h4 className="fw-bold text-white mb-1.5">Also hiring on SimplyJob?</h4>
                   <p className="text-secondary-subtle mb-0 small" style={{ maxWidth: "640px" }}>
-                    Candidate profiles hired on SimplyJob automatically synchronize into AttendStack. Link your SimplyJob organization ID and every extra employee seat drops to ₹250/month — cheaper than buying seats directly here.
+                    Candidate profiles hired on SimplyJob automatically synchronize into ZuperHR. Link your SimplyJob organization ID and every extra employee seat drops to ₹250/month — cheaper than buying seats directly here.
                   </p>
                 </Col>
                 <Col lg={4} className="text-lg-end">
@@ -1016,7 +1016,7 @@ export default function AttendStackPlansPage() {
               </Badge>
             </div>
             <p className="text-secondary small mb-3.5">
-              This legal identity and GSTIN will be captured on all official AttendStack billing receipts.
+              This legal identity and GSTIN will be captured on all official ZuperHR billing receipts.
             </p>
 
             <Form onSubmit={handleSaveInvoiceProfile}>

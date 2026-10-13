@@ -15,18 +15,18 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "../marketing-pages.module.css";
 
 export const metadata: Metadata = {
-  title: "About AttendStack | Workforce Management by Bhatt Square Pvt. Ltd.",
+  title: "About ZuperHR | Workforce Management by Bhatt Square Pvt. Ltd.",
   description:
-    "Learn about AttendStack, an enterprise HRMS & workforce platform developed by Bhatt Square Pvt. Ltd. Engineered for automated attendance, shift intelligence, and compliant payroll.",
+    "Learn about ZuperHR, an enterprise HRMS & workforce platform developed by Bhatt Square Pvt. Ltd. Engineered for automated attendance, shift intelligence, and compliant payroll.",
   alternates: {
-    canonical: "https://attendance.nextgenapplication.com/about",
+    canonical: "https://zuperhr.in/about",
   },
   openGraph: {
-    title: "About AttendStack | Workforce Management by Bhatt Square Pvt. Ltd.",
+    title: "About ZuperHR | Workforce Management by Bhatt Square Pvt. Ltd.",
     description:
       "Enterprise HRMS platform built for modern organizations. Attendance tracking, shift management, and automated Indian payroll.",
-    url: "https://attendance.nextgenapplication.com/about",
-    siteName: "AttendStack",
+    url: "https://zuperhr.in/about",
+    siteName: "ZuperHR",
     type: "website",
   },
 };
@@ -63,13 +63,13 @@ export default function AboutPage() {
             <div className={styles.heroCopy}>
               <span className={styles.eyebrow}>
                 <span />
-                About AttendStack
+                About ZuperHR
               </span>
               <h1>
                 Workforce operations, built for <span>clarity and control.</span>
               </h1>
               <p>
-                AttendStack is a professional workforce management platform and
+                ZuperHR is a professional workforce management platform and
                 Bhatt Square Pvt. Ltd. project that connects attendance,
                 employee records, leave, and payroll visibility in one
                 organized experience.
@@ -90,12 +90,12 @@ export default function AboutPage() {
                 <div className={styles.identityLogo}>
                   <Image
                     src="/images/brand/logo/android-chrome-192x192.png"
-                    alt="AttendStack"
+                    alt="ZuperHR"
                     width={58}
                     height={58}
                   />
                   <span>
-                    <strong>AttendStack</strong>
+                    <strong>ZuperHR</strong>
                     <small>A product of Bhatt Square Pvt. Ltd.</small>
                   </span>
                 </div>
@@ -120,7 +120,7 @@ export default function AboutPage() {
             <span className={styles.sectionLabel}>Our product principles</span>
             <h2>Professional software should make work feel simpler.</h2>
             <p>
-              AttendStack brings thoughtful structure to daily operations while
+              ZuperHR brings thoughtful structure to daily operations while
               keeping the experience clear for every role.
             </p>
           </div>
@@ -151,15 +151,15 @@ export default function AboutPage() {
                   The best workforce systems turn everyday activity into clear,
                   dependable operational insight.
                 </blockquote>
-                <small>AttendStack, a Bhatt Square Pvt. Ltd. project</small>
+                <small>ZuperHR, a Bhatt Square Pvt. Ltd. project</small>
               </div>
             </div>
             <div className={styles.storyCopy}>
-              <span className={styles.sectionLabel}>Why AttendStack exists</span>
+              <span className={styles.sectionLabel}>Why ZuperHR exists</span>
               <h2>To make the everyday work of running a team feel simpler.</h2>
               <p>
                 Workforce information is often spread across messages,
-                spreadsheets, paper records, and disconnected tools. AttendStack
+                spreadsheets, paper records, and disconnected tools. ZuperHR
                 brings those signals into one structured platform, giving
                 companies stronger visibility and employees a reliable place to
                 manage their workday.
@@ -182,7 +182,7 @@ export default function AboutPage() {
               <span className={styles.sectionLabel}>Product ownership</span>
               <h2>A focused workforce product, built with purpose.</h2>
               <p>
-                AttendStack is a Bhatt Square Pvt. Ltd. project created to
+                ZuperHR is a Bhatt Square Pvt. Ltd. project created to
                 deliver a polished, dependable, and scalable foundation for
                 modern workforce operations.
               </p>
@@ -243,7 +243,7 @@ export default function AboutPage() {
           <div className={styles.ctaCard}>
             <div>
               <span className={styles.sectionLabel}>Start your workday</span>
-              <h2>Access the AttendStack workspace built for your role.</h2>
+              <h2>Access the ZuperHR workspace built for your role.</h2>
               <p>
                 Employees can check attendance and records, while company teams
                 can manage workforce operations from one connected platform.

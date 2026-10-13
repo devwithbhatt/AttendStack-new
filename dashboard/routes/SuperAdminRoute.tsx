@@ -7,6 +7,7 @@ import {
   IconLogout,
   IconPlus,
   IconCreditCard,
+  IconDeviceDesktop,
 } from "@tabler/icons-react";
 import { MenuItemType } from "types/menuTypes";
 
@@ -49,6 +50,17 @@ export const SuperAdminMenu: MenuItemType[] = [
     title: "Administrators & HRs",
     link: "/super-admin/admins",
     icon: <IconShieldCheck size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "MONITORING",
+    grouptitle: true,
+  },
+  {
+    id: uuid(),
+    title: "Live Monitoring",
+    link: "/super-admin/live-monitoring",
+    icon: <IconDeviceDesktop size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

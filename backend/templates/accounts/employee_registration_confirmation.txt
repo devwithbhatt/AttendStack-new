@@ -1,6 +1,6 @@
 Hello {{ name }},
 
-Your AttendStack account for "{{ organization_name }}" is confirmed. You can
+Your ZuperHR account for "{{ organization_name }}" is confirmed. You can
 sign in now with the email and password you chose during registration.
 
 Your employee ID: {{ employee_id }}
@@ -16,6 +16,6 @@ If you were not expecting this email, please contact {{ support_email }} —
 someone may have entered your email address by mistake.
 
 Regards,
-AttendStack Team
+ZuperHR Team
 
 This is an automated notification. Please do not reply to this email.

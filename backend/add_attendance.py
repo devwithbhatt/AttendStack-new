@@ -4,7 +4,7 @@ import django
 import datetime
 
 # Set up Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'attendstack_backend.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zuperhr_backend.settings')
 django.setup()
 
 from employees.models import Employee

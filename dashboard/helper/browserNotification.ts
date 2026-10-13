@@ -1,7 +1,7 @@
 import { playMessageChime } from './notificationSound';
 
 let swRegistration: ServiceWorkerRegistration | null = null;
-let originalDocumentTitle = typeof document !== 'undefined' ? document.title : 'AttendStack';
+let originalDocumentTitle = typeof document !== 'undefined' ? document.title : 'ZuperHR';
 let unreadTitleCount = 0;
 
 // Track active window notifications by tag for programmatic closing
@@ -13,7 +13,7 @@ const notifiedMessageIds = new Set<string>();
 const loadNotifiedIdsFromStorage = () => {
   if (typeof window === 'undefined') return;
   try {
-    const raw = localStorage.getItem('attendstack_notified_msg_ids') || sessionStorage.getItem('attendstack_notified_msg_ids');
+    const raw = localStorage.getItem('zuperhr_notified_msg_ids') || sessionStorage.getItem('zuperhr_notified_msg_ids');
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
@@ -28,7 +28,7 @@ const saveNotifiedIdsToStorage = () => {
   try {
     // Keep max 1000 recent IDs to avoid storage bloating
     const arr = Array.from(notifiedMessageIds).slice(-1000);
-    localStorage.setItem('attendstack_notified_msg_ids', JSON.stringify(arr));
+    localStorage.setItem('zuperhr_notified_msg_ids', JSON.stringify(arr));
   } catch (_) { }
 };
 
@@ -75,7 +75,7 @@ export const registerChatServiceWorker = async (): Promise<ServiceWorkerRegistra
     swRegistration = reg;
     return reg;
   } catch (err) {
-    console.warn('[AttendStack] Service Worker registration warning:', err);
+    console.warn('[ZuperHR] Service Worker registration warning:', err);
     return null;
   }
 };
@@ -86,7 +86,7 @@ export const registerChatServiceWorker = async (): Promise<ServiceWorkerRegistra
 export const isChatNotificationDisabled = (): boolean => {
   if (typeof window === 'undefined') return false;
   try {
-    return localStorage.getItem('attendstack_chat_notifications_disabled') === 'true';
+    return localStorage.getItem('zuperhr_chat_notifications_disabled') === 'true';
   } catch (_) {
     return false;
   }
@@ -98,8 +98,8 @@ export const isChatNotificationDisabled = (): boolean => {
 export const setChatNotificationDisabled = (disabled: boolean): void => {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem('attendstack_chat_notifications_disabled', disabled ? 'true' : 'false');
-    window.dispatchEvent(new CustomEvent('attendstack_chat_notification_toggle', { detail: { disabled } }));
+    localStorage.setItem('zuperhr_chat_notifications_disabled', disabled ? 'true' : 'false');
+    window.dispatchEvent(new CustomEvent('zuperhr_chat_notification_toggle', { detail: { disabled } }));
   } catch (_) { }
 };
 
@@ -188,7 +188,7 @@ export const updateTabTitleBadge = async (count: number) => {
     document.getElementsByTagName('head')[0]?.appendChild(faviconLink);
   }
 
-  const cleanBaseTitle = originalDocumentTitle.replace(/^[🟢\(\d+\)\s•]+/, '').trim() || 'AttendStack';
+  const cleanBaseTitle = originalDocumentTitle.replace(/^[🟢\(\d+\)\s•]+/, '').trim() || 'ZuperHR';
 
   if (count > 0) {
     document.title = `🟢 (${count}) ${cleanBaseTitle}`;
@@ -285,7 +285,7 @@ export const sendBrowserChatNotification = async ({
     return;
   }
 
-  const notificationTag = conversationId ? `chat_${conversationId}` : 'attendstack_chat';
+  const notificationTag = conversationId ? `chat_${conversationId}` : 'zuperhr_chat';
   const targetUrl = conversationId ? `/chat?convId=${conversationId}` : '/chat';
   const iconUrl = avatar || '/favicon.png';
 

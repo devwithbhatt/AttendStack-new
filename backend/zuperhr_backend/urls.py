@@ -1,5 +1,5 @@
 """
-URL configuration for attendstack_backend project.
+URL configuration for zuperhr_backend project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.2/topics/http/urls/
@@ -19,7 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include, re_path
 from organizations.views import OrganizationVerifyCodeView, OrganizationVerifyApiKeyView
-from attendstack_backend.media_views import serve_protected_media
+from zuperhr_backend.media_views import serve_protected_media
 
 
 urlpatterns = [
@@ -45,6 +45,7 @@ urlpatterns = [
     path("api/v1/tasks/", include("tasks.urls", namespace="tasks")),
     path("api/v1/chat/", include("chat.urls")),
     path("api/v1/monitoring/", include("monitoring.urls", namespace="monitoring")),
+    path("api/v1/platform-monitoring/", include("platform_monitoring.urls", namespace="platform_monitoring")),
     path("api/v1/", include("settings.urls")),
     path("api/v1/roles/", include("roles.urls", namespace="roles")),
 ]

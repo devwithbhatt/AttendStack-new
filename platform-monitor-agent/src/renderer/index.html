@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src *;">
+<title>Bhatt Square Watch</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Bhatt Square Watch</h1>
+
+  <!-- Not signed in: User ID + password + passkey -->
+  <div class="card" id="loginCard">
+    <div class="title">Sign in to activate monitoring</div>
+    <div class="muted">Enter the details you were given. You only do this once on this computer.</div>
+    <div class="notice hidden" id="signedOutNotice">This computer was signed out. Sign in again to continue.</div>
+    <label for="userId">User ID</label>
+    <input id="userId" type="text" inputmode="numeric" maxlength="5" placeholder="5-digit User ID" autocomplete="off">
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="••••••••••" autocomplete="off">
+    <label for="passkey">Passkey</label>
+    <input id="passkey" type="text" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false">
+    <label class="consent"><input id="consent" type="checkbox"> I understand this computer's screen may be viewed live by the administrator while this app is running.</label>
+    <button id="signinBtn">Sign in</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <!-- Signed in: this window hides; shown again from the tray -->
+  <div class="card active hidden" id="activeCard">
+    <div class="shield"><div class="dot"></div></div>
+    <div class="title center">Monitoring is active</div>
+    <p class="muted center">Signed in as <span class="who" id="who"></span></p>
+    <p class="muted center">This computer is signed in and running in the background. You can close this window — it keeps running.</p>
+    <div class="statusline" id="statusline">Connecting…</div>
+  </div>
+</div>
+<script src="agent.js"></script>
+</body>
+</html>

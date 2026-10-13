@@ -19,18 +19,18 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "AttendStack | AI-Ready Workforce Management, Attendance & Payroll HRMS",
+  title: "ZuperHR | AI-Ready Workforce Management, Attendance & Payroll HRMS",
   description:
-    "AttendStack by Bhatt Square Pvt. Ltd. is an all-in-one workforce management system offering smart biometric & GPS attendance, multi-shift scheduling, automated Indian payroll, leave tracking, and employee self-service.",
+    "ZuperHR by Bhatt Square Pvt. Ltd. is an all-in-one workforce management system offering smart biometric & GPS attendance, multi-shift scheduling, automated Indian payroll, leave tracking, and employee self-service.",
   alternates: {
-    canonical: "https://attendance.nextgenapplication.com",
+    canonical: "https://zuperhr.in",
   },
   openGraph: {
-    title: "AttendStack | AI-Ready Workforce Management & Automated Payroll",
+    title: "ZuperHR | AI-Ready Workforce Management & Automated Payroll",
     description:
       "Enterprise attendance tracking, shift grace rules, automated Indian payroll with PF/ESIC deductions, and leave management.",
-    url: "https://attendance.nextgenapplication.com",
-    siteName: "AttendStack",
+    url: "https://zuperhr.in",
+    siteName: "ZuperHR",
     type: "website",
   },
 };
@@ -41,34 +41,34 @@ const faqSchema = {
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "What is AttendStack?",
+      "name": "What is ZuperHR?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "AttendStack is a cloud-based workforce management and HRMS software engineered by Bhatt Square Pvt. Ltd. It automates employee attendance tracking, multi-shift scheduling, leave entitlements, and statutory Indian payroll."
+        "text": "ZuperHR is a cloud-based workforce management and HRMS software engineered by Bhatt Square Pvt. Ltd. It automates employee attendance tracking, multi-shift scheduling, leave entitlements, and statutory Indian payroll."
       }
     },
     {
       "@type": "Question",
-      "name": "Does AttendStack support shift grace periods and early checkout penalties?",
+      "name": "Does ZuperHR support shift grace periods and early checkout penalties?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes, AttendStack features customizable work shifts with automated late grace thresholds, half-day calculation, auto-checkout options, and pro-rated salary deductions."
+        "text": "Yes, ZuperHR features customizable work shifts with automated late grace thresholds, half-day calculation, auto-checkout options, and pro-rated salary deductions."
       }
     },
     {
       "@type": "Question",
-      "name": "How does GPS geofencing and biometric attendance work in AttendStack?",
+      "name": "How does GPS geofencing and biometric attendance work in ZuperHR?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "AttendStack enables verified punch-ins using GPS geofencing coordinates with radius verification, IP whitelisting, and biometric hardware sync to eliminate buddy punching."
+        "text": "ZuperHR enables verified punch-ins using GPS geofencing coordinates with radius verification, IP whitelisting, and biometric hardware sync to eliminate buddy punching."
       }
     },
     {
       "@type": "Question",
-      "name": "Is AttendStack payroll compliant with Indian labor laws?",
+      "name": "Is ZuperHR payroll compliant with Indian labor laws?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes, AttendStack automatically calculates monthly payouts with Indian statutory compliance, including Provident Fund (PF), ESIC, Professional Tax, UAN tracking, and auto-generated digital payslips."
+        "text": "Yes, ZuperHR automatically calculates monthly payouts with Indian statutory compliance, including Provident Fund (PF), ESIC, Professional Tax, UAN tracking, and auto-generated digital payslips."
       }
     }
   ]
@@ -161,7 +161,7 @@ export default function Home() {
                 <span>One clear system.</span>
               </h1>
               <p className={styles.heroDescription}>
-                AttendStack brings attendance, employee operations, leave, and
+                ZuperHR brings attendance, employee operations, leave, and
                 payroll visibility together so your team can focus on work that
                 matters.
               </p>
@@ -190,7 +190,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className={styles.heroVisual} aria-label="AttendStack company dashboard preview">
+            <div className={styles.heroVisual} aria-label="ZuperHR company dashboard preview">
               <div className={styles.visualBadge}>
                 <IconBuilding size={17} strokeWidth={2} />
                 Company workspace
@@ -207,7 +207,7 @@ export default function Home() {
                 </div>
                 <Image
                   src="/images/product/company-dashboard.png"
-                  alt="AttendStack company dashboard showing workforce metrics, attendance overview, and live activity"
+                  alt="ZuperHR company dashboard showing workforce metrics, attendance overview, and live activity"
                   width={1364}
                   height={646}
                   className={styles.productScreenshot}
@@ -327,7 +327,7 @@ export default function Home() {
                 </div>
                 <Image
                   src="/images/product/employee-dashboard.png"
-                  alt="AttendStack employee dashboard showing attendance punch, live activity, and work readiness"
+                  alt="ZuperHR employee dashboard showing attendance punch, live activity, and work readiness"
                   width={1366}
                   height={642}
                   className={styles.productScreenshot}

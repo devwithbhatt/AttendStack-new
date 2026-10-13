@@ -153,7 +153,7 @@ class CreateCheckoutView(APIView):
                 "order_id": payment.provider_order_id,
                 "amount": int(payment.amount * 100),
                 "currency": payment.currency,
-                "name": "AttendStack Suite",
+                "name": "ZuperHR Suite",
                 "description": f"{plan.name} ({billing_cycle})",
                 "prefill": {
                     "name": request.user.get_full_name(),

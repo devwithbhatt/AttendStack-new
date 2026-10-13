@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class OrganizationVerifyCodeView(APIView):
     """
-    Public endpoint to verify if an AttendStack Organization Code is valid and active.
+    Public endpoint to verify if an ZuperHR Organization Code is valid and active.
     Used by SimplyJob to check status before sending invitations.
     """
     permission_classes = [AllowAny]
@@ -66,7 +66,7 @@ class OrganizationDirectorySyncView(APIView):
     """
     Server-to-server only: returns every organization's basic identity so
     SimplyJob's admin portal can show a unified company directory across both
-    products (including companies that signed up on AttendStack directly and
+    products (including companies that signed up on ZuperHR directly and
     have no corresponding SimplyJob account). Guarded by the same shared
     secret used for the SSO handshake — never exposed to browsers.
     """
@@ -80,7 +80,7 @@ class OrganizationDirectorySyncView(APIView):
 
         expected = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
-            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or getattr(settings, "ZUPERHR_ONBOARDING_SECRET", "")
         ).strip()
         provided = str(request.headers.get("X-Sync-Secret", "")).strip()
         if not expected or not provided or not hmac.compare_digest(expected, provided):
@@ -105,7 +105,7 @@ class OrganizationDirectorySyncView(APIView):
 
 class OrganizationVerifyApiKeyView(APIView):
     """
-    Public endpoint to verify an AttendStack API Key.
+    Public endpoint to verify an ZuperHR API Key.
     Used by SimplyJob to connect and auto-sync Organization details & Plan status.
     """
     permission_classes = [AllowAny]
@@ -137,7 +137,7 @@ class OrganizationVerifyApiKeyView(APIView):
             return Response(
                 {
                     "valid": False,
-                    "error": "Invalid or inactive AttendStack API Key. Please verify the key in AttendStack Settings > API & Integrations.",
+                    "error": "Invalid or inactive ZuperHR API Key. Please verify the key in ZuperHR Settings > API & Integrations.",
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
@@ -260,7 +260,7 @@ class OrganizationEmployeesSyncStatusView(APIView):
             # Determine high-level sync status
             if has_logged_in or emp.status in (EmployeeStatus.ACTIVE, EmployeeStatus.NOTICE_PERIOD):
                 sync_status = "ACTIVE_ONBOARDED"
-                status_display = "Active in AttendStack"
+                status_display = "Active in ZuperHR"
             elif is_account_created or emp.status == EmployeeStatus.PROVISION:
                 sync_status = "ONBOARDED"
                 status_display = "Onboarded (Account Created)"
@@ -613,7 +613,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         plan_name = str(request.data.get("plan_name", "Starter Plan")).strip()
         duration_days = int(request.data.get("duration_days", 30))
         max_employees = int(request.data.get("max_employees", 50))
-        plan_source = str(request.data.get("plan_source", "ATTENDSTACK_DIRECT")).strip()
+        plan_source = str(request.data.get("plan_source", "ZUPERHR_DIRECT")).strip()
 
         base_date = organization.plan_expires_at if (organization.plan_expires_at and organization.plan_expires_at > timezone.now()) else timezone.now()
         organization.plan_name = plan_name
@@ -629,13 +629,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="renew-plan")
     def renew_plan(self, request, pk=None):
-        """Allows purchasing or renewing an AttendStack standalone plan by ID."""
+        """Allows purchasing or renewing an ZuperHR standalone plan by ID."""
         organization = self.get_object()
         return self._process_plan_renewal(organization, request.user, request)
 
     @action(detail=False, methods=["post"], url_path="renew-plan")
     def renew_plan_current(self, request):
-        """Allows purchasing or renewing an AttendStack plan for the current user's workspace."""
+        """Allows purchasing or renewing an ZuperHR plan for the current user's workspace."""
         user = request.user
         org_id = request.data.get("organization_id")
         is_platform_admin = user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN
@@ -1067,7 +1067,7 @@ class SalesLeadCreateView(APIView):
 
             sales_email = getattr(settings, "SALES_TEAM_EMAIL", None) or settings.DEFAULT_FROM_EMAIL
             EmailMessage(
-                subject=f"New Sales Enquiry — {lead.plan_name or 'AttendStack'} — {lead.company_name}",
+                subject=f"New Sales Enquiry — {lead.plan_name or 'ZuperHR'} — {lead.company_name}",
                 body=(
                     f"Full Name: {lead.full_name}\n"
                     f"Company Email: {lead.company_email}\n"

@@ -181,7 +181,7 @@ export default function LiveMonitoringPage() {
       const blob = await r.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "AttendStackMonitor-Setup.exe";
+      a.download = "ZuperHRMonitor-Setup.exe";
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (e: any) {

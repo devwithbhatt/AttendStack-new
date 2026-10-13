@@ -319,7 +319,7 @@ export default function SuperAdminPlansPage() {
               </Badge>
             </div>
             <p className="text-secondary mb-0 small">
-              Configure public AttendStack subscription plans, seat capacity thresholds, and granular feature flags.
+              Configure public ZuperHR subscription plans, seat capacity thresholds, and granular feature flags.
             </p>
           </div>
         </div>
@@ -674,7 +674,7 @@ export default function SuperAdminPlansPage() {
             <div className="bg-light p-3 rounded-3 border mb-3">
               <h6 className="fw-bold text-dark mb-1 d-flex align-items-center gap-1.5">
                 <IconChecklist size={18} className="text-primary" />
-                AttendStack Sidebar Module Access Permissions
+                ZuperHR Sidebar Module Access Permissions
               </h6>
               <p className="text-muted small mb-3">
                 Enable or disable specific dashboard navigation modules and capabilities for this tier.

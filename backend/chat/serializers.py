@@ -123,7 +123,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
         # Chat attachments are private to the conversation; return a short-lived
         # signed URL so they cannot be fetched from /media/ without a token.
         if obj.file:
-            from attendstack_backend.media_signing import build_media_url
+            from zuperhr_backend.media_signing import build_media_url
             return build_media_url(self.context.get('request'), obj.file)
         return None
 

@@ -22,22 +22,17 @@ export default function MarketingHeader() {
         <Link
           href="/"
           className={styles.brand}
-          aria-label="AttendStack home"
+          aria-label="ZuperHR home"
           onClick={closeMenu}
         >
-          <span className={styles.logoWrap}>
-            <Image
-              src="/images/brand/logo/android-chrome-192x192.png"
-              alt=""
-              width={38}
-              height={38}
-              priority
-            />
-          </span>
-          <span className={styles.brandCopy}>
-            <strong>AttendStack</strong>
-            <small>A product of Bhatt Square</small>
-          </span>
+          <Image
+            src="/images/brand/logo/logo.png"
+            alt="ZuperHR"
+            width={140}
+            height={38}
+            priority
+            style={{ height: "46px", width: "auto" }}
+          />
         </Link>
 
         <nav className={styles.navLinks} aria-label="Website navigation">

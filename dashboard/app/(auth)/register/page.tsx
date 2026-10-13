@@ -399,10 +399,10 @@ export default function EmployeeRegistrationPage() {
           <Card className="border-0 shadow-sm rounded-3 overflow-hidden">
             <Card.Body className="p-4 p-md-5">
               <div className="text-center mb-4">
-                <Link href="/" aria-label="AttendStack home" className="d-inline-flex mb-3">
+                <Link href="/" aria-label="ZuperHR home" className="d-inline-flex mb-3">
                   <Image
                     src="/images/brand/logo/logo.png"
-                    alt="AttendStack logo"
+                    alt="ZuperHR logo"
                     style={{ height: 48, width: "auto", objectFit: "contain" }}
                   />
                 </Link>
@@ -423,7 +423,7 @@ export default function EmployeeRegistrationPage() {
                       </span>
                       <div>
                         <Badge bg="success-subtle" text="success" className="mb-2">Registration complete</Badge>
-                        <h2 className="h4 fw-semibold mb-2">You can now sign in to AttendStack</h2>
+                        <h2 className="h4 fw-semibold mb-2">You can now sign in to ZuperHR</h2>
                         <p className="text-secondary mb-0">
                           Use your work email and password to access your employee dashboard. Your organization connection and submitted profile details are already linked to your account.
                         </p>

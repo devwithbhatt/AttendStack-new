@@ -1,6 +1,6 @@
-# AttendStack
+# ZuperHR
 
-> AttendStack is an enterprise-grade cloud Workforce Management (WFM) and Human Resource Management System (HRMS) platform developed by Bhatt Square Pvt. Ltd. It unifies biometric and GPS geofenced attendance, multi-shift scheduling, leave entitlements, payroll processing, and employee self-service (ESS) into a single operational workspace.
+> ZuperHR is an enterprise-grade cloud Workforce Management (WFM) and Human Resource Management System (HRMS) platform developed by Bhatt Square Pvt. Ltd. It unifies biometric and GPS geofenced attendance, multi-shift scheduling, leave entitlements, payroll processing, and employee self-service (ESS) into a single operational workspace.
 
 ## Core Capabilities & Features
 
@@ -38,7 +38,7 @@
 - Public rulebooks ensuring transparent company attendance and leave guidelines.
 
 ## Publisher & Company Information
-- Product Name: AttendStack
+- Product Name: ZuperHR
 - Developer / Owner: Bhatt Square Pvt. Ltd. (https://bhattsquare.com)
-- Web Platform: https://attendance.nextgenapplication.com
+- Web Platform: https://zuperhr.in
 - Target Audience: Small businesses, high-growth startups, manufacturing units, IT services, and enterprise workforces.

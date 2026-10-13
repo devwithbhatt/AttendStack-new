@@ -10,7 +10,7 @@
 .headerInner {
   position: relative;
   display: flex;
-  width: min(1240px, calc(100% - 40px));
+  width: min(1180px, calc(100% - 40px));
   min-height: 78px;
   margin: 0 auto;
   align-items: center;
@@ -60,7 +60,7 @@
 
 .brandCopy small {
   color: #73837c;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.75px;
   text-transform: uppercase;
@@ -75,7 +75,7 @@
 .navLinks a,
 .companyLogin {
   color: #4c5f56;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 750;
   text-decoration: none;
   transition: color 180ms ease;
@@ -102,7 +102,7 @@
   border-radius: 10px;
   background: #00a76f;
   color: #fff;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   text-decoration: none;
   box-shadow: 0 10px 22px rgba(0, 167, 111, 0.2);
@@ -156,7 +156,7 @@
   padding: 12px 13px;
   border-radius: 9px;
   color: #33483f;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 760;
   text-decoration: none;
 }
@@ -206,14 +206,14 @@
 }
 
 .mobileEmployeeLogin strong {
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 820;
 }
 
 .mobileEmployeeLogin small {
   margin-top: 2px;
   color: rgba(255, 255, 255, 0.68);
-  font-size: 7px;
+  font-size: 10px;
 }
 
 .mobileCompanyLogin {
@@ -226,7 +226,7 @@
   border: 1px solid #d8e4de;
   border-radius: 11px;
   color: #33483f;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 780;
   text-decoration: none;
 }
@@ -257,7 +257,7 @@
 .footerBrandColumn p,
 .accessColumn > p {
   color: rgba(255, 255, 255, 0.5);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 550;
   line-height: 1.75;
 }
@@ -288,7 +288,7 @@
 
 .footerBrand small {
   color: #71d5aa;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -305,7 +305,7 @@
   gap: 7px;
   margin-top: 18px;
   color: #7ce0b4;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 750;
   text-decoration: none;
 }
@@ -325,7 +325,7 @@
 .accessColumn h2 {
   margin: 3px 0 17px;
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -334,7 +334,7 @@
 .footerColumn a {
   margin-bottom: 11px;
   color: rgba(255, 255, 255, 0.52);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 650;
   text-decoration: none;
   transition: color 180ms ease;
@@ -385,14 +385,14 @@
 }
 
 .footerEmployeeLogin strong {
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 800;
 }
 
 .footerEmployeeLogin small {
   margin-top: 2px;
   color: rgba(255, 255, 255, 0.48);
-  font-size: 6px;
+  font-size: 10px;
 }
 
 .footerCompanyLogin {
@@ -401,7 +401,7 @@
   gap: 7px;
   margin-top: 13px;
   color: rgba(255, 255, 255, 0.56);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 750;
   text-decoration: none;
 }
@@ -418,7 +418,7 @@
   padding-top: 22px;
   border-top: 1px solid rgba(255, 255, 255, 0.09);
   color: rgba(255, 255, 255, 0.38);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -436,7 +436,7 @@
 
 .footerDeveloperCredit {
   color: rgba(255, 255, 255, 0.16);
-  font-size: 6px;
+  font-size: 10px;
   font-weight: 550;
   letter-spacing: 0.15px;
 }
@@ -509,7 +509,7 @@
   }
 
   .brandCopy small {
-    font-size: 5.5px;
+    font-size: 8px;
     letter-spacing: 0.45px;
   }
 
@@ -526,7 +526,7 @@
   .employeeLogin {
     min-height: 40px;
     padding: 0 11px;
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .employeeLogin svg:last-child {

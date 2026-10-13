@@ -118,10 +118,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ hideLogo = false, container
               className='d-none d-md-flex align-items-center gap-2'>
               <Image
                 src={getAssetPath("/images/brand/logo/logo.png")}
-                alt=''
-                style={{ height: "30px", width: "auto" }}
+                alt='ZuperHR'
+                style={{ height: "36px", width: "auto" }}
               />
-              <span className='fw-bold fs-4 site-logo-text'>AttendStack</span>
             </Link>
           </div>
         )}
@@ -285,7 +284,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ hideLogo = false, container
             <div className='text-center py-5 upgrade-ui'>
               <div>
                 <div className='my-3'>
-                  <h5 className='mb-1 fs-6'>AttendStack</h5>
+                  <Image src={getAssetPath("/images/brand/logo/logo.png")} alt="ZuperHR" style={{ height: "24px", width: "auto" }} className="mb-1" />
                   <span className='d-block text-secondary'>{user ? user.full_name : 'Admin'}</span>
                   <span className='text-secondary'>{user ? user.designation : 'Administrator'}</span>
                 </div>

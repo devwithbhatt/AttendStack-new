@@ -20,18 +20,18 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "../marketing-pages.module.css";
 
 export const metadata: Metadata = {
-  title: "AttendStack Capabilities | Biometric Attendance, Multi-Shift & Payroll HRMS",
+  title: "ZuperHR Capabilities | Biometric Attendance, Multi-Shift & Payroll HRMS",
   description:
-    "Explore AttendStack capabilities: GPS geofenced attendance, biometric device integration, multi-shift scheduling with grace thresholds, leave management, and Indian statutory payroll with PF/ESIC.",
+    "Explore ZuperHR capabilities: GPS geofenced attendance, biometric device integration, multi-shift scheduling with grace thresholds, leave management, and Indian statutory payroll with PF/ESIC.",
   alternates: {
-    canonical: "https://attendance.nextgenapplication.com/capabilities",
+    canonical: "https://zuperhr.in/capabilities",
   },
   openGraph: {
-    title: "AttendStack Capabilities | Attendance, Shift Rostering & Payroll",
+    title: "ZuperHR Capabilities | Attendance, Shift Rostering & Payroll",
     description:
       "GPS geofencing, shift grace rules, leave entitlement balances, and one-click Indian payroll processing.",
-    url: "https://attendance.nextgenapplication.com/capabilities",
-    siteName: "AttendStack",
+    url: "https://zuperhr.in/capabilities",
+    siteName: "ZuperHR",
     type: "website",
   },
 };
@@ -86,7 +86,7 @@ export default function CapabilitiesPage() {
             <div className={styles.heroCopy}>
               <span className={styles.eyebrow}>
                 <span />
-                AttendStack capabilities
+                ZuperHR capabilities
               </span>
               <h1>
                 One platform for the <span>whole workday.</span>
@@ -115,7 +115,7 @@ export default function CapabilitiesPage() {
               </div>
               <Image
                 src="/images/product/company-dashboard.png"
-                alt="AttendStack company dashboard"
+                alt="ZuperHR company dashboard"
                 width={1364}
                 height={646}
                 priority
@@ -131,7 +131,7 @@ export default function CapabilitiesPage() {
             <span className={styles.sectionLabel}>Connected workforce tools</span>
             <h2>Built for the tasks that happen every day.</h2>
             <p>
-              Each AttendStack capability works as part of one organized system,
+              Each ZuperHR capability works as part of one organized system,
               reducing handoffs and keeping important information connected.
             </p>
           </div>
@@ -182,7 +182,7 @@ export default function CapabilitiesPage() {
               </div>
               <Image
                 src="/images/product/employee-dashboard.png"
-                alt="AttendStack employee dashboard"
+                alt="ZuperHR employee dashboard"
                 width={1366}
                 height={642}
               />
@@ -202,7 +202,7 @@ export default function CapabilitiesPage() {
               </div>
               <Image
                 src="/images/product/company-dashboard.png"
-                alt="AttendStack company workforce dashboard"
+                alt="ZuperHR company workforce dashboard"
                 width={1364}
                 height={646}
               />
@@ -229,7 +229,7 @@ export default function CapabilitiesPage() {
         <div className={styles.container}>
           <div className={styles.ctaCard}>
             <div>
-              <span className={styles.sectionLabel}>Access AttendStack</span>
+              <span className={styles.sectionLabel}>Access ZuperHR</span>
               <h2>Your workforce tools are ready in one connected system.</h2>
               <p>
                 Employee access is always easy to find, with company operations

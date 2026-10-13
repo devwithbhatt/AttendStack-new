@@ -26,16 +26,16 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://attendance.nextgenapplication.com"),
-  applicationName: "AttendStack",
+  metadataBase: new URL("https://zuperhr.in"),
+  applicationName: "ZuperHR",
   title: {
-    default: "AttendStack | Enterprise Workforce Management & HRMS Software",
-    template: "%s | AttendStack",
+    default: "ZuperHR | Enterprise Workforce Management & HRMS Software",
+    template: "%s | ZuperHR",
   },
   description:
     "Enterprise HRMS & workforce management platform developed by Bhatt Square Pvt. Ltd. Automate geofenced mobile attendance, biometric device sync, multi-shift rosters with grace periods, leave proration, and Indian statutory payroll with PF, ESIC, and TDS compliance.",
   keywords: [
-    "AttendStack",
+    "ZuperHR",
     "Workforce Management Software",
     "HRMS India",
     "Attendance Management System",
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AttendStack",
+    title: "ZuperHR",
   },
   icons: {
     icon: [
@@ -88,19 +88,19 @@ export const metadata: Metadata = {
     ],
   },
   alternates: {
-    canonical: "https://attendance.nextgenapplication.com",
+    canonical: "https://zuperhr.in",
     languages: {
-      "en-IN": "https://attendance.nextgenapplication.com",
-      "en-US": "https://attendance.nextgenapplication.com",
-      "x-default": "https://attendance.nextgenapplication.com",
+      "en-IN": "https://zuperhr.in",
+      "en-US": "https://zuperhr.in",
+      "x-default": "https://zuperhr.in",
     },
   },
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "https://attendance.nextgenapplication.com",
-    siteName: "AttendStack",
-    title: "AttendStack | Enterprise Workforce Management & HRMS Software",
+    url: "https://zuperhr.in",
+    siteName: "ZuperHR",
+    title: "ZuperHR | Enterprise Workforce Management & HRMS Software",
     description:
       "Automate geofenced attendance, multi-shift rosters with grace periods, leave entitlements, and statutory Indian payroll in one unified platform.",
     images: [
@@ -108,13 +108,13 @@ export const metadata: Metadata = {
         url: "/images/brand/logo/logo.png",
         width: 1200,
         height: 630,
-        alt: "AttendStack Enterprise HRMS & Workforce Management Platform",
+        alt: "ZuperHR Enterprise HRMS & Workforce Management Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AttendStack | Enterprise Workforce Management & HRMS Software",
+    title: "ZuperHR | Enterprise Workforce Management & HRMS Software",
     description:
       "Automate geofenced attendance, multi-shift rosters with grace periods, leave entitlements, and statutory Indian payroll in one unified platform.",
     images: ["/images/brand/logo/logo.png"],
@@ -142,9 +142,9 @@ const jsonLd = {
   "@graph": [
     {
       "@type": "WebSite",
-      "@id": "https://attendance.nextgenapplication.com/#website",
-      url: "https://attendance.nextgenapplication.com",
-      name: "AttendStack",
+      "@id": "https://zuperhr.in/#website",
+      url: "https://zuperhr.in",
+      name: "ZuperHR",
       description: "Modern Workforce Management & Enterprise HRMS Platform",
       publisher: {
         "@id": "https://bhattsquare.com/#organization",
@@ -157,10 +157,10 @@ const jsonLd = {
       name: "Bhatt Square Pvt. Ltd.",
       legalName: "Bhatt Square Private Limited",
       url: "https://bhattsquare.com",
-      logo: "https://attendance.nextgenapplication.com/images/brand/logo/logo.png",
+      logo: "https://zuperhr.in/images/brand/logo/logo.png",
       sameAs: [
         "https://bhattsquare.com",
-        "https://attendance.nextgenapplication.com",
+        "https://zuperhr.in",
       ],
       contactPoint: [
         {
@@ -173,13 +173,13 @@ const jsonLd = {
     },
     {
       "@type": "SoftwareApplication",
-      "@id": "https://attendance.nextgenapplication.com/#software",
-      name: "AttendStack",
+      "@id": "https://zuperhr.in/#software",
+      name: "ZuperHR",
       applicationCategory: "BusinessApplication",
       applicationSubCategory: "Workforce Management & HRMS",
       operatingSystem: "Web, Android, iOS, Windows, macOS",
       softwareVersion: "2.4.0",
-      url: "https://attendance.nextgenapplication.com",
+      url: "https://zuperhr.in",
       description:
         "Enterprise cloud HRMS engineered by Bhatt Square Pvt. Ltd. featuring GPS geofencing attendance, biometric device integration, multi-shift scheduling with grace thresholds, leave proration, and Indian statutory payroll with PF, ESIC, and TDS compliance.",
       publisher: {

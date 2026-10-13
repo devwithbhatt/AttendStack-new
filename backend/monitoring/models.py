@@ -1,5 +1,5 @@
 """
-AttendStack – Live Monitoring
+ZuperHR – Live Monitoring
 
 Read-only live screen monitoring of a company's registered work computers.
 

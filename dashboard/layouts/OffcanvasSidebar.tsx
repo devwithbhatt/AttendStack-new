@@ -37,10 +37,9 @@ const OffcanvasSidebar = () => {
         <Link href="/" className="d-flex align-items-center gap-2" onClick={closeSidebar}>
           <Image
             src={getAssetPath("/images/brand/logo/logo.png")}
-            alt=""
-            style={{ height: "30px", width: "auto" }}
+            alt="ZuperHR"
+            style={{ height: "36px", width: "auto" }}
           />
-          <span className="fw-bold fs-4  site-logo-text">AttendStack</span>
         </Link>
       </OffcanvasHeader>
       <OffcanvasBody className="p-0 ">

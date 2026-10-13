@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://attendance.nextgenapplication.com";
+  const baseUrl = "https://zuperhr.in";
   const lastModified = new Date();
 
   return [

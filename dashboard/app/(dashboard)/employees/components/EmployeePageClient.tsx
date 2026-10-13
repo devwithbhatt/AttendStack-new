@@ -1420,7 +1420,7 @@ const EmployeePageClient = () => {
                 <div className="small">{inviteError}</div>
               </Alert>
               <div className="p-3 bg-light border rounded text-secondary small mb-3">
-                <strong>Enforcement Rule:</strong> To invite hired employees from SimplyJob, your company must copy your AttendStack Org ID and paste your SimplyJob Org ID in Settings.
+                <strong>Enforcement Rule:</strong> To invite hired employees from SimplyJob, your company must copy your ZuperHR Org ID and paste your SimplyJob Org ID in Settings.
               </div>
               <div className="d-flex justify-content-end gap-2">
                 <Button variant="outline-secondary" onClick={() => setShowInviteModal(false)}>

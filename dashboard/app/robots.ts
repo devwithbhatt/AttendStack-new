@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = "https://attendance.nextgenapplication.com";
+  const baseUrl = "https://zuperhr.in";
 
   return {
     rules: [

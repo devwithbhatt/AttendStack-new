@@ -150,7 +150,7 @@ export const downloadPayslipPdf = async (payroll: any, options: PdfOptions = {})
   const right = pageWidth - margin;
 
   const companyDetails = payroll.company_details || {};
-  const companyName = safeText(companyDetails.company_name || options.companyName, "AttendStack");
+  const companyName = safeText(companyDetails.company_name || options.companyName, "ZuperHR");
   const companyAddress = safeText(companyDetails.company_address || options.companyAddress, "");
   const companyEmail = safeText(companyDetails.company_email || options.companyEmail, "");
   const companyPhone = safeText(companyDetails.company_phone || options.companyPhone, "");
@@ -490,7 +490,7 @@ export const downloadPayslipPdf = async (payroll: any, options: PdfOptions = {})
   const footerLinks = [];
   if (companyEmail) footerLinks.push(`HR Support: ${companyEmail}`);
   if (companyWebsite) footerLinks.push(companyWebsite);
-  footerLinks.push("Confidential - AttendStack Payroll");
+  footerLinks.push("Confidential - ZuperHR Payroll");
 
   doc.setFont("helvetica", "normal");
   doc.text(footerLinks.join("   |   "), margin, footerY + 7.5);
@@ -501,7 +501,7 @@ export const downloadPayslipPdf = async (payroll: any, options: PdfOptions = {})
     title: `Payslip - ${safeText(employee.full_name)} - ${period}`,
     subject: `Official Salary Voucher for ${period}`,
     author: companyName,
-    creator: "AttendStack Enterprise Payroll",
+    creator: "ZuperHR Enterprise Payroll",
   });
 
   doc.save(payslipFileName(payroll));

@@ -1,25 +1,25 @@
 {
   "expo": {
-    "name": "AttendStack",
-    "slug": "attendstack-mobile",
+    "name": "ZuperHR",
+    "slug": "zuperhr-mobile",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "com.bhattsquare.attendstack",
+      "bundleIdentifier": "com.bhattsquare.zuperhr",
       "buildNumber": "4",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "AttendStack uses your location to verify you're checking in from an approved location.",
-        "NSCameraUsageDescription": "AttendStack needs camera access to let you share photos and videos in chat.",
-        "NSPhotoLibraryUsageDescription": "AttendStack needs photo library access to let you share photos and videos in chat.",
-        "NSMicrophoneUsageDescription": "AttendStack needs microphone access to let you record and send voice messages in chat."
+        "NSLocationWhenInUseUsageDescription": "ZuperHR uses your location to verify you're checking in from an approved location.",
+        "NSCameraUsageDescription": "ZuperHR needs camera access to let you share photos and videos in chat.",
+        "NSPhotoLibraryUsageDescription": "ZuperHR needs photo library access to let you share photos and videos in chat.",
+        "NSMicrophoneUsageDescription": "ZuperHR needs microphone access to let you record and send voice messages in chat."
       }
     },
     "android": {
-      "package": "com.bhattsquare.attendstack",
+      "package": "com.bhattsquare.zuperhr",
       "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -49,7 +49,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "AttendStack uses your location to verify you're checking in from an approved location."
+          "locationWhenInUsePermission": "ZuperHR uses your location to verify you're checking in from an approved location."
         }
       ],
       "expo-font",
@@ -57,14 +57,14 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "AttendStack needs microphone access to let you record and send voice messages in chat."
+          "microphonePermission": "ZuperHR needs microphone access to let you record and send voice messages in chat."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "AttendStack needs photo library access to let you share photos and videos in chat.",
-          "cameraPermission": "AttendStack needs camera access to let you share photos and videos in chat."
+          "photosPermission": "ZuperHR needs photo library access to let you share photos and videos in chat.",
+          "cameraPermission": "ZuperHR needs camera access to let you share photos and videos in chat."
         }
       ],
       "@react-native-community/datetimepicker"

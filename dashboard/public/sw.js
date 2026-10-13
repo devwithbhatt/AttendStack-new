@@ -1,5 +1,5 @@
-// AttendStack Chat Service Worker - Production Grade Background Notifications
-const CACHE_NAME = 'attendstack-chat-v1';
+// ZuperHR Chat Service Worker - Production Grade Background Notifications
+const CACHE_NAME = 'zuperhr-chat-v1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -16,11 +16,11 @@ self.addEventListener('push', (event) => {
     try {
       data = event.data.json();
     } catch (e) {
-      data = { title: 'AttendStack Message', body: event.data.text() };
+      data = { title: 'ZuperHR Message', body: event.data.text() };
     }
   }
 
-  const title = data.title || 'New Message on AttendStack';
+  const title = data.title || 'New Message on ZuperHR';
   const options = {
     body: data.body || 'You have received a new message.',
     icon: data.icon || '/favicon.png',

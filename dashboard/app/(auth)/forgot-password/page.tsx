@@ -128,7 +128,7 @@ function ForgotPasswordContent() {
                   <Image
                     src="/images/brand/logo/logo.png"
                     className="mb-4"
-                    alt="AttendStack Logo"
+                    alt="ZuperHR Logo"
                     style={{ height: "45px", width: "auto" }}
                   />
                 </Link>

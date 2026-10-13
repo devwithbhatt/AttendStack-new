@@ -1,5 +1,5 @@
 """
-ASGI config for attendstack_backend project.
+ASGI config for zuperhr_backend project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -10,13 +10,14 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 import os
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'attendstack_backend.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zuperhr_backend.settings')
 django_asgi_app = get_asgi_application()
 
 from channels.routing import ProtocolTypeRouter, URLRouter
 from chat.middleware import JWTAuthMiddleware
 import chat.routing
 import monitoring.routing
+import platform_monitoring.routing
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
@@ -24,6 +25,7 @@ application = ProtocolTypeRouter({
         URLRouter(
             chat.routing.websocket_urlpatterns
             + monitoring.routing.websocket_urlpatterns
+            + platform_monitoring.routing.websocket_urlpatterns
         )
     ),
 })

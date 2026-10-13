@@ -1,5 +1,5 @@
 """
-AttendStack Backend – Django Settings
+ZuperHR Backend – Django Settings
 Professional HR & Attendance Management System
 """
 
@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ──────────────────────────────────────────────────────────────────────────────
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key")
 SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
-ATTENDSTACK_APP_URL = config("ATTENDSTACK_APP_URL", default="http://localhost:3000")
+ZUPERHR_APP_URL = config("ZUPERHR_APP_URL", default="http://localhost:3000")
 DEBUG = str(config("DEBUG", default="true")).strip().lower() in {
     "1",
     "true",
@@ -81,7 +81,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "attendstack_backend.urls"
+ROOT_URLCONF = "zuperhr_backend.urls"
 
 TEMPLATES = [
     {
@@ -99,7 +99,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "attendstack_backend.wsgi.application"
+WSGI_APPLICATION = "zuperhr_backend.wsgi.application"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # DATABASE
@@ -153,7 +153,7 @@ STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Read STATIC_ROOT from environment (e.g. /var/www/attendstack/static/ in prod)
+# Read STATIC_ROOT from environment (e.g. /var/www/zuperhr/static/ in prod)
 # Defaults to a local directory for easy development on Windows/Mac
 STATIC_ROOT = config("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
 
@@ -203,10 +203,10 @@ if EMAIL_HOST_PASSWORD_FILE and not EMAIL_HOST_PASSWORD:
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=not EMAIL_USE_SSL, cast=bool)
 EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="AttendStack <no-reply@attendstack.com>")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="ZuperHR <no-reply@zuperhr.com>")
 PASSWORD_RESET_SUPPORT_EMAIL = config(
     "PASSWORD_RESET_SUPPORT_EMAIL",
-    default=EMAIL_HOST_USER or "support@attendstack.com",
+    default=EMAIL_HOST_USER or "support@zuperhr.com",
 )
 # Where "Contact Sales" enquiries from the Plans page (see organizations/views.py
 # SalesLeadCreateView) get emailed.
@@ -311,7 +311,7 @@ CORS_ALLOW_HEADERS = [
 # DRF SPECTACULAR (API Docs)
 # ──────────────────────────────────────────────────────────────────────────────
 SPECTACULAR_SETTINGS = {
-    "TITLE": "AttendStack API",
+    "TITLE": "ZuperHR API",
     "DESCRIPTION": (
         "Professional HR & Attendance Management System REST API. "
         "Supports Admin, HR, and Employee roles with JWT authentication."
@@ -349,7 +349,7 @@ CELERY_TIMEZONE = "Asia/Kolkata"
 # ──────────────────────────────────────────────────────────────────────────────
 # CHANNELS & REAL-TIME WEBSOCKETS (REDIS WITH RESP2 & NO HEALTHCHECK TIMEOUTS)
 # ──────────────────────────────────────────────────────────────────────────────
-ASGI_APPLICATION = "attendstack_backend.asgi.application"
+ASGI_APPLICATION = "zuperhr_backend.asgi.application"
 
 REDIS_HOST = config("REDIS_HOST", default="127.0.0.1")
 REDIS_PORT = config("REDIS_PORT", default=6379, cast=int)
@@ -397,7 +397,7 @@ MEDIA_SIGNED_TTL = config("MEDIA_SIGNED_TTL", default=86400, cast=int)
 # SIMPLYJOB INTEGRATION
 # ──────────────────────────────────────────────────────────────────────────────
 SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
-SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyjob.in/api/companies/webhooks/attendstack/sync-invite-code/")
+SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyjob.in/api/companies/webhooks/zuperhr/sync-invite-code/")
 SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="")
 
 # ──────────────────────────────────────────────────────────────────────────────

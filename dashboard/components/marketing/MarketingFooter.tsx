@@ -16,15 +16,12 @@ export default function MarketingFooter() {
           <div className={styles.footerBrandColumn}>
             <Link href="/" className={styles.footerBrand}>
               <Image
-                src="/images/brand/logo/android-chrome-192x192.png"
-                alt=""
-                width={42}
+                src="/images/brand/logo/logo-white-bg.jpg"
+                alt="ZuperHR"
+                width={140}
                 height={42}
+                style={{ height: "42px", width: "auto", borderRadius: "6px" }}
               />
-              <span>
-                <strong>AttendStack</strong>
-                <small>A product of Bhatt Square</small>
-              </span>
             </Link>
             <p>
               A clear, connected workspace for attendance, people operations,
@@ -59,7 +56,7 @@ export default function MarketingFooter() {
           </div>
 
           <div className={styles.accessColumn}>
-            <h2>Access AttendStack</h2>
+            <h2>Access ZuperHR</h2>
             <p>Choose the workspace built for your role.</p>
             <Link href="/sign-in" className={styles.footerEmployeeLogin}>
               <span>
@@ -85,7 +82,7 @@ export default function MarketingFooter() {
 
         <div className={styles.footerBottom}>
           <div className={styles.footerCopyright}>
-            <span>&copy; {new Date().getFullYear()} AttendStack. All rights reserved.</span>
+            <span>&copy; {new Date().getFullYear()} ZuperHR. All rights reserved.</span>
             <Link href="/super-admin/login" className={styles.footerTrust} style={{ textDecoration: "none", color: "inherit" }} title="Super Admin Access">
               <IconShieldCheck size={15} />
             </Link>
@@ -97,16 +94,6 @@ export default function MarketingFooter() {
                 Bhatt Square Pvt. Ltd.
               </a>
             </span>
-            <small className={styles.footerDeveloperCredit}>
-              Developed by{" "}
-              <a
-                href="https://in.linkedin.com/in/amanktyr"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Aman Katiyar
-              </a>
-            </small>
           </span>
         </div>
       </div>

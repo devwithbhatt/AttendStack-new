@@ -679,7 +679,7 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
         if not include_inactive:
             org_employees = org_employees.filter(status='ACTIVE')
         else:
-            # Terminated staff can't access AttendStack at all, so they're
+            # Terminated staff can't access ZuperHR at all, so they're
             # left out of the directory entirely; Inactive ones stay listed.
             org_employees = org_employees.exclude(status='TERMINATED')
         org_employee_emails = org_employees.values_list('email', flat=True)

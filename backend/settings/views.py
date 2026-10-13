@@ -153,8 +153,8 @@ class SyncSimplyJobSettingsView(generics.GenericAPIView):
                         FROM companies_company c
                         LEFT JOIN auth_user u ON c.owner_id = u.id
                         WHERE (%s IS NOT NULL AND c.id = %s)
-                           OR (%s != '' AND c.attendstack_organization_id = %s)
-                           OR (%s != '' AND c.attendstack_invite_code = %s)
+                           OR (%s != '' AND c.zuperhr_organization_id = %s)
+                           OR (%s != '' AND c.zuperhr_invite_code = %s)
                            OR (%s != '' AND LOWER(u.email) = %s)
                         ORDER BY c.updated_at DESC
                         LIMIT 1;

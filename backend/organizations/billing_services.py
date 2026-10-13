@@ -76,7 +76,7 @@ def activate_payment(payment, provider_payment_id="", signature=""):
     )
     org.plan_name = plan.name
     org.plan_expires_at = base_date + timedelta(days=duration_days)
-    org.plan_source = "ATTENDSTACK_DIRECT"
+    org.plan_source = "ZUPERHR_DIRECT"
     org.max_employees = payment.employee_count or plan.max_employees
     org.plan_status = Organization.PlanStatus.ACTIVE
     org.save(update_fields=[

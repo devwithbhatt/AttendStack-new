@@ -57,7 +57,7 @@ class Organization(models.Model):
         choices=PlanStatus.choices,
         default=PlanStatus.ACTIVE,
     )
-    plan_source = models.CharField(max_length=40, default="ATTENDSTACK_DIRECT", blank=True)
+    plan_source = models.CharField(max_length=40, default="ZUPERHR_DIRECT", blank=True)
     max_employees = models.IntegerField(default=50)
     invite_code = models.CharField(
         max_length=12,
@@ -151,7 +151,7 @@ class Plan(models.Model):
     # organization is verified as linked to SimplyJob (see
     # OrganizationSerializer.is_simplyjob_linked) — SimplyJob-linked orgs get
     # the cheaper rate, which is the incentive to route purchases through
-    # SimplyJob instead of buying AttendStack directly.
+    # SimplyJob instead of buying ZuperHR directly.
     included_employees = models.IntegerField(
         default=5, help_text="Employees covered by the flat price before per-seat overage applies."
     )
@@ -172,7 +172,7 @@ class Plan(models.Model):
     )
     sort_order = models.IntegerField(default=0)
 
-    # Granular Feature Access Controls (matching AttendStack Sidebar Modules)
+    # Granular Feature Access Controls (matching ZuperHR Sidebar Modules)
     allows_employees = models.BooleanField(default=True, help_text="Employees Directory & Profiles")
     allows_attendance = models.BooleanField(default=True, help_text="Daily Attendance & Live Punches")
     allows_geofencing = models.BooleanField(default=False, help_text="Office IP Shield & GPS Geofencing")

@@ -21,7 +21,7 @@ export default function AdminTasksClient() {
     }
 
     // The cached copy above can be stale (e.g. a Super Admin just granted
-    // this company AttendStack access) — re-verify against the backend so a
+    // this company ZuperHR access) — re-verify against the backend so a
     // long-lived session doesn't keep showing a paywall that's already lifted.
     const token = localStorage.getItem("authToken");
     if (token) {

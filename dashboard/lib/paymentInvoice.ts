@@ -158,17 +158,17 @@ export async function downloadPaymentInvoice(payment: any, organization?: any) {
 
   const issuer = {
     name: "Bhatt Square Private Limited",
-    tradeName: "AttendStack",
+    tradeName: "ZuperHR",
     address: "B-1/4, VISHESH KHAND, GOMTI NAGAR, Gomtinagar, Lucknow, Uttar Pradesh 226010",
-    email: "support@attendstack.com",
+    email: "support@zuperhr.com",
     taxId: "09AALCB7260P1ZX",
     cin: "U68100UP2023PTC184782",
     state: "Uttar Pradesh",
     stateCode: "09",
     sac: "998314",
-    website: "https://attendance.nextgenapplication.com/",
-    // supportDetails: "Billing support: support@attendstack.com",
-    termsText: "Subscription access is governed by AttendStack Terms. Refund eligibility is subject to https://attendance.nextgenapplication.com/refund-policy. Billing support: support@attendstack.com.",
+    website: "https://zuperhr.in/",
+    // supportDetails: "Billing support: support@zuperhr.com",
+    termsText: "Subscription access is governed by ZuperHR Terms. Refund eligibility is subject to https://zuperhr.in/refund-policy. Billing support: support@zuperhr.com.",
   };
 
   const customer = {
@@ -234,7 +234,7 @@ export async function downloadPaymentInvoice(payment: any, organization?: any) {
   doc.setDrawColor(...COLORS.line);
   doc.line(summaryX - 7, 14, summaryX - 7, 35.5);
   setText(COLORS.blue, "bold", 7);
-  doc.text("ATTENDSTACK PAYMENT", summaryX, 17);
+  doc.text("ZUPERHR PAYMENT", summaryX, 17);
   setText(COLORS.navy, "bold", 7);
   doc.text("Invoice No.", summaryX, 22);
   setText(COLORS.slate, "normal", 7);
@@ -370,7 +370,7 @@ export async function downloadPaymentInvoice(payment: any, organization?: any) {
   setText(COLORS.muted, "normal", 6.8);
   const termsCopy =
     issuer.termsText ||
-    `Subscription access is governed by AttendStack Terms. Refund eligibility is subject to the published Refund Policy. Billing support: ${issuer.email}.`;
+    `Subscription access is governed by ZuperHR Terms. Refund eligibility is subject to the published Refund Policy. Billing support: ${issuer.email}.`;
   const terms = doc.splitTextToSize(termsCopy, 82);
   doc.text(terms, margin, lowerTop + 7);
 
@@ -407,10 +407,10 @@ export async function downloadPaymentInvoice(payment: any, organization?: any) {
 
   doc.setProperties({
     title: `Invoice ${invoiceNumber}`,
-    subject: `AttendStack payment invoice for ${payment.plan_name}`,
+    subject: `ZuperHR payment invoice for ${payment.plan_name}`,
     author: issuer.name,
-    creator: "AttendStack Billing",
+    creator: "ZuperHR Billing",
   });
 
-  doc.save(`AttendStack-Invoice-${invoiceNumber}.pdf`);
+  doc.save(`ZuperHR-Invoice-${invoiceNumber}.pdf`);
 }

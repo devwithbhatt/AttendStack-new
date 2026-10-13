@@ -1,0 +1,33 @@
+{
+  "name": "zuperhr-monitor-agent",
+  "version": "0.1.1",
+  "description": "ZuperHR Live Monitoring — background screen agent for company computers (read-only).",
+  "main": "src/main.js",
+  "author": "Bhatt Square Private Limited",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.bhattsquare.zuperhr.monitor",
+    "productName": "ZuperHR Monitor",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "artifactName": "ZuperHRMonitor-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": true
+    }
+  }
+}

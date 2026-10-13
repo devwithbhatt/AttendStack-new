@@ -140,11 +140,11 @@ function EmployeeJoinContent() {
                   href="/"
                   className="d-inline-flex align-items-center justify-content-center rounded-circle bg-white p-2.5 mb-3 shadow-md border-0 text-decoration-none"
                   style={{ width: "72px", height: "72px", cursor: "pointer" }}
-                  title="Go to AttendStack Home"
+                  title="Go to ZuperHR Home"
                 >
                   <img
                     src="/images/brand/logo/logo.png"
-                    alt="AttendStack logo"
+                    alt="ZuperHR logo"
                     style={{ height: "42px", width: "auto", objectFit: "contain" }}
                   />
                 </Link>
@@ -313,7 +313,7 @@ function EmployeeJoinContent() {
 
             <div className="text-center mt-4">
               <p className="text-secondary small mb-0">
-                Powered by <strong className="text-dark">SimplyJob</strong> & <strong className="text-dark">AttendStack Enterprise</strong>
+                Powered by <strong className="text-dark">SimplyJob</strong> & <strong className="text-dark">ZuperHR Enterprise</strong>
               </p>
             </div>
           </Col>

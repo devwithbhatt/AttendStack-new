@@ -348,7 +348,7 @@ export default function SuperAdminCompaniesPage() {
               </Badge>
             </div>
             <p className="text-secondary mb-0 small">
-              Create, inspect, activate, or suspend any tenant company workspace across the AttendStack platform.
+              Create, inspect, activate, or suspend any tenant company workspace across the ZuperHR platform.
             </p>
           </div>
         </div>

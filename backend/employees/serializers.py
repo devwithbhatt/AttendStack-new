@@ -88,8 +88,8 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
         # Sensitive documents (Aadhaar/PAN/CV) are returned as short-lived
         # signed URLs so they cannot be fetched from /media/ without a token;
         # profile photos and other display assets stay public. See
-        # attendstack_backend.media_signing.
-        from attendstack_backend.media_signing import build_media_url
+        # zuperhr_backend.media_signing.
+        from zuperhr_backend.media_signing import build_media_url
 
         return build_media_url(self.context.get("request"), file_field)
 
@@ -376,6 +376,6 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def _absolute_file_url(self, file_field):
         # Sign sensitive documents (Aadhaar/PAN/CV); display assets stay public.
-        from attendstack_backend.media_signing import build_media_url
+        from zuperhr_backend.media_signing import build_media_url
 
         return build_media_url(self.context.get("request"), file_field)

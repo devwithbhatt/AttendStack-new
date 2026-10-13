@@ -55,7 +55,7 @@ export default function PlansBillingScreen() {
   );
 
   const openCheckout = () =>
-    Alert.alert("Continue in browser", "Plans are paid securely through the AttendStack web dashboard. Sign in there with the same account to complete checkout.", [
+    Alert.alert("Continue in browser", "Plans are paid securely through the ZuperHR web dashboard. Sign in there with the same account to complete checkout.", [
       { text: "Cancel", style: "cancel" },
       { text: "Open", onPress: () => Linking.openURL(`${WEB_APP_URL}/plans`) },
     ]);

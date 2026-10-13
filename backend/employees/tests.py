@@ -89,7 +89,7 @@ class OrganizationInviteCodeUniquenessTests(TestCase):
 @override_settings(ROOT_URLCONF="employees.urls")
 class EmployeeStatusActionTests(APITestCase):
     def setUp(self):
-        self.organization = Organization.objects.create(name="AttendStack")
+        self.organization = Organization.objects.create(name="ZuperHR")
         self.admin_user = User.objects.create_superuser(
             email="admin@example.com",
             password="StrongPass123!",
@@ -338,7 +338,7 @@ class EmployeeCreationLoginProvisioningTests(APITestCase):
     """
 
     def setUp(self):
-        self.organization = Organization.objects.create(name="AttendStack")
+        self.organization = Organization.objects.create(name="ZuperHR")
         self.admin_user = User.objects.create_superuser(
             email="admin2@example.com",
             password="StrongPass123!",
@@ -368,7 +368,7 @@ class EmployeeCreationLoginProvisioningTests(APITestCase):
         self.assertEqual(len(mail.outbox), 1)
         sent = mail.outbox[0]
         self.assertIn("new.hire@example.com", sent.to)
-        self.assertIn("AttendStack", sent.subject)
+        self.assertIn("ZuperHR", sent.subject)
 
     def test_login_account_is_not_duplicated_if_one_already_exists(self):
         existing = User.objects.create_user(
@@ -407,7 +407,7 @@ class MergeRequestActionTests(APITestCase):
     entirely)."""
 
     def setUp(self):
-        self.organization = Organization.objects.create(name="AttendStack")
+        self.organization = Organization.objects.create(name="ZuperHR")
         self.other_organization = Organization.objects.create(name="Other Co")
         self.admin_user = User.objects.create_hr(
             email="org-admin@example.com",

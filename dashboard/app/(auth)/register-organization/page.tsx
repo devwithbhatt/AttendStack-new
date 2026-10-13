@@ -256,10 +256,10 @@ function OrganizationRegistrationContent() {
           <Card className="border-0 shadow-sm rounded-4 overflow-hidden">
             <Card.Body className="p-4 p-md-5">
               <div className="text-center mb-4">
-                <Link href="/" aria-label="AttendStack home" className="d-inline-flex mb-3">
+                <Link href="/" aria-label="ZuperHR home" className="d-inline-flex mb-3">
                   <Image
                     src="/images/brand/logo/logo.png"
-                    alt="AttendStack logo"
+                    alt="ZuperHR logo"
                     style={{ height: 48, width: "auto", objectFit: "contain" }}
                   />
                 </Link>

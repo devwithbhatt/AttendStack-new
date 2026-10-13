@@ -192,9 +192,9 @@ const UserMenu = () => {
         <div className="d-flex gap-3 align-items-center border-bottom px-4 py-4" style={{ backgroundColor: "#fcfdfe", borderBottomStyle: "dashed" }}>
           {renderAvatarBadge(48)}
           <div className="overflow-hidden">
-            <h5 className="mb-0 fw-bold text-dark text-truncate">{user ? user.full_name : "AttendStack User"}</h5>
+            <h5 className="mb-0 fw-bold text-dark text-truncate">{user ? user.full_name : "ZuperHR User"}</h5>
             <p className="mb-0 text-secondary small text-truncate" style={{ fontSize: "0.8rem" }}>
-              {user ? user.email : "user@attendstack.com"}
+              {user ? user.email : "user@zuperhr.com"}
             </p>
             <span className="badge bg-success-subtle text-success border border-success-subtle mt-1.5 font-monospace rounded-pill text-uppercase px-2 py-1" style={{ fontSize: "0.65rem", fontWeight: 600 }}>
               {user ? (user.custom_role_title || (user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "EMPLOYEE" ? "Employee" : user.role)) : "Staff"}

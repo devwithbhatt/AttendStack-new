@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src *;">
+<title>ZuperHR Monitor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>ZuperHR Monitor</h1>
+
+  <!-- First launch: sign in once -->
+  <div class="card" id="loginCard">
+    <div class="title">Sign in to activate monitoring</div>
+    <div class="muted">You only do this once on this computer.</div>
+    <label>Organisation ID</label>
+    <input id="org" type="text" placeholder="ORG-XXXXXXXX" autocomplete="off">
+    <label>Login Email</label>
+    <input id="email" type="email" placeholder="you@company.com">
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••">
+    <label class="consent"><input id="consent" type="checkbox"> I understand this company computer's screen may be monitored during work hours.</label>
+    <button id="signinBtn">Sign in</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <!-- After sign-in: this window hides; shown only if reopened from tray -->
+  <div class="card active hidden" id="activeCard">
+    <div class="shield"><div class="dot"></div></div>
+    <div class="title center">Monitoring is active</div>
+    <p class="muted center">Signed in as <span class="who" id="who"></span></p>
+    <p class="muted center">This computer is registered and running in the background. You can close this window — it keeps running.</p>
+    <div class="statusline" id="statusline">Connecting…</div>
+  </div>
+</div>
+<script src="agent.js"></script>
+</body>
+</html>

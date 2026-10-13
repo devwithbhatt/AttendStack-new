@@ -55,7 +55,7 @@ function SSOContent() {
   return (
     <Card className="p-4 shadow-sm text-center" style={{ maxWidth: "420px", width: "100%" }}>
       <Card.Body>
-        <h3 className="fw-bold mb-3">Connecting to AttendStack</h3>
+        <h3 className="fw-bold mb-3">Connecting to ZuperHR</h3>
         {error ? (
           <Alert variant="danger" className="mb-3">
             {error}

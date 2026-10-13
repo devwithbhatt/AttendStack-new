@@ -24,7 +24,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='organization',
             name='plan_source',
-            field=models.CharField(blank=True, default='ATTENDSTACK_DIRECT', max_length=40),
+            field=models.CharField(blank=True, default='ZUPERHR_DIRECT', max_length=40),
         ),
         migrations.AddField(
             model_name='organization',

@@ -7,7 +7,7 @@ export function BrandHeader() {
     <View style={styles.wrap}>
       <Image source={require("../../assets/brand-logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={styles.name} numberOfLines={1}>
-        AttendStack
+        ZuperHR
       </Text>
     </View>
   );

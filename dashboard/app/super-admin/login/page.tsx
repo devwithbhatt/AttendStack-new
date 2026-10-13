@@ -108,11 +108,11 @@ export default function SuperAdminLoginPage() {
               <Card.Body>
                 {step === "credentials" && (
                   <div className="text-center mb-4">
-                    <Link href="/" aria-label="AttendStack Home">
+                    <Link href="/" aria-label="ZuperHR Home">
                       <Image
                         src="/images/brand/logo/logo.png"
                         className="mb-3 rounded-3"
-                        alt="AttendStack Logo"
+                        alt="ZuperHR Logo"
                         style={{ height: "58px", width: "auto", objectFit: "contain" }}
                       />
                     </Link>
@@ -154,7 +154,7 @@ export default function SuperAdminLoginPage() {
                         <Form.Label className="small fw-semibold text-secondary">Super Admin Email</Form.Label>
                         <Form.Control
                           type="email"
-                          placeholder="superadmin@attendstack.com"
+                          placeholder="superadmin@zuperhr.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           required

@@ -7,7 +7,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from attendstack_backend.secret_files import read_secret_file
+from zuperhr_backend.secret_files import read_secret_file
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -50,7 +50,7 @@ class ProductionEmailBackendGuardTests(SimpleTestCase):
     def _start_settings(self, **env):
         child_env = {**os.environ, **env}
         return subprocess.run(
-            [sys.executable, "-c", "import django, os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','attendstack_backend.settings'); django.setup()"],
+            [sys.executable, "-c", "import django, os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','zuperhr_backend.settings'); django.setup()"],
             cwd=BACKEND_DIR, env=child_env, capture_output=True, text=True, timeout=120,
         )
 

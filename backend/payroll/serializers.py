@@ -189,7 +189,7 @@ class PayrollSerializer(serializers.ModelSerializer):
                 request = self.context.get("request")
                 logo_url = request.build_absolute_uri(settings.company_logo.url) if request else settings.company_logo.url
             return {
-                "company_name": settings.company_name or "AttendStack",
+                "company_name": settings.company_name or "ZuperHR",
                 "company_address": settings.company_address or "",
                 "company_email": settings.company_email or "",
                 "company_phone": settings.company_phone or "",

@@ -34,8 +34,8 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
         return {"ok": False, "skipped": True, "reason": "Not linked to SimplyJob"}
 
     results = {"db_updated": False, "webhook_sent": False}
-    attendstack_invite_code = str(organization.invite_code).strip()
-    attendstack_org_id = str(organization.id).strip()
+    zuperhr_invite_code = str(organization.invite_code).strip()
+    zuperhr_org_id = str(organization.id).strip()
 
     # 1. Direct SimplyJob Database Sync (Instant & Fail-safe)
     db_url = getattr(settings, "SIMPLYJOB_DATABASE_URL", "").strip()
@@ -48,29 +48,29 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
                     cur.execute(
                         """
                         UPDATE companies_company
-                        SET attendstack_invite_code = %s,
-                            attendstack_organization_id = %s,
+                        SET zuperhr_invite_code = %s,
+                            zuperhr_organization_id = %s,
                             updated_at = NOW()
-                        WHERE id = %s OR attendstack_organization_id = %s;
+                        WHERE id = %s OR zuperhr_organization_id = %s;
                         """,
-                        (attendstack_invite_code, attendstack_org_id, int(source_company_id), attendstack_org_id)
+                        (zuperhr_invite_code, zuperhr_org_id, int(source_company_id), zuperhr_org_id)
                     )
                 else:
                     cur.execute(
                         """
                         UPDATE companies_company
-                        SET attendstack_invite_code = %s,
-                            attendstack_organization_id = %s,
+                        SET zuperhr_invite_code = %s,
+                            zuperhr_organization_id = %s,
                             updated_at = NOW()
-                        WHERE attendstack_organization_id = %s;
+                        WHERE zuperhr_organization_id = %s;
                         """,
-                        (attendstack_invite_code, attendstack_org_id, attendstack_org_id)
+                        (zuperhr_invite_code, zuperhr_org_id, zuperhr_org_id)
                     )
                 conn.commit()
                 results["db_updated"] = (cur.rowcount > 0)
                 logger.info(
                     "Direct SimplyJob DB updated (%d rows) for organization %s, invite code %s",
-                    cur.rowcount, attendstack_org_id, mask_code(attendstack_invite_code),
+                    cur.rowcount, zuperhr_org_id, mask_code(zuperhr_invite_code),
                 )
             conn.close()
         except Exception as exc:
@@ -84,8 +84,8 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
     if webhook_url and secret:
         payload_data = {
             "source_company_id": source_company_id,
-            "attendstack_organization_id": attendstack_org_id,
-            "attendstack_invite_code": attendstack_invite_code,
+            "zuperhr_organization_id": zuperhr_org_id,
+            "zuperhr_invite_code": zuperhr_invite_code,
             "timestamp": int(timezone.now().timestamp()),
             "nonce": secrets.token_hex(8),
         }
@@ -98,7 +98,7 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
                 data=payload_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-AttendStack-Signature": signature,
+                    "X-ZuperHR-Signature": signature,
                 },
                 method="POST",
             )
@@ -110,7 +110,7 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
             results["webhook_error"] = str(exc)
 
     results["ok"] = bool(results["db_updated"] or results["webhook_sent"])
-    results["attendstack_invite_code"] = attendstack_invite_code
+    results["zuperhr_invite_code"] = zuperhr_invite_code
     return results
 
 

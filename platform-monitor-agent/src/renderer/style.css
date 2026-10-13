@@ -1,0 +1,22 @@
+:root { --bg:#0f172a; --card:#1e293b; --fg:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --bad:#ef4444; --line:#334155; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+.wrap { max-width:440px; margin:0 auto; padding:28px 18px; }
+h1 { font-size:19px; margin:0 0 16px; text-align:center; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:22px; }
+.title { font-weight:600; margin-bottom:4px; }
+.title.center, .center { text-align:center; }
+.muted { color:var(--muted); font-size:13px; }
+label { display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
+input[type=text],input[type=email],input[type=password]{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--fg); font-size:14px; }
+.consent { display:flex; gap:8px; align-items:flex-start; margin-top:16px; font-size:13px; color:var(--fg); }
+button { margin-top:20px; width:100%; padding:11px; border:0; border-radius:8px; background:var(--accent); color:#0b1220; font-weight:600; font-size:14px; cursor:pointer; }
+button:disabled { opacity:.5; cursor:not-allowed; }
+.err { color:var(--bad); font-size:13px; margin-top:10px; min-height:16px; }
+.hidden { display:none; }
+.shield { width:60px; height:60px; margin:2px auto 12px; border-radius:50%; background:rgba(34,197,94,.12); display:flex; align-items:center; justify-content:center; }
+.shield .dot { width:15px; height:15px; border-radius:50%; background:var(--ok); box-shadow:0 0 14px var(--ok); }
+.who { color:var(--fg); font-weight:600; }
+.statusline { font-size:12px; margin-top:14px; color:var(--muted); text-align:center; }
+.statusline.live { color:var(--ok); }
+.notice { background:rgba(56,189,248,.12); border:1px solid var(--accent); color:var(--fg); border-radius:8px; padding:8px 10px; font-size:13px; margin-top:12px; }

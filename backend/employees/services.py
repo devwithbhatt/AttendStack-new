@@ -165,7 +165,7 @@ def sync_employee_from_simplyjob(*, company_data, employee_data):
     if owner_email:
         owner = User.objects.filter(email__iexact=owner_email).first()
 
-    org_code = str(company_data.get("invite_code", "") or company_data.get("attendstack_invite_code", "")).strip()
+    org_code = str(company_data.get("invite_code", "") or company_data.get("zuperhr_invite_code", "")).strip()
     organization = None
     if org_code:
         organization = Organization.objects.filter(invite_code__iexact=org_code).first()
@@ -251,7 +251,7 @@ def sync_employee_from_simplyjob(*, company_data, employee_data):
         try:
             import urllib.request
             from django.core.files.base import ContentFile
-            req = urllib.request.Request(resume_url, headers={"User-Agent": "AttendStack-Downloader/1.0"})
+            req = urllib.request.Request(resume_url, headers={"User-Agent": "ZuperHR-Downloader/1.0"})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 content = resp.read()
                 if content:

@@ -1,4 +1,4 @@
-# AttendStack Production Server Configuration Report
+# ZuperHR Production Server Configuration Report
 **Generated:** May 20, 2026
 
 ---
@@ -51,7 +51,7 @@ http {
 
 #### Sites Available: `/etc/nginx/sites-available/`
 ```
-attendance.nextgenapplication.com (2,831 bytes)
+zuperhr.in (2,831 bytes)
 backend (3,218 bytes)
 default (1,115 bytes)
 default.backup (499 bytes)
@@ -59,12 +59,12 @@ ecom-app (2,824 bytes)
 gymproject (1,965 bytes)
 mafroosh (1,029 bytes)
 testing (1,879 bytes)
-.attendance.nextgenapplication.comsudo.swp (1,024 bytes - editor backup file)
+.zuperhr.insudo.swp (1,024 bytes - editor backup file)
 ```
 
 #### Sites Enabled: `/etc/nginx/sites-enabled/`
 ```
-✓ attendance.nextgenapplication.com
+✓ zuperhr.in
 ✓ backend
 ✓ ecom-app
 ✓ gymproject
@@ -74,24 +74,24 @@ testing (1,879 bytes)
 
 ---
 
-### Active Production Site: `attendance.nextgenapplication.com`
+### Active Production Site: `zuperhr.in`
 
-**Location:** `/etc/nginx/sites-enabled/attendance.nextgenapplication.com`
+**Location:** `/etc/nginx/sites-enabled/zuperhr.in`
 
 **Configuration:**
 ```nginx
 server {
     listen 80;
-    server_name attendance.nextgenapplication.com;
+    server_name zuperhr.in;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name attendance.nextgenapplication.com;
+    server_name zuperhr.in;
 
-    ssl_certificate /etc/letsencrypt/live/attendance.nextgenapplication.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/attendance.nextgenapplication.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/zuperhr.in/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zuperhr.in/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -144,14 +144,14 @@ server {
 
     # Static files
     location /static/ {
-        alias /var/www/attendstack/static/;
+        alias /var/www/zuperhr/static/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
 
     # Media files
     location /media/ {
-        alias /home/squarefit/AttendStack/backend/media/;
+        alias /home/squarefit/ZuperHR/backend/media/;
     }
 }
 ```
@@ -162,7 +162,7 @@ server {
 - Security headers (HSTS, X-Content-Type-Options, X-Frame-Options)
 - Routes `/admin` and `/api` to Django backend (port 8001)
 - Routes `/` and `/admin/sign-in` to Next.js frontend (port 3003)
-- Static files served from `/var/www/attendstack/static/`
+- Static files served from `/var/www/zuperhr/static/`
 - Media files served from backend media directory
 
 ---
@@ -171,25 +171,25 @@ server {
 
 ### Location: `/etc/systemd/system/`
 
-#### Django Backend Service: `attendstack-backend.service`
+#### Django Backend Service: `zuperhr-backend.service`
 
-**Path:** `/etc/systemd/system/attendstack-backend.service`
+**Path:** `/etc/systemd/system/zuperhr-backend.service`
 **Size:** 503 bytes | **Owner:** root | **Permissions:** -rw-r--r--
 **Last Modified:** May 19, 2026
 
 **Configuration:**
 ```ini
 [Unit]
-Description=AttendStack Django Backend
+Description=ZuperHR Django Backend
 After=network.target
 
 [Service]
 User=squarefit
 Group=squarefit
-WorkingDirectory=/home/squarefit/AttendStack/backend
-Environment="PATH=/home/squarefit/AttendStack/backend/venv/bin"
-Environment="DJANGO_SETTINGS_MODULE=attendstack_backend.settings"
-ExecStart=/home/squarefit/AttendStack/backend/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 --reload attendstack_backend.wsgi:application
+WorkingDirectory=/home/squarefit/ZuperHR/backend
+Environment="PATH=/home/squarefit/ZuperHR/backend/venv/bin"
+Environment="DJANGO_SETTINGS_MODULE=zuperhr_backend.settings"
+ExecStart=/home/squarefit/ZuperHR/backend/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8001 --reload zuperhr_backend.wsgi:application
 Restart=always
 RestartSec=10
 
@@ -199,10 +199,10 @@ WantedBy=multi-user.target
 
 **Key Details:**
 - Runs as user `squarefit` with group `squarefit`
-- Working directory: `/home/squarefit/AttendStack/backend`
+- Working directory: `/home/squarefit/ZuperHR/backend`
 - Gunicorn: 3 workers on 127.0.0.1:8001
-- Python virtual environment: `/home/squarefit/AttendStack/backend/venv`
-- Django settings module: `attendstack_backend.settings`
+- Python virtual environment: `/home/squarefit/ZuperHR/backend/venv`
+- Django settings module: `zuperhr_backend.settings`
 - Auto-restart enabled with 10-second delay
 - Starts on multi-user boot target
 
@@ -227,7 +227,7 @@ User=squarefit
 LimitNOFILE=infinity
 LimitNPROC=infinity
 LimitCORE=infinity
-Environment=PATH=/home/squarefit/AttendStack/backend/venv/bin:...
+Environment=PATH=/home/squarefit/ZuperHR/backend/venv/bin:...
 Environment=PM2_HOME=/home/squarefit/.pm2
 PIDFile=/home/squarefit/.pm2/pm2.pid
 Restart=on-failure
@@ -256,7 +256,7 @@ WantedBy=multi-user.target
 **Path:** `/etc/systemd/system/pm2-root.service`
 **Last Modified:** Mar 15, 2026
 
-**Status:** Installed but not actively used for AttendStack
+**Status:** Installed but not actively used for ZuperHR
 
 ---
 
@@ -287,7 +287,7 @@ pids/                    (Process ID references)
 ```json
 [
   {
-    "name": "attendstack-frontend",
+    "name": "zuperhr-frontend",
     "namespace": "default",
     "args": [
       "start",
@@ -307,7 +307,7 @@ pids/                    (Process ID references)
 ```
 
 **Details:**
-- **Process Name:** attendstack-frontend
+- **Process Name:** zuperhr-frontend
 - **Command:** npm start with port 3003
 - **Status:** online (running)
 - **Node Version:** 24.13.0
@@ -322,9 +322,9 @@ pids/                    (Process ID references)
 
 Commands to view logs:
 ```bash
-pm2 logs attendstack-frontend
+pm2 logs zuperhr-frontend
 pm2 list                           # Show all processes
-pm2 show attendstack-frontend      # Show process details
+pm2 show zuperhr-frontend      # Show process details
 ```
 
 ---
@@ -333,33 +333,33 @@ pm2 show attendstack-frontend      # Show process details
 
 ### Gunicorn Startup Script
 
-**Location:** `/home/squarefit/AttendStack/backend/gunicorn_start.sh`
+**Location:** `/home/squarefit/ZuperHR/backend/gunicorn_start.sh`
 
 **Script Content:**
 ```bash
 #!/bin/bash
 
 # The name of your Django project
-NAME="attendstack_backend"
+NAME="zuperhr_backend"
 
 # The directory where your project is located
-DJANGODIR=/home/squarefit/AttendStack/backend
+DJANGODIR=/home/squarefit/ZuperHR/backend
 
 # The user and group to run as
 USER=squarefit
 GROUP=www-data
 
 # Set the PATH to include the virtual environment's bin directory
-PATH="/home/squarefit/AttendStack/backend/venv/bin:$PATH"
+PATH="/home/squarefit/ZuperHR/backend/venv/bin:$PATH"
 
 # The path to your project's settings module
-export DJANGO_SETTINGS_MODULE=attendstack_backend.settings
+export DJANGO_SETTINGS_MODULE=zuperhr_backend.settings
 
 # The path to your project's root directory
 export PYTHONPATH=$DJANGODIR:$PYTHONPATH
 
 # Start Gunicorn
-exec /home/squarefit/AttendStack/backend/venv/bin/gunicorn ${NAME}.wsgi:application \
+exec /home/squarefit/ZuperHR/backend/venv/bin/gunicorn ${NAME}.wsgi:application \
   --name $NAME \
   --workers 3 \
   --bind=127.0.0.1:8000 \
@@ -368,15 +368,15 @@ exec /home/squarefit/AttendStack/backend/venv/bin/gunicorn ${NAME}.wsgi:applicat
 ```
 
 **Key Configuration:**
-- **Script Location:** `/home/squarefit/AttendStack/backend/gunicorn_start.sh`
-- **Django Project:** attendstack_backend
-- **Working Directory:** `/home/squarefit/AttendStack/backend`
+- **Script Location:** `/home/squarefit/ZuperHR/backend/gunicorn_start.sh`
+- **Django Project:** zuperhr_backend
+- **Working Directory:** `/home/squarefit/ZuperHR/backend`
 - **User:** squarefit, Group: www-data
 - **Workers:** 3
 - **Bind Address:** 127.0.0.1:8000 (Note: systemd service uses port 8001)
 - **Log Level:** debug
 - **Logging:** stdout (-f flag)
-- **Virtual Environment:** `/home/squarefit/AttendStack/backend/venv`
+- **Virtual Environment:** `/home/squarefit/ZuperHR/backend/venv`
 
 **Note:** The systemd service file uses port 8001, while this script specifies port 8000. The systemd configuration takes precedence in production.
 
@@ -386,7 +386,7 @@ exec /home/squarefit/AttendStack/backend/venv/bin/gunicorn ${NAME}.wsgi:applicat
 
 ### Let's Encrypt Certificates
 
-**Location:** `/etc/letsencrypt/live/attendance.nextgenapplication.com/`
+**Location:** `/etc/letsencrypt/live/zuperhr.in/`
 
 **Certificate Files:**
 ```
@@ -407,7 +407,7 @@ privkey.pem        (Private key)
 ## 6. APACHE CONFIGURATION (Not Actively Used)
 
 ### Apache Status
-**Status:** Installed but not actively used for AttendStack
+**Status:** Installed but not actively used for ZuperHR
 
 ### Apache Sites Configuration
 
@@ -431,7 +431,7 @@ testing.conf → ../sites-available/testing.conf
 testing-le-ssl.conf → ../sites-available/testing-le-ssl.conf
 ```
 
-**Note:** These are for other projects (gymproject, testing), not for AttendStack. Nginx is the primary web server for AttendStack.
+**Note:** These are for other projects (gymproject, testing), not for ZuperHR. Nginx is the primary web server for ZuperHR.
 
 ---
 
@@ -442,7 +442,7 @@ testing-le-ssl.conf → ../sites-available/testing-le-ssl.conf
 
 **Search Results:**
 - No docker-compose.yml found in workspace
-- No Dockerfile found (except in dependencies: `/home/squarefit/AttendStack/dashboard/node_modules/bcrypt/Dockerfile`)
+- No Dockerfile found (except in dependencies: `/home/squarefit/ZuperHR/dashboard/node_modules/bcrypt/Dockerfile`)
 - No .dockerignore files in workspace
 
 **Note:** Application is deployed directly on the host system, not containerized.
@@ -502,13 +502,13 @@ HAProxy is not installed on the server. Nginx serves as the reverse proxy instea
 | Type | Location | Status |
 |------|----------|--------|
 | **Nginx Main Config** | `/etc/nginx/nginx.conf` | ✅ Active |
-| **Nginx Site Config** | `/etc/nginx/sites-enabled/attendance.nextgenapplication.com` | ✅ Active |
-| **Django Backend Service** | `/etc/systemd/system/attendstack-backend.service` | ✅ Active |
+| **Nginx Site Config** | `/etc/nginx/sites-enabled/zuperhr.in` | ✅ Active |
+| **Django Backend Service** | `/etc/systemd/system/zuperhr-backend.service` | ✅ Active |
 | **PM2 Frontend Service** | `/etc/systemd/system/pm2-squarefit.service` | ✅ Active |
 | **PM2 Dump File** | `/home/squarefit/.pm2/dump.pm2` | ✅ Active |
-| **Gunicorn Script** | `/home/squarefit/AttendStack/backend/gunicorn_start.sh` | ⚠️ Reference only |
-| **SSL Certificates** | `/etc/letsencrypt/live/attendance.nextgenapplication.com/` | ✅ Active |
-| **Apache Sites** | `/etc/apache2/sites-available/` | ❌ Not for AttendStack |
+| **Gunicorn Script** | `/home/squarefit/ZuperHR/backend/gunicorn_start.sh` | ⚠️ Reference only |
+| **SSL Certificates** | `/etc/letsencrypt/live/zuperhr.in/` | ✅ Active |
+| **Apache Sites** | `/etc/apache2/sites-available/` | ❌ Not for ZuperHR |
 | **Docker** | N/A | ❌ Not used |
 | **HAProxy** | N/A | ❌ Not installed |
 
@@ -520,21 +520,21 @@ HAProxy is not installed on the server. Nginx serves as the reverse proxy instea
 
 ```bash
 # Django Backend
-sudo systemctl status attendstack-backend
+sudo systemctl status zuperhr-backend
 
 # PM2 Frontend
 pm2 list
-pm2 show attendstack-frontend
+pm2 show zuperhr-frontend
 
 # Nginx
 sudo systemctl status nginx
 sudo nginx -t                    # Test nginx config
 
 # Check logs
-sudo journalctl -u attendstack-backend -f
+sudo journalctl -u zuperhr-backend -f
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
-pm2 logs attendstack-frontend
+pm2 logs zuperhr-frontend
 ```
 
 ### Restart Services
@@ -544,17 +544,17 @@ pm2 logs attendstack-frontend
 sudo systemctl restart nginx
 
 # Restart Django Backend
-sudo systemctl restart attendstack-backend
+sudo systemctl restart zuperhr-backend
 
 # Restart PM2 Frontend
-pm2 restart attendstack-frontend
+pm2 restart zuperhr-frontend
 ```
 
 ### Enable at Boot
 
 ```bash
 # Ensure services start on boot
-sudo systemctl enable attendstack-backend
+sudo systemctl enable zuperhr-backend
 sudo systemctl enable nginx
 pm2 startup
 pm2 save
@@ -567,7 +567,7 @@ pm2 save
 ### Directory Structure
 
 ```
-/home/squarefit/AttendStack/
+/home/squarefit/ZuperHR/
 ├── imptortant.txt                    # Setup instructions
 ├── backend/
 │   ├── gunicorn_start.sh            # Gunicorn startup script
@@ -618,8 +618,8 @@ Configured in Nginx for HTTPS:
 1. **Port 8001 vs 8000:** The systemd service uses port 8001, while the gunicorn_start.sh script references port 8000. The systemd service takes precedence.
 
 2. **Static Files:** 
-   - Nginx location: `/var/www/attendstack/static/` with 30-day cache
-   - Django media: `/home/squarefit/AttendStack/backend/media/`
+   - Nginx location: `/var/www/zuperhr/static/` with 30-day cache
+   - Django media: `/home/squarefit/ZuperHR/backend/media/`
 
 3. **Proxy Headers:** All locations include proper headers for logging client IP and forwarded protocol
 
@@ -631,9 +631,9 @@ Configured in Nginx for HTTPS:
    - Let's Encrypt certificates with auto-renewal capability
    - DH parameters configured for PFS (Perfect Forward Secrecy)
 
-6. **Nginx Sites:** Multiple projects configured but only attendance.nextgenapplication.com is actively used for AttendStack
+6. **Nginx Sites:** Multiple projects configured but only zuperhr.in is actively used for ZuperHR
 
-7. **Apache:** Installed but not in use for AttendStack deployment
+7. **Apache:** Installed but not in use for ZuperHR deployment
 
 ---
 
@@ -647,15 +647,15 @@ sudo nginx -t
 sudo netstat -tlnp | grep nginx
 
 # 3. Check Django backend status
-sudo systemctl status attendstack-backend
-sudo journalctl -u attendstack-backend -n 50
+sudo systemctl status zuperhr-backend
+sudo journalctl -u zuperhr-backend -n 50
 
 # 4. Check if Gunicorn is listening on 8001
 sudo netstat -tlnp | grep 8001
 
 # 5. Check PM2 processes
 pm2 list
-pm2 logs attendstack-frontend
+pm2 logs zuperhr-frontend
 
 # 6. Check if Next.js is listening on 3003
 sudo netstat -tlnp | grep 3003
@@ -670,8 +670,8 @@ sudo tail -f /var/log/nginx/error.log
 sudo certbot certificates
 
 # 10. Verify DNS resolution
-dig attendance.nextgenapplication.com
-nslookup attendance.nextgenapplication.com
+dig zuperhr.in
+nslookup zuperhr.in
 ```
 
 ---

@@ -47,7 +47,7 @@ def _send_password_reset_email(user, otp, requested_ip=None):
         "support_email": support_email,
     }
     message = EmailMultiAlternatives(
-        subject="[AttendStack Security] Password reset verification code",
+        subject="[ZuperHR Security] Password reset verification code",
         body=render_to_string("accounts/password_reset_otp.txt", context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
@@ -171,7 +171,7 @@ def _send_login_2fa_email(user, otp, requested_ip=None):
         "support_email": support_email,
     }
     message = EmailMultiAlternatives(
-        subject="[AttendStack Security] Your sign-in verification code",
+        subject="[ZuperHR Security] Your sign-in verification code",
         body=render_to_string("accounts/login_2fa_otp.txt", context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
@@ -315,7 +315,7 @@ def send_company_admin_welcome_email(user, organization):
         "support_email": support_email,
     }
     message = EmailMultiAlternatives(
-        subject="[AttendStack] Your Company Admin workspace is ready",
+        subject="[ZuperHR] Your Company Admin workspace is ready",
         body=render_to_string("accounts/company_admin_welcome.txt", context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
@@ -331,7 +331,7 @@ def send_company_admin_welcome_email(user, organization):
 
 def send_employee_welcome_email(user, employee, organization):
     """
-    Notify a newly added employee that their AttendStack login is ready.
+    Notify a newly added employee that their ZuperHR login is ready.
 
     Same no-password-by-email pattern as `send_company_admin_welcome_email`:
     the account is provisioned with a random, never-disclosed password, and
@@ -351,7 +351,7 @@ def send_employee_welcome_email(user, employee, organization):
         "support_email": support_email,
     }
     message = EmailMultiAlternatives(
-        subject=f"[AttendStack] Your {organization.name if organization else 'AttendStack'} account is ready",
+        subject=f"[ZuperHR] Your {organization.name if organization else 'ZuperHR'} account is ready",
         body=render_to_string("accounts/employee_welcome.txt", context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
@@ -383,7 +383,7 @@ def send_employee_registration_confirmation_email(user, employee, organization):
         "support_email": support_email,
     }
     message = EmailMultiAlternatives(
-        subject=f"[AttendStack] Your {organization.name if organization else 'AttendStack'} account is confirmed",
+        subject=f"[ZuperHR] Your {organization.name if organization else 'ZuperHR'} account is confirmed",
         body=render_to_string("accounts/employee_registration_confirmation.txt", context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
@@ -399,8 +399,8 @@ def send_employee_registration_confirmation_email(user, employee, organization):
 
 def send_purchase_thank_you_email(user, organization):
     """
-    Confirms a bundle purchase (SimplyJob + AttendStack) and tells the new
-    Company Admin their AttendStack workspace was auto-provisioned — no
+    Confirms a bundle purchase (SimplyJob + ZuperHR) and tells the new
+    Company Admin their ZuperHR workspace was auto-provisioned — no
     manual Super Admin onboarding step was needed. Same no-password,
     OTP-self-service pattern as `send_company_admin_welcome_email`.
     """
@@ -414,7 +414,7 @@ def send_purchase_thank_you_email(user, organization):
         "support_email": support_email,
     }
     message = EmailMultiAlternatives(
-        subject="[AttendStack] Thanks for your SimplyJob + AttendStack purchase",
+        subject="[ZuperHR] Thanks for your SimplyJob + ZuperHR purchase",
         body=render_to_string("accounts/purchase_thank_you.txt", context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],

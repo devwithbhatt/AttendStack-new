@@ -99,9 +99,9 @@ class PasswordResetOTPTests(APITestCase):
         )
         self.assertEqual(
             mail.outbox[0].subject,
-            "[AttendStack Security] Password reset verification code",
+            "[ZuperHR Security] Password reset verification code",
         )
-        self.assertIn("AttendStack Security Team", mail.outbox[0].body)
+        self.assertIn("ZuperHR Security Team", mail.outbox[0].body)
         self.assertIn("IP address:", mail.outbox[0].body)
         self.assertIn("never share this code", mail.outbox[0].body)
         self.assertEqual(len(mail.outbox[0].alternatives), 1)
@@ -411,7 +411,7 @@ class SubAdminManagementAPITests(APITestCase):
 
 @override_settings(SIMPLYJOB_ONBOARDING_SECRET="test-secret", EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class SimplyJobAutoOnboardingTests(APITestCase):
-    """A SimplyJob bundle customer jumping into AttendStack via SSO (or the public
+    """A SimplyJob bundle customer jumping into ZuperHR via SSO (or the public
     registration form) should get RBAC-seeded automatically and a one-time thank-you
     email, without any Super Admin manually creating the organization first."""
 
@@ -472,20 +472,20 @@ class SimplyJobAutoOnboardingTests(APITestCase):
         organization = Organization.objects.get(external_company_id="sj-co-admin-granted")
         self.assertEqual(organization.plan_name, "Enterprise Sovereign Plan")
 
-    def test_sso_jump_does_not_hijack_an_existing_attendstack_owner_into_a_new_org(self):
+    def test_sso_jump_does_not_hijack_an_existing_zuperhr_owner_into_a_new_org(self):
         existing_owner = get_user_model().objects.create_hr(
-            email="already-on-attendstack@example.com",
+            email="already-on-zuperhr@example.com",
             first_name="Already",
             last_name="Here",
         )
         existing_org = Organization.objects.create(
-            name="Existing AttendStack Co",
+            name="Existing ZuperHR Co",
             owner=existing_owner,
             external_company_id="some-other-source-id",
         )
 
         payload, signature = self._signed_sso_payload(
-            email="already-on-attendstack@example.com",
+            email="already-on-zuperhr@example.com",
             source_company_id="sj-co-different",
         )
         response = self.client.post(reverse("accounts:sso_login"), {"payload": payload, "signature": signature}, format="json")

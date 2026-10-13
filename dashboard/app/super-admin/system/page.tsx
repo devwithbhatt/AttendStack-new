@@ -61,7 +61,7 @@ export default function SuperAdminSystemPage() {
       {
         id: "log-101",
         action: "Super Admin Platform Overview",
-        user: "superadmin@attendstack.com",
+        user: "superadmin@zuperhr.com",
         timestamp: new Date().toISOString(),
         status: "SUCCESS",
         details: "Fetched multi-tenant platform summary and org stats.",
@@ -69,7 +69,7 @@ export default function SuperAdminSystemPage() {
       {
         id: "log-100",
         action: "Company Invite Code Regeneration",
-        user: "superadmin@attendstack.com",
+        user: "superadmin@zuperhr.com",
         timestamp: new Date(Date.now() - 3600000).toISOString(),
         status: "SUCCESS",
         details: "Generated new onboarding access code for tenant.",

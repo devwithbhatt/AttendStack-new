@@ -1,6 +1,6 @@
-# AttendStack Mobile
+# ZuperHR Mobile
 
-Employee-facing React Native (Expo) app for AttendStack: sign in, check in/out with GPS, view attendance history, apply for leave, and view holidays. Talks to the same Django REST API as the web dashboard.
+Employee-facing React Native (Expo) app for ZuperHR: sign in, check in/out with GPS, view attendance history, apply for leave, and view holidays. Talks to the same Django REST API as the web dashboard.
 
 ## Setup
 

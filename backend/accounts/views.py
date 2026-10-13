@@ -151,7 +151,7 @@ class VerifyRegistrationTokenView(APIView):
 
         secret = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
-            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or getattr(settings, "ZUPERHR_ONBOARDING_SECRET", "")
         ).strip()
         if not secret:
             return None, "Integration secret is not configured."
@@ -311,7 +311,7 @@ class OrganizationCodeLookupView(APIView):
                     "valid": False,
                     "code": code,
                     "detail": "Enter a valid active organization code.",
-                    "error": "The organization code does not exist or has expired in AttendStack.",
+                    "error": "The organization code does not exist or has expired in ZuperHR.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -542,7 +542,7 @@ class SimplyJobEmployeeOnboardingView(APIView):
     def post(self, request, *args, **kwargs):
         secret = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
-            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or getattr(settings, "ZUPERHR_ONBOARDING_SECRET", "")
         ).strip()
         if not secret:
             raise AuthenticationFailed("Onboarding secret is not configured.")
@@ -560,8 +560,8 @@ class SimplyJobEmployeeOnboardingView(APIView):
             employee_data=serializer.validated_data,
         )
         join_base = (
-            getattr(settings, "ATTENDSTACK_APP_URL", "")
-            or getattr(settings, "ATTENDSTACK_DASHBOARD_URL", "http://localhost:3000")
+            getattr(settings, "ZUPERHR_APP_URL", "")
+            or getattr(settings, "ZUPERHR_DASHBOARD_URL", "http://localhost:3000")
         ).strip().rstrip("/")
         query = urlencode({"code": organization.invite_code, "email": employee.email})
         join_url = f"{join_base}/join?{query}"
@@ -614,7 +614,7 @@ class SSOLoginView(APIView):
 
         secret = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
-            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or getattr(settings, "ZUPERHR_ONBOARDING_SECRET", "")
         ).strip()
         if not secret:
             return Response({"detail": "SSO secret is not configured on this server."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -668,7 +668,7 @@ class SSOLoginView(APIView):
             newly_provisioned = False
 
             if organization is None:
-                # Don't hijack someone who already has their own AttendStack
+                # Don't hijack someone who already has their own ZuperHR
                 # account into a brand new organization — leave them exactly as
                 # they were and just resolve to what they already own.
                 existing_owned = user_already_existed and user.owned_organizations.first()

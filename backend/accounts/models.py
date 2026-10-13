@@ -1,5 +1,5 @@
 """
-AttendStack – Custom User Model
+ZuperHR – Custom User Model
 Roles: SUPER_ADMIN | HR | EMPLOYEE
 """
 
@@ -54,7 +54,7 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
-    AttendStack custom user model.
+    ZuperHR custom user model.
     Roles: SUPER_ADMIN, HR, SUB_ADMIN, EMPLOYEE
     """
 

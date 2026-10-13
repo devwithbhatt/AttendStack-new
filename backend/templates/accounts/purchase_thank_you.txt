@@ -1,8 +1,8 @@
 Hello {{ name }},
 
-Thank you for purchasing the SimplyJob + AttendStack bundle plan!
+Thank you for purchasing the SimplyJob + ZuperHR bundle plan!
 
-Your AttendStack workspace for "{{ organization_name }}" has been created
+Your ZuperHR workspace for "{{ organization_name }}" has been created
 automatically — no setup was needed on your end.
 
 Your sign-in email address:
@@ -25,6 +25,6 @@ If you were not expecting this email, please contact {{ support_email }} —
 someone may have entered your email address by mistake.
 
 Regards,
-AttendStack Team
+ZuperHR Team
 
 This is an automated notification. Please do not reply to this email.

@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Join Organization | AttendStack Employee Onboarding",
+  title: "Join Organization | ZuperHR Employee Onboarding",
   description:
-    "Accept your company invitation, set up your employee credentials, and access the AttendStack workforce portal.",
+    "Accept your company invitation, set up your employee credentials, and access the ZuperHR workforce portal.",
   alternates: {
-    canonical: "https://attendance.nextgenapplication.com/join",
+    canonical: "https://zuperhr.in/join",
   },
   openGraph: {
-    title: "Join Organization | AttendStack Employee Onboarding",
-    description: "Accept your company invitation and set up your AttendStack employee account.",
-    url: "https://attendance.nextgenapplication.com/join",
-    siteName: "AttendStack",
+    title: "Join Organization | ZuperHR Employee Onboarding",
+    description: "Accept your company invitation and set up your ZuperHR employee account.",
+    url: "https://zuperhr.in/join",
+    siteName: "ZuperHR",
     type: "website",
   },
 };

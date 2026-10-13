@@ -21,7 +21,7 @@ interface PlanFeatureLockedPaywallProps {
 
 export default function PlanFeatureLockedPaywall({
   featureTitle,
-  featureDescription = "This feature module is not included in your current workspace subscription. Upgrade your AttendStack plan to unlock instant access.",
+  featureDescription = "This feature module is not included in your current workspace subscription. Upgrade your ZuperHR plan to unlock instant access.",
   benefits = [
     "Full access to this module for all managers & admins",
     "Automated reporting & PDF/CSV export engine",
@@ -64,7 +64,7 @@ export default function PlanFeatureLockedPaywall({
           {featureDescription} Available on <strong className="text-dark">{requiredTier}</strong>.
         </p>
 
-        {/* Benefits Box - Native AttendStack Style */}
+        {/* Benefits Box - Native ZuperHR Style */}
         <div className="bg-light p-3.5 p-md-4 rounded-3 border text-start mb-4">
           <span
             className="text-uppercase text-muted fw-bold small d-block mb-2.5"

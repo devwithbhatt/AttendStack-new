@@ -28,7 +28,7 @@ from organizations.models import Organization
 
 User = get_user_model()
 
-SENDER = "AttendStack <noreply@bhattsquare.com>"
+SENDER = "ZuperHR <noreply@bhattsquare.com>"
 SUPPORT = "support@bhattsquare.com"
 
 

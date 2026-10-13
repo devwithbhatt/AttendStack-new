@@ -3,18 +3,18 @@ import Image from "next/image";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Page Not Found | AttendStack",
-  description: "The requested AttendStack page could not be found.",
+  title: "Page Not Found | ZuperHR",
+  description: "The requested ZuperHR page could not be found.",
 };
 
 export default function GlobalNotFound() {
   return (
     <main className="min-vh-100 bg-light d-flex align-items-center py-5">
       <div className="container text-center">
-        <Link href="/" aria-label="AttendStack home">
+        <Link href="/" aria-label="ZuperHR home">
           <Image
             src="/images/brand/logo/logo.png"
-            alt="AttendStack"
+            alt="ZuperHR"
             width={190}
             height={55}
             className="mb-4"

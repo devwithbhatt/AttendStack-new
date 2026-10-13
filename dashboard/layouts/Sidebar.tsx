@@ -316,17 +316,16 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
     <div id={containerId}>
       <div>
         {hideLogo || (
-          <div className='brand-logo'>
+          <div className='brand-logo d-flex justify-content-center'>
             <Link
               href='/'
-              className='d-none d-md-flex align-items-center gap-2'
+              className='d-none d-md-flex align-items-center'
               onClick={onNavigate}>
               <Image
                 src={getAssetPath("/images/brand/logo/logo.png")}
-                alt=''
-                style={{ height: "30px", width: "auto" }}
+                alt='ZuperHR'
+                style={{ height: "36px", width: "auto" }}
               />
-              <span className='fw-bold fs-4 site-logo-text'>AttendStack</span>
             </Link>
           </div>
         )}
@@ -518,7 +517,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                   )}
                 </div>
                 <div className='my-3'>
-                  <h5 className='mb-1 fs-6'>{isMounted ? (companyName || 'AttendStack') : 'AttendStack'}</h5>
+                  <h5 className='mb-1 fs-6'>{isMounted ? (companyName || <Image src={getAssetPath("/images/brand/logo/logo.png")} alt="ZuperHR" style={{ height: "22px", width: "auto" }} />) : <Image src={getAssetPath("/images/brand/logo/logo.png")} alt="ZuperHR" style={{ height: "22px", width: "auto" }} />}</h5>
                   <span className='d-block text-secondary'>{isMounted && currentUser ? (currentUser.full_name || currentUser.name || currentUser.username) : 'HR Administrator'}</span>
                   <span className='text-secondary'>{isMounted && currentUser ? (currentUser.designation || currentUser.custom_role_title || currentUser.role) : 'Administrator'}</span>
                 </div>

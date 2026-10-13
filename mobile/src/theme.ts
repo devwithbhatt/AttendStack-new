@@ -1,4 +1,4 @@
-// Mirrors the AttendStack web dashboard's design tokens
+// Mirrors the ZuperHR web dashboard's design tokens
 // (dashboard/styles/theme/_theme-variables.scss) so the mobile app feels
 // like the same product.
 

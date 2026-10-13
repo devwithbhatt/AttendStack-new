@@ -61,12 +61,12 @@ export const preloadNotificationSound = (): void => {
 
 export const isChatSoundMuted = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem('attendstack_chat_sound_muted') === 'true';
+  return localStorage.getItem('zuperhr_chat_sound_muted') === 'true';
 };
 
 export const setChatSoundMuted = (muted: boolean): void => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('attendstack_chat_sound_muted', muted ? 'true' : 'false');
+  localStorage.setItem('zuperhr_chat_sound_muted', muted ? 'true' : 'false');
 };
 
 /**

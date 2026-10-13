@@ -96,15 +96,14 @@ const SignInPage = () => {
             <Card.Body>
               {step === "credentials" && (
                 <div className="text-center mb-4">
-                  <Link href="/" aria-label="AttendStack home">
+                  <Link href="/" aria-label="ZuperHR home">
                     <Image
                       src="/images/brand/logo/logo.png"
-                      className="mb-3 rounded-3"
-                      alt="AttendStack logo"
-                      style={{ height: "72px", width: "72px", objectFit: "contain" }}
+                      className="mb-3"
+                      alt="ZuperHR"
+                      style={{ height: "48px", width: "auto" }}
                     />
                   </Link>
-                  <h1 className="h3 fw-bold mb-1">AttendStack</h1>
                   <p className="text-muted mb-0">Sign in to your account</p>
                 </div>
               )}
@@ -185,7 +184,7 @@ const SignInPage = () => {
                   </p>
                   <div className="border-top text-center mt-4 pt-3">
                     <small className="text-muted">
-                      AttendStack is a{" "}
+                      ZuperHR is a{" "}
                       <a
                         href="https://bhattsquare.com"
                         target="_blank"

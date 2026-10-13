@@ -100,15 +100,12 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
             >
               <Image
                 src={getAssetPath("/images/brand/logo/logo.png")}
-                alt="Logo"
-                style={{ height: "32px", width: "auto" }}
+                alt="ZuperHR"
+                style={{ height: "36px", width: "auto" }}
               />
-              <div className="d-flex flex-column align-items-start">
-                <span className="fw-bold fs-4 site-logo-text lh-1">AttendStack</span>
-                <Badge bg="warning" text="dark" className="font-monospace text-uppercase mt-1" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>
-                  SUPER ADMIN
-                </Badge>
-              </div>
+              <Badge bg="warning" text="dark" className="font-monospace text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>
+                SUPER ADMIN
+              </Badge>
             </Link>
           </div>
         )}
@@ -144,7 +141,7 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
                 </div>
                 <div className="my-2">
                   <h5 className="mb-1 fs-6">{user ? user.full_name || "Super Admin" : "Super Admin"}</h5>
-                  <span className="d-block text-secondary small">{user ? user.email : "superadmin@attendstack.com"}</span>
+                  <span className="d-block text-secondary small">{user ? user.email : "superadmin@zuperhr.com"}</span>
                   <Badge bg="success-subtle" text="success" className="border border-success-subtle mt-1">
                     Super Admin Control
                   </Badge>

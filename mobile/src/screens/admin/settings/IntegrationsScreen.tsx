@@ -112,7 +112,7 @@ export default function IntegrationsScreen() {
           <TouchableOpacity onPress={() => copy(org.invite_code, "Invite code")} hitSlop={10}>
             <Feather name="copy" size={18} color={colors.primaryDark} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => Share.share({ message: `Join ${org.name} on AttendStack with invite code: ${org.invite_code}` })} hitSlop={10}>
+          <TouchableOpacity onPress={() => Share.share({ message: `Join ${org.name} on ZuperHR with invite code: ${org.invite_code}` })} hitSlop={10}>
             <Feather name="share-2" size={18} color={colors.primaryDark} />
           </TouchableOpacity>
         </View>

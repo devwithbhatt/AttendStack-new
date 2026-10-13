@@ -2,7 +2,7 @@
 WebRTC ICE server configuration (STUN + optional TURN).
 
 The live screen stream travels **peer-to-peer** between the employee's computer
-and the admin's browser; it never passes through the AttendStack app server.
+and the admin's browser; it never passes through the ZuperHR app server.
 ICE servers only help the two peers find each other:
 
 * STUN lets peers discover their public address (free, stateless).
@@ -47,7 +47,7 @@ def build_ice_servers():
         # coturn long-term-credential REST scheme: username = "<expiry>:<id>",
         # password = base64(HMAC-SHA1(secret, username)).
         expiry = int(time.time()) + _TURN_TTL_SECONDS
-        username = f"{expiry}:attendstack"
+        username = f"{expiry}:zuperhr"
         digest = hmac.new(secret.encode(), username.encode(), hashlib.sha1).digest()
         credential = base64.b64encode(digest).decode()
         servers.append(

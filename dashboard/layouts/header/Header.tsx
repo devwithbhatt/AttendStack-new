@@ -65,12 +65,12 @@ const Header = () => {
 
   const getReadStorageKey = () => {
     const userData = localStorage.getItem("user");
-    if (!userData) return "attendstack_notification_reads_guest";
+    if (!userData) return "zuperhr_notification_reads_guest";
     try {
       const user = JSON.parse(userData);
-      return `attendstack_notification_reads_${user.email || user.id || user.role || "user"}`;
+      return `zuperhr_notification_reads_${user.email || user.id || user.role || "user"}`;
     } catch {
-      return "attendstack_notification_reads_user";
+      return "zuperhr_notification_reads_user";
     }
   };
 
@@ -243,7 +243,7 @@ const Header = () => {
 
       generatedNotifications.push({
         id: "system-welcome",
-        title: "Welcome to AttendStack",
+        title: "Welcome to ZuperHR",
         description: "Keep tracking your logs daily and check your dashboard regularly for holiday schedules.",
         timeLabel: "System Welcome",
         type: "system",

@@ -176,7 +176,7 @@ export default function LoginScreen() {
               <>
                 <View style={styles.logoWrap}>
                   <Image source={require("../../assets/brand-logo.png")} style={styles.logo} />
-                  <Text style={styles.title}>AttendStack</Text>
+                  <Text style={styles.title}>ZuperHR</Text>
                   <Text style={styles.subtitle}>Sign in to your account</Text>
                 </View>
 
@@ -234,7 +234,7 @@ export default function LoginScreen() {
 
                 <View style={styles.footer}>
                   <Text style={styles.footerText}>
-                    AttendStack is a <Text style={styles.footerBrand}>Bhatt Square</Text> project.
+                    ZuperHR is a <Text style={styles.footerBrand}>Bhatt Square</Text> project.
                   </Text>
                 </View>
               </>

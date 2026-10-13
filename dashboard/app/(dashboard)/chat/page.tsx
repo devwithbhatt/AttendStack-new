@@ -445,7 +445,7 @@ function ChatPageContent() {
     }
 
     // The cached copy above can be stale (e.g. a Super Admin just granted
-    // this company AttendStack access) — re-verify against the backend so a
+    // this company ZuperHR access) — re-verify against the backend so a
     // long-lived session doesn't keep showing a paywall that's already lifted.
     const token = localStorage.getItem("authToken");
     if (token) {
@@ -1026,9 +1026,9 @@ function ChatPageContent() {
     const handleNotifToggle = (e: any) => {
       setIsNotificationDisabled(Boolean(e.detail?.disabled));
     };
-    window.addEventListener("attendstack_chat_notification_toggle", handleNotifToggle);
+    window.addEventListener("zuperhr_chat_notification_toggle", handleNotifToggle);
     return () => {
-      window.removeEventListener("attendstack_chat_notification_toggle", handleNotifToggle);
+      window.removeEventListener("zuperhr_chat_notification_toggle", handleNotifToggle);
     };
   }, []);
 
@@ -1082,7 +1082,7 @@ function ChatPageContent() {
           setChatNotificationDisabled(false);
           playMessageChime();
           await sendBrowserChatNotification({
-            title: "AttendStack Notifications Active! 🎉",
+            title: "ZuperHR Notifications Active! 🎉",
             body: "You will now receive instant desktop and background chat alerts.",
             playSound: false,
           });
@@ -1140,6 +1140,7 @@ function ChatPageContent() {
   } = useQuery({
     queryKey: ["conversations"],
     queryFn: fetchConversations,
+    refetchInterval: 8000,
   });
 
   // Sync browser tab title & favicon Green Dot with total unread messages
@@ -1256,23 +1257,44 @@ function ChatPageContent() {
 
   // Scroll to bottom on new messages
   const scrollToBottom = useCallback((smooth = true) => {
-    if (chatMessagesAreaRef.current) {
-      chatMessagesAreaRef.current.scrollTo({
-        top: chatMessagesAreaRef.current.scrollHeight,
-        behavior: smooth ? "smooth" : "auto",
-      });
-    } else {
-      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-    }
+    const doScroll = () => {
+      if (chatMessagesAreaRef.current) {
+        chatMessagesAreaRef.current.scrollTo({
+          top: chatMessagesAreaRef.current.scrollHeight,
+          behavior: smooth ? "smooth" : "auto",
+        });
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+      }
+    };
+    requestAnimationFrame(() => {
+      doScroll();
+      if (!smooth) {
+        setTimeout(doScroll, 150);
+        setTimeout(doScroll, 500);
+      }
+    });
   }, []);
 
   useEffect(() => {
     scrollToBottom(false);
   }, [activeConversationId, scrollToBottom]);
 
+  const prevMsgLenRef = useRef<number>(0);
   useEffect(() => {
-    scrollToBottom(true);
-  }, [messages.length, typingUser, scrollToBottom]);
+    const prevLen = prevMsgLenRef.current;
+    prevMsgLenRef.current = messages.length;
+    const isInitialLoad = prevLen === 0 && messages.length > 0;
+    if (isInitialLoad) {
+      scrollToBottom(false);
+    } else if (messages.length > prevLen) {
+      scrollToBottom(true);
+    }
+  }, [messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    if (typingUser) scrollToBottom(true);
+  }, [typingUser, scrollToBottom]);
 
   const handleScrollArea = () => {
     if (!chatMessagesAreaRef.current) return;
@@ -1287,6 +1309,12 @@ function ChatPageContent() {
 
     if (wsRef.current) {
       wsRef.current.close();
+    }
+
+    setTypingUser(null);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
     }
 
     const controller = connectChatWebSocket(
@@ -1373,6 +1401,7 @@ function ChatPageContent() {
             return old.map((c) => (c.id === updated.id ? updated : c));
           });
         } else if (data.type === "typing") {
+          if (String(data.user_id) === String(currentUserId)) return;
           if (data.is_typing) {
             setTypingUser(data.username);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -1395,7 +1424,9 @@ function ChatPageContent() {
       }
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
       }
+      setTypingUser(null);
     };
   }, [activeConversationId, currentUserId, queryClient]);
 
@@ -1814,7 +1845,7 @@ function ChatPageContent() {
     const safeName =
       fileName ||
       targetFileUrl.split("/").pop()?.split("?")[0] ||
-      `attendstack-file-${Date.now()}`;
+      `zuperhr-file-${Date.now()}`;
 
     setDownloadingFileUrl(fileUrl);
 
@@ -2275,7 +2306,7 @@ function ChatPageContent() {
       if (!matchesSearch) return false;
       if (convFilter === "group") return c.type === "GROUP";
       return true;
-    });
+    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   }, [conversations, searchQuery, convFilter, currentUserId]);
 
   // Active members filter for user search
@@ -3047,7 +3078,7 @@ function ChatPageContent() {
                   className="shadow-xs border border-2 border-white flex-shrink-0"
                 />
                 <div className="text-truncate">
-                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>AttendStack Chat</h2>
+                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>ZuperHR Chat</h2>
                   <span className="chat-count text-muted small">
                     {filteredConversations.length} conversation{filteredConversations.length === 1 ? "" : "s"}
                   </span>

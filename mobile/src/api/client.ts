@@ -2,8 +2,8 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { API_BASE_URL } from "../config";
 
-const ACCESS_TOKEN_KEY = "attendstack_access_token";
-const REFRESH_TOKEN_KEY = "attendstack_refresh_token";
+const ACCESS_TOKEN_KEY = "zuperhr_access_token";
+const REFRESH_TOKEN_KEY = "zuperhr_refresh_token";
 
 export const tokenStorage = {
   async getAccess() {

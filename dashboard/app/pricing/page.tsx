@@ -10,18 +10,18 @@ import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "../marketing-pages.module.css";
 
 export const metadata: Metadata = {
-  title: "Plans & Pricing | AttendStack Workforce Management",
+  title: "Plans & Pricing | ZuperHR Workforce Management",
   description:
-    "Simple, employee-wise AttendStack pricing. Every plan includes a base set of employee seats, with extra seats billed per employee — cheaper when your organization is linked to SimplyJob.",
+    "Simple, employee-wise ZuperHR pricing. Every plan includes a base set of employee seats, with extra seats billed per employee — cheaper when your organization is linked to SimplyJob.",
   alternates: {
-    canonical: "https://attendance.nextgenapplication.com/pricing",
+    canonical: "https://zuperhr.in/pricing",
   },
   openGraph: {
-    title: "Plans & Pricing | AttendStack",
+    title: "Plans & Pricing | ZuperHR",
     description:
-      "Employee-wise AttendStack pricing with a discounted per-seat rate for organizations hiring on SimplyJob.",
-    url: "https://attendance.nextgenapplication.com/pricing",
-    siteName: "AttendStack",
+      "Employee-wise ZuperHR pricing with a discounted per-seat rate for organizations hiring on SimplyJob.",
+    url: "https://zuperhr.in/pricing",
+    siteName: "ZuperHR",
     type: "website",
   },
 };
@@ -77,7 +77,7 @@ export default async function PlansPage() {
                 Pay for the seats <span>you actually use.</span>
               </h1>
               <p>
-                Every AttendStack plan includes a base set of employee seats.
+                Every ZuperHR plan includes a base set of employee seats.
                 Need more? Extra seats are billed per employee — and cost
                 less for organizations hiring on SimplyJob.
               </p>
@@ -154,7 +154,7 @@ export default async function PlansPage() {
 
                     {contactSales ? (
                       <a
-                        href="mailto:onboarding@bhattsquare.com?subject=AttendStack%20Enterprise%20Plan"
+                        href="mailto:onboarding@bhattsquare.com?subject=ZuperHR%20Enterprise%20Plan"
                         className={`${styles.pricingCta} ${styles.pricingCtaOutline}`}
                       >
                         Contact Sales
@@ -179,7 +179,7 @@ export default async function PlansPage() {
               <h3>Hiring on SimplyJob?</h3>
               <p>
                 Link your SimplyJob organization ID and every extra employee
-                seat drops to ₹250/month across every AttendStack plan —
+                seat drops to ₹250/month across every ZuperHR plan —
                 cheaper than buying seats directly here.
               </p>
             </div>
@@ -201,7 +201,7 @@ export default async function PlansPage() {
           <div className={styles.ctaCard}>
             <div>
               <span className={styles.sectionLabel}>Ready when you are</span>
-              <h2>Start your AttendStack workspace today.</h2>
+              <h2>Start your ZuperHR workspace today.</h2>
               <p>
                 Set up your organization, invite employees, and start
                 tracking attendance in minutes.

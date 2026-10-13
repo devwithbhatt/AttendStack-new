@@ -1,0 +1,42 @@
+{
+  "name": "bhattsquare-watch",
+  "version": "1.0.0",
+  "description": "Bhatt Square Watch — background screen app for the Super Admin's Live Monitoring (read-only).",
+  "main": "src/main.js",
+  "author": "Bhatt Square Private Limited",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.bhattsquare.watch",
+    "productName": "Bhatt Square Watch",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "BhattSquareWatch.${ext}"
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

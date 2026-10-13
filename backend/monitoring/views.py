@@ -178,7 +178,7 @@ class AgentDownloadView(APIView):
     """Serve the Windows agent installer to an authenticated admin.
 
     Returns 404 until a built installer is placed at ``MEDIA_ROOT/monitoring/
-    agent/AttendStackMonitor-Setup.exe``; the dashboard button hides/greys
+    agent/ZuperHRMonitor-Setup.exe``; the dashboard button hides/greys
     itself when this 404s.
     """
 
@@ -188,7 +188,7 @@ class AgentDownloadView(APIView):
     def get(self, request):
         from django.conf import settings
 
-        path = settings.MEDIA_ROOT / "monitoring" / "agent" / "AttendStackMonitor-Setup.exe"
+        path = settings.MEDIA_ROOT / "monitoring" / "agent" / "ZuperHRMonitor-Setup.exe"
         if not path.exists():
             return Response(
                 {"detail": "Agent installer is not available yet."},
@@ -197,7 +197,7 @@ class AgentDownloadView(APIView):
         return FileResponse(
             open(path, "rb"),
             as_attachment=True,
-            filename="AttendStackMonitor-Setup.exe",
+            filename="ZuperHRMonitor-Setup.exe",
         )
 
 
