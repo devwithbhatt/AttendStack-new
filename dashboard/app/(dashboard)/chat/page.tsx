@@ -1237,6 +1237,7 @@ function ChatPageContent() {
       return (res.results || []).slice().reverse();
     },
     enabled: !!activeConversationId,
+    refetchInterval: 5000,
   });
 
   const messages = useMemo(() => messagesData || [], [messagesData]);
