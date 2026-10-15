@@ -73,6 +73,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     date_joined = models.DateTimeField(default=timezone.now)
     last_login  = models.DateTimeField(blank=True, null=True)
+    chat_last_seen_at = models.DateTimeField(blank=True, null=True)
 
     # Employee gets an auto-generated employee_id (set by employees app signal)
     employee_id = models.CharField(max_length=20, unique=True, blank=True, null=True)

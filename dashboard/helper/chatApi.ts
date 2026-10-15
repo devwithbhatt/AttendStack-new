@@ -14,6 +14,8 @@ export interface UserMinimal {
   designation?: string;
   department?: string;
   company_logo?: string;
+  is_online?: boolean;
+  chat_last_seen_at?: string | null;
 }
 
 export interface Attachment {
@@ -103,7 +105,7 @@ export const sendMessageWithAttachments = async (
   files: File[] = [],
   replyToId?: string | null,
   messageType?: string
-): Promise<Message> => {
+): Promise<Message | Message[]> => {
   const formData = new FormData();
   if (content) {
     formData.append('content', content);
@@ -309,6 +311,12 @@ export const connectChatWebSocket = (
       }
     },
   };
+};
+
+export const sendPresenceHeartbeat = async (): Promise<void> => {
+  try {
+    await apiClient.post('/api/v1/chat/presence/heartbeat/');
+  } catch {}
 };
 
 export const reactToMessage = async (

@@ -191,10 +191,18 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
           if (profile && profile.id) {
             setLocalUser(profile);
             localStorage.setItem("user", JSON.stringify(profile));
-            if (profile.organization) {
-              setOrganization(profile.organization);
-              localStorage.setItem("organization", JSON.stringify(profile.organization));
-            }
+          }
+        })
+        .catch(() => {});
+
+      fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/me/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((orgData) => {
+          if (orgData && orgData.id) {
+            setOrganization(orgData);
+            localStorage.setItem("organization", JSON.stringify(orgData));
           }
         })
         .catch(() => {});

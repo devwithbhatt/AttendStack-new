@@ -12,6 +12,10 @@ PATH_FEATURE_MAP = {
 
 EXEMPT_METHODS = {"OPTIONS", "HEAD"}
 
+EXEMPT_PATHS = {
+    "/api/v1/chat/presence/heartbeat/",
+}
+
 
 def _resolve_plan_features(organization):
     from organizations.models import Plan
@@ -56,6 +60,10 @@ class PlanEnforcementMiddleware:
             return self.get_response(request)
 
         path = request.path
+
+        if path in EXEMPT_PATHS:
+            return self.get_response(request)
+
         required_feature = None
         for prefix, feature_key in PATH_FEATURE_MAP.items():
             if path.startswith(prefix):

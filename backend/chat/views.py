@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes as perm_classes_dec
 from rest_framework.response import Response
+from django.utils import timezone as tz
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Count
@@ -351,66 +352,98 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # Auto detect type if files attached
-        if files and message_type == Message.MessageType.TEXT:
-            first_file = files[0]
-            if first_file.content_type.startswith('image/'):
-                message_type = Message.MessageType.IMAGE
-            elif first_file.content_type.startswith('video/'):
-                message_type = Message.MessageType.VIDEO
-            else:
-                message_type = Message.MessageType.FILE
-
         reply_to_id = request.data.get('reply_to') or request.data.get('reply_to_id')
         reply_to_msg = None
         if reply_to_id:
             reply_to_msg = Message.objects.filter(id=reply_to_id, conversation=conversation).first()
 
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=request.user,
-            reply_to=reply_to_msg,
-            content=content,
-            message_type=message_type
-        )
+        created_messages = []
 
-        for f in files:
-            Attachment.objects.create(
-                message=message,
-                file=f,
-                file_type=f.content_type,
-                file_size=f.size
+        if files and len(files) > 1 and not content:
+            for f in files:
+                if f.content_type.startswith('image/'):
+                    ft = Message.MessageType.IMAGE
+                elif f.content_type.startswith('video/'):
+                    ft = Message.MessageType.VIDEO
+                else:
+                    ft = Message.MessageType.FILE
+
+                msg = Message.objects.create(
+                    conversation=conversation,
+                    sender=request.user,
+                    reply_to=reply_to_msg,
+                    content='',
+                    message_type=ft
+                )
+                Attachment.objects.create(
+                    message=msg,
+                    file=f,
+                    file_type=f.content_type,
+                    file_size=f.size
+                )
+                created_messages.append(msg)
+                reply_to_msg = None
+        else:
+            if files and message_type == Message.MessageType.TEXT:
+                first_file = files[0]
+                if first_file.content_type.startswith('image/'):
+                    message_type = Message.MessageType.IMAGE
+                elif first_file.content_type.startswith('video/'):
+                    message_type = Message.MessageType.VIDEO
+                else:
+                    message_type = Message.MessageType.FILE
+
+            msg = Message.objects.create(
+                conversation=conversation,
+                sender=request.user,
+                reply_to=reply_to_msg,
+                content=content,
+                message_type=message_type
             )
 
-        conversation.save()  # Triggers auto_now for updated_at
+            for f in files:
+                Attachment.objects.create(
+                    message=msg,
+                    file=f,
+                    file_type=f.content_type,
+                    file_size=f.size
+                )
+            created_messages.append(msg)
 
-        # Also update sender's last_read_message
+        conversation.save()
+
+        last_msg = created_messages[-1]
         member = conversation.members.filter(user=request.user).first()
         if member:
-            member.last_read_message = message
+            member.last_read_message = last_msg
             member.save(update_fields=['last_read_message'])
 
-        msg_data = MessageSerializer(message, context={'request': request}).data
+        all_msg_data = [
+            MessageSerializer(m, context={'request': request}).data
+            for m in created_messages
+        ]
 
-        # Broadcast via Channel Layer to room group safely
         try:
             channel_layer = get_channel_layer()
             if channel_layer:
                 from django.core.serializers.json import DjangoJSONEncoder
                 import json
-                clean_msg_data = json.loads(json.dumps(msg_data, cls=DjangoJSONEncoder))
-                async_to_sync(channel_layer.group_send)(
-                    f"chat_{conversation.id}",
-                    {
-                        "type": "chat.message",
-                        "message": clean_msg_data
-                    }
-                )
+                for md in all_msg_data:
+                    clean_msg_data = json.loads(json.dumps(md, cls=DjangoJSONEncoder))
+                    async_to_sync(channel_layer.group_send)(
+                        f"chat_{conversation.id}",
+                        {
+                            "type": "chat.message",
+                            "message": clean_msg_data
+                        }
+                    )
         except Exception as e:
             import logging
             logging.warning(f"Failed to broadcast WS message: {e}")
 
-        return Response(msg_data, status=status.HTTP_201_CREATED)
+        if len(all_msg_data) == 1:
+            return Response(all_msg_data[0], status=status.HTTP_201_CREATED)
+        return Response(all_msg_data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post', 'delete'], url_path='delete-message')
     def delete_message(self, request, pk=None):
@@ -705,3 +738,10 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(employee_id__icontains=search)
             )
         return queryset.order_by('first_name', 'last_name', 'email')
+
+
+@api_view(['POST'])
+@perm_classes_dec([permissions.IsAuthenticated])
+def chat_heartbeat(request):
+    User.objects.filter(pk=request.user.pk).update(chat_last_seen_at=tz.now())
+    return Response({"ok": True})

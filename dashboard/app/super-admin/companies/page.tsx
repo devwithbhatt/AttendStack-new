@@ -609,7 +609,7 @@ export default function SuperAdminCompaniesPage() {
                         <Dropdown.Toggle as={ActionToggle}>
                           <IconDotsVertical size={16} />
                         </Dropdown.Toggle>
-                        <Dropdown.Menu className="shadow border-0">
+                        <Dropdown.Menu className="shadow border-0" renderOnMount popperConfig={{ strategy: "fixed" }}>
                           <Dropdown.Item onClick={() => handleOpenDetails(org)}>
                             <IconEye size={15} className="me-2 text-info" /> Inspect Analytics & Details
                           </Dropdown.Item>

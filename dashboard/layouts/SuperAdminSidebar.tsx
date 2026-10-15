@@ -95,7 +95,7 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
           <div className="brand-logo py-3 px-4 border-bottom border-secondary-subtle">
             <Link
               href="/super-admin/dashboard"
-              className="d-flex align-items-center gap-2.5 text-decoration-none"
+              className="d-flex flex-column align-items-center text-decoration-none"
               onClick={onNavigate}
             >
               <Image
@@ -103,7 +103,7 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
                 alt="ZuperHR"
                 style={{ height: "36px", width: "auto" }}
               />
-              <Badge bg="warning" text="dark" className="font-monospace text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>
+              <Badge bg="warning" text="dark" className="font-monospace text-uppercase mt-1" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>
                 SUPER ADMIN
               </Badge>
             </Link>

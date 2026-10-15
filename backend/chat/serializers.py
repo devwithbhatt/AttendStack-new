@@ -12,14 +12,24 @@ class UserMinimalSerializer(serializers.ModelSerializer):
     designation = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     company_logo = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+    chat_last_seen_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'name', 'role',
             'employee_id', 'is_active', 'status', 'profile_photo_url',
-            'designation', 'department', 'company_logo'
+            'designation', 'department', 'company_logo',
+            'is_online', 'chat_last_seen_at',
         ]
+
+    def get_is_online(self, obj):
+        from django.utils import timezone as tz
+        last_seen = getattr(obj, 'chat_last_seen_at', None)
+        if not last_seen:
+            return False
+        return (tz.now() - last_seen).total_seconds() < 120
 
     def get_name(self, obj):
         full_name = f"{getattr(obj, 'first_name', '')} {getattr(obj, 'last_name', '')}".strip()

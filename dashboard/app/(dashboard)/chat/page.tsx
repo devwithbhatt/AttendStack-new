@@ -50,6 +50,7 @@ import {
   Reply,
   Copy,
   Smile,
+  SmilePlus,
   Megaphone,
   Pin,
   UploadCloud,
@@ -483,7 +484,7 @@ function ChatPageContent() {
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest(".chat-quick-reactions-bar") && !target.closest(".chat-bubble")) {
+      if (!target.closest(".chat-quick-reactions-bar") && !target.closest(".chat-bubble") && !target.closest(".chat-msg-hover-actions")) {
         setActiveActionBarMsgId(null);
       }
     };
@@ -690,8 +691,9 @@ function ChatPageContent() {
         "STICKER"
       );
     },
-    onSuccess: (newMsg) => {
-      if (!newMsg || !activeConversationId) return;
+    onSuccess: (result) => {
+      if (!result || !activeConversationId) return;
+      const newMsg = Array.isArray(result) ? result[result.length - 1] : result;
 
       setShowEmojiPicker(false);
       setReplyingTo(null);
@@ -1699,7 +1701,8 @@ function ChatPageContent() {
     mutationFn: async ({ targetConvId, content }: { targetConvId: string; content: string }) => {
       return await sendMessageWithAttachments(targetConvId, content, []);
     },
-    onSuccess: (newMsg, variables) => {
+    onSuccess: (result, variables) => {
+      const newMsg = Array.isArray(result) ? result[result.length - 1] : result;
       setForwardedConvIds((prev) => [...prev, variables.targetConvId]);
       queryClient.setQueryData<Message[]>(["messages", variables.targetConvId], (old = []) => {
         if (old.some((m) => m.id === newMsg.id)) return old;
@@ -1777,8 +1780,8 @@ function ChatPageContent() {
         replyingTo?.id || null
       );
     },
-    onSuccess: (newMsg) => {
-      if (!newMsg || !activeConversationId) return;
+    onSuccess: (result) => {
+      if (!result || !activeConversationId) return;
 
       setInputContent("");
       setSelectedFiles([]);
@@ -1789,15 +1792,19 @@ function ChatPageContent() {
         inputRef.current.style.height = "auto";
       }
 
+      const newMessages = Array.isArray(result) ? result : [result];
+      const lastMsg = newMessages[newMessages.length - 1];
+
       queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
-        if (old.some((m) => m.id === newMsg.id)) return old;
-        return [...old, newMsg];
+        const existingIds = new Set(old.map((m) => m.id));
+        const toAdd = newMessages.filter((m) => !existingIds.has(m.id));
+        return toAdd.length > 0 ? [...old, ...toAdd] : old;
       });
 
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
         old.map((c) =>
           c.id === activeConversationId
-            ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
+            ? { ...c, last_message: lastMsg, updated_at: new Date().toISOString() }
             : c
         )
       );
@@ -2573,6 +2580,287 @@ function ChatPageContent() {
       const isBeingSwiped = swipingMsgId === msg.id;
       const currentSwipeX = isBeingSwiped ? swipeOffset : 0;
 
+      const shouldSplitAttachments = !msg.is_deleted && !msg.content && msg.attachments && msg.attachments.length > 1;
+
+      const renderHoverActions = (msgForAction: Message, actionKey: string) => (
+        <div className={`chat-msg-hover-actions ${isMe ? "hover-actions-left" : "hover-actions-right"}`}>
+          <button
+            type="button"
+            className="chat-hover-action-btn"
+            title="Reply"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInitiateReply(msgForAction);
+            }}
+          >
+            <CornerUpLeft size={15} />
+          </button>
+          <button
+            type="button"
+            className="chat-hover-action-btn"
+            title="React"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveActionBarMsgId((prev) => (prev === actionKey ? null : actionKey));
+            }}
+          >
+            <SmilePlus size={15} />
+          </button>
+          <Dropdown align="end" className="d-inline-flex">
+            <Dropdown.Toggle
+              variant="light"
+              size="sm"
+              className="chat-hover-action-btn no-caret border-0 bg-transparent p-0 d-flex align-items-center justify-content-center"
+            >
+              <MoreVertical size={15} />
+            </Dropdown.Toggle>
+            <Dropdown.Menu className="shadow-lg border rounded-3 py-1 dropdown-menu-end" style={{ minWidth: "150px", zIndex: 1060 }}>
+              <Dropdown.Item
+                className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
+                onClick={() => handleInitiateReply(msgForAction)}
+              >
+                <Reply size={13} />
+                <span>Reply</span>
+              </Dropdown.Item>
+              <Dropdown.Item
+                className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
+                onClick={() => {
+                  setForwardMsg(msgForAction);
+                  setForwardSearch("");
+                  setForwardedConvIds([]);
+                }}
+              >
+                <CornerUpRight size={13} />
+                <span>Forward</span>
+              </Dropdown.Item>
+              {canDelete && (
+                <>
+                  <Dropdown.Divider className="my-1" />
+                  <Dropdown.Item
+                    className="d-flex align-items-center gap-2 text-danger px-3 py-1.5 small"
+                    onClick={() => handleDeleteMessage(msgForAction.id)}
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete</span>
+                  </Dropdown.Item>
+                </>
+              )}
+            </Dropdown.Menu>
+          </Dropdown>
+        </div>
+      );
+
+      const renderReactionPicker = (actionKey: string, targetMsgId: string) => (
+        activeActionBarMsgId === actionKey ? (
+          <div className="chat-quick-reactions-bar shadow-sm" onClick={(e) => e.stopPropagation()}>
+            {CORPORATE_REACTIONS.map((em) => (
+              <button
+                key={em}
+                type="button"
+                className="quick-reaction-btn"
+                title={`React ${em}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleReaction(targetMsgId, em);
+                  setActiveActionBarMsgId(null);
+                }}
+              >
+                {em}
+              </button>
+            ))}
+          </div>
+        ) : null
+      );
+
+      const renderSingleAttachment = (att: typeof msg.attachments[0]) => {
+        const isImg = att.file_type?.startsWith("image/") || (att.file && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file));
+        const isVid = att.file_type?.startsWith("video/") || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
+        const fileName = att.file ? att.file.split("/").pop()?.split("?")[0] || "Attachment" : "Attachment";
+        const fileSizeStr = att.file_size ? (
+          att.file_size < 1024 * 1024
+            ? `${Math.round(att.file_size / 1024)} kB`
+            : `${(att.file_size / (1024 * 1024)).toFixed(1)} MB`
+        ) : "";
+
+        if (isImg) {
+          return (
+            <div
+              className="whatsapp-media-card position-relative overflow-hidden rounded-3"
+              style={{ cursor: "pointer", maxWidth: "330px" }}
+              onClick={() =>
+                openMediaPreview({ url: att.file_url, type: "image", name: fileName, size: fileSizeStr })
+              }
+            >
+              <BSImage
+                src={att.file_url}
+                alt={fileName}
+                className="w-100"
+                style={{ maxHeight: "280px", objectFit: "cover", borderRadius: "8px", display: "block" }}
+              />
+              <div className="whatsapp-media-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
+                <button
+                  className="btn btn-dark bg-opacity-75 text-white rounded-circle border-0 shadow-lg d-flex align-items-center justify-content-center"
+                  style={{ width: "44px", height: "44px", backdropFilter: "blur(4px)" }}
+                  title="Download & Save to Device"
+                  disabled={downloadingFileUrl === att.file_url}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadFile(e, att.file_url, fileName);
+                  }}
+                >
+                  {downloadingFileUrl === att.file_url ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : (
+                    <Download size={20} />
+                  )}
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        if (isVid) {
+          return (
+            <div className="whatsapp-video-card rounded-3 overflow-hidden bg-black position-relative" style={{ maxWidth: "330px" }}>
+              <div className="d-flex align-items-center justify-content-between p-2 bg-dark bg-opacity-80 text-white small">
+                <div className="d-flex align-items-center gap-1.5 overflow-hidden text-truncate me-2">
+                  <VideoIcon size={14} className="text-primary flex-shrink-0" />
+                  <span className="text-truncate fw-semibold" style={{ fontSize: "12px" }}>{fileName}</span>
+                  {fileSizeStr && <span className="badge bg-secondary py-0.5 px-1.5" style={{ fontSize: "10px" }}>{fileSizeStr}</span>}
+                </div>
+                <div className="d-flex align-items-center gap-1">
+                  <button
+                    className="btn btn-sm btn-dark text-white p-1 rounded border-0"
+                    title="Full Preview"
+                    onClick={() => openMediaPreview({ url: att.file_url, type: "video", name: fileName, size: fileSizeStr })}
+                  >
+                    <Maximize2 size={13} />
+                  </button>
+                  <button
+                    className="btn btn-sm btn-primary text-white p-1 rounded border-0 d-flex align-items-center gap-1"
+                    title="Download Video"
+                    disabled={downloadingFileUrl === att.file_url}
+                    onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                  >
+                    {downloadingFileUrl === att.file_url ? (
+                      <Spinner animation="border" size="sm" style={{ width: "13px", height: "13px" }} />
+                    ) : (
+                      <Download size={13} />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <video controls preload="metadata" playsInline className="w-100" style={{ maxHeight: "260px", display: "block" }}>
+                <source src={att.file_url} type={att.file_type || "video/mp4"} />
+                Your browser does not support playing this video format.
+              </video>
+            </div>
+          );
+        }
+
+        const fileMeta = getFileMeta(fileName);
+        return (
+          <div
+            className="whatsapp-file-card d-flex align-items-center justify-content-between p-2 rounded-2"
+            onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+          >
+            <div className="d-flex align-items-center gap-2.5 overflow-hidden me-2">
+              <div
+                className="whatsapp-doc-badge d-flex flex-column align-items-center justify-content-center flex-shrink-0 rounded-1"
+                style={{ width: "36px", height: "44px", backgroundColor: fileMeta.color, color: "#ffffff" }}
+              >
+                <FileText size={18} strokeWidth={2.2} />
+                <span style={{ fontSize: "8.5px", fontWeight: 800, marginTop: "1px", letterSpacing: "0.03em" }}>
+                  {fileMeta.label}
+                </span>
+              </div>
+              <div className="d-flex flex-column overflow-hidden text-start">
+                <span className="fw-semibold text-truncate" title={fileName} style={{ color: "#111b21", fontSize: "13.5px", lineHeight: "1.35" }}>
+                  {fileName}
+                </span>
+                <span style={{ color: "#667781", fontSize: "11px", marginTop: "2px", fontWeight: 400 }}>
+                  {fileMeta.label} • {fileSizeStr || "Document"}
+                </span>
+              </div>
+            </div>
+            <button
+              className="whatsapp-download-btn btn p-1.5 rounded-circle border-0 d-flex align-items-center justify-content-center flex-shrink-0"
+              title={`Download ${fileName}`}
+              disabled={downloadingFileUrl === att.file_url}
+              onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+            >
+              {downloadingFileUrl === att.file_url ? (
+                <Spinner animation="border" size="sm" style={{ width: "16px", height: "16px" }} />
+              ) : (
+                <Download size={19} strokeWidth={2} />
+              )}
+            </button>
+          </div>
+        );
+      };
+
+      if (shouldSplitAttachments) {
+        msg.attachments.forEach((att, attIdx) => {
+          const actionKey = `${msg.id}-att-${att.id}`;
+          elements.push(
+            <div
+              key={actionKey}
+              id={attIdx === 0 ? `msg-${msg.id}` : undefined}
+              className={`chat-message-row ${isMe ? "sent" : "received"} position-relative`}
+            >
+              {!isMe && attIdx === 0 && (
+                <SafeAvatar src={senderPhoto} name={senderName} size={30} fontSize={11} className="chat-msg-avatar mb-1 me-1" />
+              )}
+              {!isMe && attIdx > 0 && <div style={{ width: "30px", flexShrink: 0 }} className="me-1" />}
+
+              {renderHoverActions(msg, actionKey)}
+
+              <div
+                className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"} ${activeActionBarMsgId === actionKey ? "active-bubble-focused" : ""}`}
+              >
+                {renderReactionPicker(actionKey, msg.id)}
+
+                {!isMe && activeConversation?.type === "GROUP" && attIdx === 0 && (
+                  <span className="chat-sender-name">{msg.sender?.name || msg.sender?.email}</span>
+                )}
+
+                {renderSingleAttachment(att)}
+
+                <div className="chat-bubble-meta">
+                  <span className="chat-time">{timeStr}</span>
+                  {isMe && <CheckCheck size={13} className="chat-read-icon" />}
+                </div>
+
+                {attIdx === msg.attachments.length - 1 && hasReactions && (
+                  <div className="chat-msg-reactions-container">
+                    {msg.reactions!.map((r) => {
+                      const userNames = r.users.map((u) => (String(u.id) === String(currentUserId) ? "You" : u.name)).join(", ");
+                      return (
+                        <OverlayTrigger
+                          key={r.emoji}
+                          placement="top"
+                          overlay={<Tooltip id={`tooltip-reaction-${msg.id}-${r.emoji}`}>{userNames} reacted with {r.emoji}</Tooltip>}
+                        >
+                          <button
+                            type="button"
+                            className={`chat-reaction-badge ${r.reacted_by_me ? "active-reaction" : ""}`}
+                            onClick={(e) => { e.stopPropagation(); handleToggleReaction(msg.id, r.emoji); }}
+                          >
+                            <span className="reaction-emoji">{r.emoji}</span>
+                            {r.count > 1 && <span className="reaction-count">{r.count}</span>}
+                          </button>
+                        </OverlayTrigger>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        });
+        return;
+      }
+
       elements.push(
         <div
           key={msg.id}
@@ -2608,114 +2896,18 @@ function ChatPageContent() {
             />
           )}
 
+          {/* Hover action buttons - reply, emoji, more */}
+          {!msg.is_deleted && renderHoverActions(msg, msg.id)}
+
           <div
             className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"} ${activeActionBarMsgId === msg.id ? "active-bubble-focused" : ""}`}
             style={{
               transform: currentSwipeX > 0 ? `translateX(${currentSwipeX}px)` : undefined,
               transition: isBeingSwiped ? "none" : "transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28)",
-              cursor: "pointer",
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveActionBarMsgId((prev) => (prev === msg.id ? null : msg.id));
             }}
           >
-            {/* WhatsApp-Style Click-to-Show Reaction & Action Bar */}
-            {activeActionBarMsgId === msg.id && (
-              <div className="chat-quick-reactions-bar shadow-sm" onClick={(e) => e.stopPropagation()}>
-                {CORPORATE_REACTIONS.map((em) => (
-                  <button
-                    key={em}
-                    type="button"
-                    className="quick-reaction-btn"
-                    title={`React ${em}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleReaction(msg.id, em);
-                      setActiveActionBarMsgId(null);
-                    }}
-                  >
-                    {em}
-                  </button>
-                ))}
-
-                {/* Quick Reply Button on Action Bar */}
-                <button
-                  type="button"
-                  className="quick-reaction-btn reply-quick-btn"
-                  title="Reply to message"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleInitiateReply(msg);
-                    setActiveActionBarMsgId(null);
-                  }}
-                >
-                  <CornerUpLeft size={14} />
-                </button>
-
-                {/* Message 3-dots Dropdown Actions */}
-                <Dropdown align="end" className="d-inline-block">
-                  <Dropdown.Toggle
-                    variant="light"
-                    size="sm"
-                    className="quick-reaction-btn no-caret border-0 bg-transparent p-0 d-flex align-items-center justify-content-center"
-                  >
-                    <MoreVertical size={13} />
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu className="shadow-lg border rounded-3 py-1 dropdown-menu-end" style={{ minWidth: "150px", zIndex: 1060 }}>
-                    <Dropdown.Item
-                      className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
-                      onClick={() => {
-                        handleInitiateReply(msg);
-                        setActiveActionBarMsgId(null);
-                      }}
-                    >
-                      <Reply size={13} />
-                      <span>Reply</span>
-                    </Dropdown.Item>
-                    {msg.content && (
-                      <Dropdown.Item
-                        className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
-                        onClick={() => {
-                          handleCopyMessage(msg.id, msg.content);
-                          setActiveActionBarMsgId(null);
-                        }}
-                      >
-                        <Copy size={13} />
-                        <span>{copiedMsgId === msg.id ? "Copied!" : "Copy Text"}</span>
-                      </Dropdown.Item>
-                    )}
-                    <Dropdown.Item
-                      className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
-                      onClick={() => {
-                        setForwardMsg(msg);
-                        setForwardSearch("");
-                        setForwardedConvIds([]);
-                        setActiveActionBarMsgId(null);
-                      }}
-                    >
-                      <CornerUpRight size={13} />
-                      <span>Forward</span>
-                    </Dropdown.Item>
-                    {canDelete && (
-                      <>
-                        <Dropdown.Divider className="my-1" />
-                        <Dropdown.Item
-                          className="d-flex align-items-center gap-2 text-danger px-3 py-1.5 small"
-                          onClick={() => {
-                            handleDeleteMessage(msg.id);
-                            setActiveActionBarMsgId(null);
-                          }}
-                        >
-                          <Trash2 size={13} />
-                          <span>Delete</span>
-                        </Dropdown.Item>
-                      </>
-                    )}
-                  </Dropdown.Menu>
-                </Dropdown>
-              </div>
-            )}
+            {/* Emoji reaction picker popup */}
+            {renderReactionPicker(msg.id, msg.id)}
 
             {/* Sender name for group chat */}
             {!isMe && activeConversation?.type === "GROUP" && (
@@ -2830,173 +3022,7 @@ function ChatPageContent() {
             {/* Attachments */}
             {msg.attachments && msg.attachments.length > 0 && (
               <div className="chat-attachments mt-1">
-                {msg.attachments.map((att) => {
-                  const isImg = att.file_type?.startsWith("image/") || (att.file && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file));
-                  const isVid = att.file_type?.startsWith("video/") || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
-                  const fileName = att.file ? att.file.split("/").pop()?.split("?")[0] || "Attachment" : "Attachment";
-                  const fileSizeStr = att.file_size ? (
-                    att.file_size < 1024 * 1024
-                      ? `${Math.round(att.file_size / 1024)} kB`
-                      : `${(att.file_size / (1024 * 1024)).toFixed(1)} MB`
-                  ) : "";
-
-                  if (isImg) {
-                    return (
-                      <div
-                        key={att.id}
-                        className="whatsapp-media-card position-relative overflow-hidden rounded-3"
-                        style={{ cursor: "pointer", maxWidth: "330px" }}
-                        onClick={() =>
-                          openMediaPreview({
-                            url: att.file_url,
-                            type: "image",
-                            name: fileName,
-                            size: fileSizeStr,
-                          })
-                        }
-                      >
-                        <BSImage
-                          src={att.file_url}
-                          alt={fileName}
-                          className="w-100"
-                          style={{ maxHeight: "280px", objectFit: "cover", borderRadius: "8px", display: "block" }}
-                        />
-                        <div className="whatsapp-media-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
-                          <button
-                            className="btn btn-dark bg-opacity-75 text-white rounded-circle border-0 shadow-lg d-flex align-items-center justify-content-center"
-                            style={{ width: "44px", height: "44px", backdropFilter: "blur(4px)" }}
-                            title="Download & Save to Device"
-                            disabled={downloadingFileUrl === att.file_url}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadFile(e, att.file_url, fileName);
-                            }}
-                          >
-                            {downloadingFileUrl === att.file_url ? (
-                              <Spinner animation="border" size="sm" />
-                            ) : (
-                              <Download size={20} />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  if (isVid) {
-                    return (
-                      <div key={att.id} className="whatsapp-video-card rounded-3 overflow-hidden bg-black position-relative" style={{ maxWidth: "330px" }}>
-                        <div className="d-flex align-items-center justify-content-between p-2 bg-dark bg-opacity-80 text-white small">
-                          <div className="d-flex align-items-center gap-1.5 overflow-hidden text-truncate me-2">
-                            <VideoIcon size={14} className="text-primary flex-shrink-0" />
-                            <span className="text-truncate fw-semibold" style={{ fontSize: "12px" }}>{fileName}</span>
-                            {fileSizeStr && <span className="badge bg-secondary py-0.5 px-1.5" style={{ fontSize: "10px" }}>{fileSizeStr}</span>}
-                          </div>
-                          <div className="d-flex align-items-center gap-1">
-                            <button
-                              className="btn btn-sm btn-dark text-white p-1 rounded border-0"
-                              title="Full Preview"
-                              onClick={() =>
-                                openMediaPreview({
-                                  url: att.file_url,
-                                  type: "video",
-                                  name: fileName,
-                                  size: fileSizeStr,
-                                })
-                              }
-                            >
-                              <Maximize2 size={13} />
-                            </button>
-                            <button
-                              className="btn btn-sm btn-primary text-white p-1 rounded border-0 d-flex align-items-center gap-1"
-                              title="Download Video"
-                              disabled={downloadingFileUrl === att.file_url}
-                              onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
-                            >
-                              {downloadingFileUrl === att.file_url ? (
-                                <Spinner animation="border" size="sm" style={{ width: "13px", height: "13px" }} />
-                              ) : (
-                                <Download size={13} />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <video
-                          controls
-                          preload="metadata"
-                          playsInline
-                          className="w-100"
-                          style={{ maxHeight: "260px", display: "block" }}
-                        >
-                          <source src={att.file_url} type={att.file_type || "video/mp4"} />
-                          Your browser does not support playing this video format.
-                        </video>
-                      </div>
-                    );
-                  }
-
-                  const fileMeta = getFileMeta(fileName);
-
-                  return (
-                    <div
-                      key={att.id}
-                      className="whatsapp-file-card d-flex align-items-center justify-content-between p-2 rounded-2"
-                      onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
-                    >
-                      <div className="d-flex align-items-center gap-2.5 overflow-hidden me-2">
-                        <div
-                          className="whatsapp-doc-badge d-flex flex-column align-items-center justify-content-center flex-shrink-0 rounded-1"
-                          style={{
-                            width: "36px",
-                            height: "44px",
-                            backgroundColor: fileMeta.color,
-                            color: "#ffffff",
-                          }}
-                        >
-                          <FileText size={18} strokeWidth={2.2} />
-                          <span style={{ fontSize: "8.5px", fontWeight: 800, marginTop: "1px", letterSpacing: "0.03em" }}>
-                            {fileMeta.label}
-                          </span>
-                        </div>
-                        <div className="d-flex flex-column overflow-hidden text-start">
-                          <span
-                            className="fw-semibold text-truncate"
-                            title={fileName}
-                            style={{
-                              color: "#111b21",
-                              fontSize: "13.5px",
-                              lineHeight: "1.35",
-                            }}
-                          >
-                            {fileName}
-                          </span>
-                          <span
-                            style={{
-                              color: "#667781",
-                              fontSize: "11px",
-                              marginTop: "2px",
-                              fontWeight: 400,
-                            }}
-                          >
-                            {fileMeta.label} • {fileSizeStr || "Document"}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        className="whatsapp-download-btn btn p-1.5 rounded-circle border-0 d-flex align-items-center justify-content-center flex-shrink-0"
-                        title={`Download ${fileName}`}
-                        disabled={downloadingFileUrl === att.file_url}
-                        onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
-                      >
-                        {downloadingFileUrl === att.file_url ? (
-                          <Spinner animation="border" size="sm" style={{ width: "16px", height: "16px" }} />
-                        ) : (
-                          <Download size={19} strokeWidth={2} />
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
+                {msg.attachments.map((att) => <div key={att.id}>{renderSingleAttachment(att)}</div>)}
               </div>
             )}
 
@@ -5215,6 +5241,52 @@ function ChatPageContent() {
 
         .chat-message-row.received {
           justify-content: flex-start;
+        }
+
+        /* Hover action buttons (reply, emoji, more) */
+        .chat-msg-hover-actions {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          opacity: 0;
+          transition: opacity 0.15s ease;
+          pointer-events: none;
+          flex-shrink: 0;
+          align-self: center;
+        }
+
+        .chat-message-row:hover .chat-msg-hover-actions,
+        .chat-msg-hover-actions:focus-within {
+          opacity: 1;
+          pointer-events: auto;
+        }
+
+        .chat-msg-hover-actions.hover-actions-left {
+          order: -1;
+        }
+
+        .chat-msg-hover-actions.hover-actions-right {
+          order: 1;
+        }
+
+        .chat-hover-action-btn {
+          width: 30px;
+          height: 30px;
+          border: none;
+          background: transparent;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #94a3b8;
+          transition: background 0.15s ease, color 0.15s ease;
+          padding: 0;
+        }
+
+        .chat-hover-action-btn:hover {
+          background: #f1f5f9;
+          color: #475569;
         }
 
         /* Swipe-to-reply spring icon indicator */
