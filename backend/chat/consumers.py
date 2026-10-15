@@ -92,6 +92,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'conversation_id': event.get('conversation_id')
         }, cls=DjangoJSONEncoder))
 
+    async def chat_read_receipt(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'read_receipt',
+            'user_id': event['user_id'],
+            'user_name': event['user_name'],
+            'message_id': event['message_id'],
+            'conversation_id': event['conversation_id'],
+        }, cls=DjangoJSONEncoder))
+
     async def chat_typing(self, event):
         # Don't send back to the user who is typing
         if str(event['user_id']) != str(self.user.id):

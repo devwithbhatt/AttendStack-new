@@ -341,13 +341,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+        MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB
         for f in files:
             if f.size > MAX_FILE_SIZE_BYTES:
                 size_mb = round(f.size / (1024 * 1024), 2)
                 return Response(
                     {
-                        "error": f"File '{f.name}' ({size_mb} MB) exceeds the maximum allowed file size of 50 MB. Please upload files under 50 MB."
+                        "error": f"File '{f.name}' ({size_mb} MB) exceeds the maximum allowed file size of 500 MB. Please upload files under 500 MB."
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
@@ -514,6 +514,22 @@ class ConversationViewSet(viewsets.ModelViewSet):
             if member:
                 member.last_read_message = latest_message
                 member.save(update_fields=['last_read_message'])
+                try:
+                    channel_layer = get_channel_layer()
+                    if channel_layer:
+                        user_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.email
+                        async_to_sync(channel_layer.group_send)(
+                            f"chat_{conversation.id}",
+                            {
+                                "type": "chat.read_receipt",
+                                "user_id": str(request.user.id),
+                                "user_name": user_name,
+                                "message_id": str(latest_message.id),
+                                "conversation_id": str(conversation.id),
+                            }
+                        )
+                except Exception:
+                    pass
         return Response({"status": "read marked"}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='clear')

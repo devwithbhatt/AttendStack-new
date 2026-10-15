@@ -1403,6 +1403,21 @@ function ChatPageContent() {
             }
             return old.map((c) => (c.id === updated.id ? updated : c));
           });
+        } else if (data.type === "read_receipt") {
+          const readUserId = data.user_id;
+          const readUserName = data.user_name;
+          const readUpToMsgId = data.message_id;
+          queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+            const targetIdx = old.findIndex((m) => m.id === readUpToMsgId);
+            if (targetIdx === -1) return old;
+            return old.map((m, i) => {
+              if (i > targetIdx) return m;
+              if (String(m.sender?.id) === String(readUserId)) return m;
+              const alreadyRead = (m.read_by || []).some((r) => r.id === readUserId);
+              if (alreadyRead) return m;
+              return { ...m, read_by: [...(m.read_by || []), { id: readUserId, name: readUserName }] };
+            });
+          });
         } else if (data.type === "typing") {
           if (String(data.user_id) === String(currentUserId)) return;
           if (data.is_typing) {
@@ -1961,7 +1976,7 @@ function ChatPageContent() {
     }
   };
 
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB limit
+  const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB limit
 
   // Helper to add files
   const addFiles = useCallback((newFiles: File[]) => {
@@ -2000,10 +2015,10 @@ function ChatPageContent() {
 
       Swal.fire({
         icon: "warning",
-        title: "File Exceeds 50 MB Limit",
+        title: "File Exceeds 500 MB Limit",
         html: `
           <p style="font-size:13.5px; color:#64748b; margin-bottom:12px; line-height:1.5;">
-            Only files up to <strong>50 MB</strong> are allowed in chat. The following file(s) exceed the size limit:
+            Only files up to <strong>500 MB</strong> are allowed in chat. The following file(s) exceed the size limit:
           </p>
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; text-align:left; margin-bottom:12px;">
             ${fileListHtml}
@@ -2829,7 +2844,11 @@ function ChatPageContent() {
 
                 <div className="chat-bubble-meta">
                   <span className="chat-time">{timeStr}</span>
-                  {isMe && <CheckCheck size={13} className="chat-read-icon" />}
+                  {isMe && (
+                    msg.read_by && msg.read_by.length > 0
+                      ? <CheckCheck size={13} className="chat-read-icon read" />
+                      : <Check size={13} className="chat-read-icon" />
+                  )}
                 </div>
 
                 {attIdx === msg.attachments.length - 1 && hasReactions && (
@@ -3030,7 +3049,11 @@ function ChatPageContent() {
             {/* Bottom metadata (timestamp + status checks) */}
             <div className="chat-bubble-meta">
               <span className="chat-time">{timeStr}</span>
-              {isMe && <CheckCheck size={13} className="chat-read-icon" />}
+              {isMe && (
+                msg.read_by && msg.read_by.length > 0
+                  ? <CheckCheck size={13} className="chat-read-icon read" />
+                  : <Check size={13} className="chat-read-icon" />
+              )}
             </div>
 
             {/* WhatsApp-style Overlapping Reaction Badges (Transparent background) */}
@@ -5349,7 +5372,10 @@ function ChatPageContent() {
         }
 
         .bubble-sent .chat-read-icon {
-          color: #c7d2fe;
+          color: rgba(255, 255, 255, 0.55);
+        }
+        .bubble-sent .chat-read-icon.read {
+          color: #93e9ff;
         }
 
         .bubble-sent .chat-quoted-bubble-card {

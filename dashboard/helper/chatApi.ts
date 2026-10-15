@@ -62,6 +62,7 @@ export interface Message {
   created_at: string;
   attachments: Attachment[];
   reactions?: ReactionSummary[];
+  read_by?: { id: string; name: string }[];
 }
 
 export interface ConversationMember {

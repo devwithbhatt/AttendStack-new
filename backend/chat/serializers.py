@@ -153,6 +153,7 @@ class MessageSerializer(serializers.ModelSerializer):
     acknowledged_count = serializers.SerializerMethodField()
     is_acknowledged_by_me = serializers.SerializerMethodField()
     reactions = serializers.SerializerMethodField()
+    read_by = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -162,7 +163,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'is_announcement', 'pinned', 'target_type',
             'department_target', 'requires_acknowledgement',
             'acknowledged_count', 'is_acknowledged_by_me',
-            'created_at', 'attachments', 'reactions'
+            'created_at', 'attachments', 'reactions', 'read_by'
         ]
         read_only_fields = ['id', 'conversation', 'sender', 'reply_to', 'is_edited', 'is_deleted', 'created_at']
 
@@ -174,6 +175,20 @@ class MessageSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.acknowledged_by.filter(id=request.user.id).exists()
         return False
+
+    def get_read_by(self, obj):
+        members = ConversationMember.objects.filter(
+            conversation_id=obj.conversation_id,
+            last_read_message__isnull=False,
+        ).select_related('last_read_message', 'user').exclude(
+            user_id=obj.sender_id
+        )
+        readers = []
+        for m in members:
+            if m.last_read_message and m.last_read_message.created_at >= obj.created_at:
+                name = f"{getattr(m.user, 'first_name', '')} {getattr(m.user, 'last_name', '')}".strip() or m.user.email
+                readers.append({'id': str(m.user.id), 'name': name})
+        return readers
 
     def get_reactions(self, obj):
         reactions_qs = obj.reactions.select_related('user').all()

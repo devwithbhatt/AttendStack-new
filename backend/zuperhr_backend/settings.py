@@ -158,11 +158,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 # Defaults to a local directory for easy development on Windows/Mac
 STATIC_ROOT = config("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
 
-# Max upload size. Keep this above the public onboarding form's 18 MB
-# client-side limit so DRF can return field-level validation errors.
-DATA_UPLOAD_MAX_MEMORY_SIZE = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=26214400, cast=int)  # 25 MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = config("FILE_UPLOAD_MAX_MEMORY_SIZE", default=26214400, cast=int)  # 25 MB
-MAX_UPLOAD_SIZE = config("MAX_UPLOAD_SIZE", default=26214400, cast=int)  # 25 MB
+# Max upload size. Chat allows files up to 500 MB; the onboarding form
+# enforces its own 18 MB client-side limit independently.
+DATA_UPLOAD_MAX_MEMORY_SIZE = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=524288000, cast=int)  # 500 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = config("FILE_UPLOAD_MAX_MEMORY_SIZE", default=524288000, cast=int)  # 500 MB
+MAX_UPLOAD_SIZE = config("MAX_UPLOAD_SIZE", default=524288000, cast=int)  # 500 MB
 
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
