@@ -5372,10 +5372,11 @@ function ChatPageContent() {
         }
 
         .bubble-sent .chat-read-icon {
-          color: rgba(255, 255, 255, 0.55);
+          color: rgba(255, 255, 255, 0.85);
         }
         .bubble-sent .chat-read-icon.read {
-          color: #93e9ff;
+          color: #00e5ff;
+          filter: drop-shadow(0 0 2px rgba(0, 229, 255, 0.5));
         }
 
         .bubble-sent .chat-quoted-bubble-card {
