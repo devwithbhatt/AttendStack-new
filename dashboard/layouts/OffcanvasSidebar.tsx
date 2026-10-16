@@ -1,6 +1,6 @@
 "use client";
 //import node modules libraries
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Image } from "react-bootstrap";
 import Offcanvas from "react-bootstrap/Offcanvas";
 import OffcanvasBody from "react-bootstrap/OffcanvasBody";
@@ -18,12 +18,21 @@ import { getAssetPath } from "helper/assetPath";
 const OffcanvasSidebar = () => {
   const { showMenu, toggleMenuHandler } = useMenu();
   const pathname = usePathname();
-  const isEmployee = pathname.startsWith("/employee-dashboard");
+  const [user, setUser] = useState<any>(null);
   const closeSidebar = useCallback(() => toggleMenuHandler(false), [toggleMenuHandler]);
 
   useEffect(() => {
     closeSidebar();
   }, [closeSidebar, pathname]);
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try { setUser(JSON.parse(userData)); } catch {}
+    }
+  }, []);
+
+  const isEmployee = user?.role === "EMPLOYEE";
 
   return (
     <Offcanvas
@@ -43,7 +52,7 @@ const OffcanvasSidebar = () => {
         </Link>
       </OffcanvasHeader>
       <OffcanvasBody className="p-0 ">
-        <Sidebar hideLogo currentPath={pathname} isEmployee={isEmployee} onNavigate={closeSidebar} />
+        <Sidebar hideLogo currentPath={pathname} isEmployee={isEmployee} onNavigate={closeSidebar} user={user} />
       </OffcanvasBody>
     </Offcanvas>
   );
