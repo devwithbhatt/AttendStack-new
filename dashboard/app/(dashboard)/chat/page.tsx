@@ -1806,6 +1806,7 @@ function ChatPageContent() {
 
       if (inputRef.current) {
         inputRef.current.style.height = "auto";
+        inputRef.current.focus();
       }
 
       const newMessages = Array.isArray(result) ? result : [result];
