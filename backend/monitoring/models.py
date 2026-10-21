@@ -202,3 +202,96 @@ class MonitoringSession(models.Model):
         if self.ended_at is None:
             self.ended_at = timezone.now()
             self.save(update_fields=["ended_at"])
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Snapshot settings & storage
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEFAULT_SNAPSHOT_INTERVAL = 30  # minutes
+DEFAULT_RETENTION_DAYS = 90    # 3 months
+
+
+class SnapshotSettings(models.Model):
+    """Per-organisation snapshot configuration.
+
+    One row per org. The interval applies org-wide by default; per-device
+    overrides live in ``DeviceSnapshotOverride``.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.OneToOneField(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="snapshot_settings",
+    )
+    interval_minutes = models.PositiveIntegerField(
+        default=DEFAULT_SNAPSHOT_INTERVAL,
+        help_text="Org-wide default interval between automatic screenshots (minutes).",
+    )
+    retention_days = models.PositiveIntegerField(
+        default=DEFAULT_RETENTION_DAYS,
+        help_text="Auto-delete snapshots older than this many days.",
+    )
+    is_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Snapshot Settings"
+        verbose_name_plural = "Snapshot Settings"
+
+    def __str__(self):
+        return f"Snapshots every {self.interval_minutes}m — {self.organization.name}"
+
+
+class DeviceSnapshotOverride(models.Model):
+    """Optional per-device override of the org-wide snapshot interval."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device = models.OneToOneField(
+        MonitoredDevice,
+        on_delete=models.CASCADE,
+        related_name="snapshot_override",
+    )
+    interval_minutes = models.PositiveIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Device Snapshot Override"
+
+    def __str__(self):
+        return f"{self.device} → every {self.interval_minutes}m"
+
+
+def snapshot_upload_path(instance, filename):
+    return f"monitoring/snapshots/{instance.device_id}/{filename}"
+
+
+class Snapshot(models.Model):
+    """One automatic screenshot captured by the agent."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device = models.ForeignKey(
+        MonitoredDevice,
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+    )
+    image = models.ImageField(upload_to=snapshot_upload_path)
+    captured_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "Snapshot"
+        verbose_name_plural = "Snapshots"
+        ordering = ["-captured_at"]
+        indexes = [
+            models.Index(fields=["device", "-captured_at"]),
+            models.Index(fields=["organization", "-captured_at"]),
+        ]
+
+    def __str__(self):
+        return f"Snapshot {self.device} @ {self.captured_at:%Y-%m-%d %H:%M}"

@@ -25,11 +25,13 @@ from organizations.services import get_organization_for_user, resolve_organizati
 from .access import is_full_monitor, visible_devices
 from .auth import DeviceTokenAuthentication
 from .ice import build_ice_servers
-from .models import MonitoredDevice, MonitoringSession
+from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot, DEFAULT_SNAPSHOT_INTERVAL
 from .serializers import (
     DeviceRegisterSerializer,
     MonitoredDeviceSerializer,
     MonitoringSessionSerializer,
+    SnapshotSettingsSerializer,
+    SnapshotSerializer,
 )
 
 
@@ -117,7 +119,13 @@ class DeviceHeartbeatView(APIView):
         device = request.auth  # set by DeviceTokenAuthentication
         active = bool(request.data.get("active", False))
         device.touch_seen(active=active)
-        return Response({"ok": True, "ice_servers": build_ice_servers()})
+        override = DeviceSnapshotOverride.objects.filter(device=device).first()
+        if override:
+            snap_interval = override.interval_minutes
+        else:
+            org_settings = SnapshotSettings.objects.filter(organization=device.organization).first()
+            snap_interval = org_settings.interval_minutes if org_settings and org_settings.is_enabled else DEFAULT_SNAPSHOT_INTERVAL
+        return Response({"ok": True, "ice_servers": build_ice_servers(), "snapshot_interval_minutes": snap_interval})
 
 
 # --------------------------------------------------------------------------- #
@@ -199,6 +207,144 @@ class AgentDownloadView(APIView):
             as_attachment=True,
             filename="ZuperHRMonitor-Setup.exe",
         )
+
+
+# --------------------------------------------------------------------------- #
+# Snapshot settings & data
+# --------------------------------------------------------------------------- #
+class SnapshotSettingsView(APIView):
+    """GET / PATCH the org-wide snapshot interval."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def get(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        settings_obj, _ = SnapshotSettings.objects.get_or_create(
+            organization=org,
+            defaults={"interval_minutes": DEFAULT_SNAPSHOT_INTERVAL},
+        )
+        data = SnapshotSettingsSerializer(settings_obj).data
+        overrides = DeviceSnapshotOverride.objects.filter(
+            device__organization=org, device__is_active=True
+        ).select_related("device").values("device_id", "interval_minutes")
+        data["device_overrides"] = {str(o["device_id"]): o["interval_minutes"] for o in overrides}
+        return Response(data)
+
+    def patch(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        settings_obj, _ = SnapshotSettings.objects.get_or_create(
+            organization=org,
+            defaults={"interval_minutes": DEFAULT_SNAPSHOT_INTERVAL},
+        )
+        interval = request.data.get("interval_minutes")
+        if interval is not None:
+            interval = int(interval)
+            if interval < 1:
+                return Response({"detail": "Interval must be at least 1 minute."}, status=400)
+            settings_obj.interval_minutes = interval
+
+        retention = request.data.get("retention_days")
+        if retention is not None:
+            retention = int(retention)
+            if retention < 1:
+                return Response({"detail": "Retention must be at least 1 day."}, status=400)
+            settings_obj.retention_days = retention
+
+        if "is_enabled" in request.data:
+            settings_obj.is_enabled = bool(request.data["is_enabled"])
+
+        settings_obj.save()
+
+        if request.data.get("apply_to_all"):
+            DeviceSnapshotOverride.objects.filter(device__organization=org).delete()
+
+        return Response(SnapshotSettingsSerializer(settings_obj).data)
+
+
+class DeviceSnapshotSettingsView(APIView):
+    """Set or clear a per-device snapshot interval override."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def patch(self, request, device_id):
+        org = _admin_org(request)
+        device = MonitoredDevice.objects.filter(id=device_id, organization=org, is_active=True).first()
+        if not device:
+            raise Http404
+        interval = request.data.get("interval_minutes")
+        if interval is None:
+            DeviceSnapshotOverride.objects.filter(device=device).delete()
+            return Response({"detail": "Override removed."})
+        interval = int(interval)
+        if interval < 1:
+            return Response({"detail": "Interval must be at least 1 minute."}, status=400)
+        override, _ = DeviceSnapshotOverride.objects.update_or_create(
+            device=device, defaults={"interval_minutes": interval}
+        )
+        return Response({"device": str(device.id), "interval_minutes": override.interval_minutes})
+
+
+class SnapshotListView(generics.ListAPIView):
+    """List snapshots for the org, optionally filtered by device."""
+
+    serializer_class = SnapshotSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def get_queryset(self):
+        org = _admin_org(self.request)
+        if not org:
+            return Snapshot.objects.none()
+        qs = Snapshot.objects.filter(organization=org).select_related(
+            "device", "device__employee", "device__user"
+        )
+        device_id = self.request.query_params.get("device")
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        return qs
+
+
+class SnapshotUploadView(APIView):
+    """Agent uploads a screenshot. Authenticated by device token."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        device = request.auth
+        if not device.is_active:
+            return Response({"detail": "Device is revoked."}, status=403)
+        image = request.FILES.get("image")
+        if not image:
+            return Response({"detail": "No image provided."}, status=400)
+        snapshot = Snapshot.objects.create(
+            device=device,
+            organization=device.organization,
+            image=image,
+        )
+        return Response({"id": str(snapshot.id), "captured_at": snapshot.captured_at.isoformat()}, status=201)
+
+
+class SnapshotIntervalView(APIView):
+    """Agent asks what interval to use. Returns minutes."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        device = request.auth
+        override = DeviceSnapshotOverride.objects.filter(device=device).first()
+        if override:
+            return Response({"interval_minutes": override.interval_minutes})
+        org_settings = SnapshotSettings.objects.filter(organization=device.organization).first()
+        interval = org_settings.interval_minutes if org_settings and org_settings.is_enabled else 0
+        return Response({"interval_minutes": interval})
 
 
 # --------------------------------------------------------------------------- #

@@ -63,7 +63,7 @@ const DasherBreadcrumb: React.FC<DasherBreadcrumbProps> = ({ items, className = 
   }, [items, pathname]);
 
   return (
-    <div className={`page-breadcrumb py-2 mb-3 ${className}`}>
+    <div className={`page-breadcrumb py-1 mb-2 ${className}`}>
       <Breadcrumb className="mb-0 align-items-center flex-wrap" listProps={{ className: "mb-0 align-items-center d-flex flex-wrap p-0 bg-transparent" }}>
         <Breadcrumb.Item linkAs="span" className="d-inline-flex align-items-center">
           <Link href="/" className="text-secondary text-decoration-none d-inline-flex align-items-center gap-1 small fw-medium hover-primary" style={{ lineHeight: 1 }}>

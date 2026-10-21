@@ -14,13 +14,15 @@
  */
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { Button, Modal, Table, Spinner, Badge, Alert } from "react-bootstrap";
+import { Button, Modal, Table, Spinner, Badge, Alert, Form } from "react-bootstrap";
 import {
   IconRefresh,
   IconDownload,
   IconEye,
   IconHistory,
   IconTrash,
+  IconCamera,
+  IconSettings,
 } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
@@ -63,10 +65,32 @@ interface Session {
   duration_seconds: number | null;
   viewer_ip: string | null;
 }
+interface SnapSettings {
+  interval_minutes: number;
+  retention_days: number;
+  is_enabled: boolean;
+  device_overrides: Record<string, number>;
+}
+interface SnapshotItem {
+  id: string;
+  device: string;
+  device_name: string;
+  employee_name: string;
+  image: string;
+  captured_at: string;
+}
 
 const fmt = (s: string | null) => (s ? new Date(s).toLocaleString() : "—");
 const fmtDur = (s: number | null) =>
   s == null ? "live / —" : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+
+const INTERVAL_OPTIONS = [5, 10, 15, 30, 60];
+const RETENTION_OPTIONS = [
+  { label: "15 days", days: 15 },
+  { label: "45 days", days: 45 },
+  { label: "3 months", days: 90 },
+  { label: "8 months", days: 240 },
+];
 
 export default function LiveMonitoringPage() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -78,6 +102,25 @@ export default function LiveMonitoringPage() {
 
   const [showLog, setShowLog] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
+
+  // Snapshots
+  const [showSnapshots, setShowSnapshots] = useState(false);
+  const [snapshots, setSnapshots] = useState<SnapshotItem[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [snapshotDevice, setSnapshotDevice] = useState<string>("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // Settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [snapSettings, setSnapSettings] = useState<SnapSettings>({ interval_minutes: 30, retention_days: 90, is_enabled: true, device_overrides: {} });
+  const [settingsInterval, setSettingsInterval] = useState(30);
+  const [customInterval, setCustomInterval] = useState("");
+  const [isCustom, setIsCustom] = useState(false);
+  const [retentionDays, setRetentionDays] = useState(90);
+  const [isCustomRetention, setIsCustomRetention] = useState(false);
+  const [customRetention, setCustomRetention] = useState("");
+  const [applyToAll, setApplyToAll] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -100,7 +143,7 @@ export default function LiveMonitoringPage() {
 
   useEffect(() => {
     loadDevices();
-    const id = setInterval(loadDevices, 8000); // keep presence fresh
+    const id = setInterval(loadDevices, 8000);
     return () => clearInterval(id);
   }, [loadDevices]);
 
@@ -199,6 +242,101 @@ export default function LiveMonitoringPage() {
     } catch { setSessions([]); }
   };
 
+  // ------------------------------------------------------------- snapshots
+  const openSnapshots = async (deviceId?: string) => {
+    setShowSnapshots(true);
+    setSnapshotsLoading(true);
+    setSnapshotDevice(deviceId || "");
+    try {
+      const url = deviceId ? `${API}/snapshots/?device=${deviceId}` : `${API}/snapshots/`;
+      const r = await fetch(url, { headers: authHeaders() });
+      const data = await r.json();
+      setSnapshots(data.results || data);
+    } catch { setSnapshots([]); }
+    finally { setSnapshotsLoading(false); }
+  };
+
+  const loadSnapshotsForDevice = async (deviceId: string) => {
+    setSnapshotsLoading(true);
+    setSnapshotDevice(deviceId);
+    try {
+      const url = deviceId ? `${API}/snapshots/?device=${deviceId}` : `${API}/snapshots/`;
+      const r = await fetch(url, { headers: authHeaders() });
+      const data = await r.json();
+      setSnapshots(data.results || data);
+    } catch { setSnapshots([]); }
+    finally { setSnapshotsLoading(false); }
+  };
+
+  // ------------------------------------------------------------- settings
+  const openSettings = async () => {
+    setShowSettings(true);
+    try {
+      const r = await fetch(`${API}/snapshot-settings/`, { headers: authHeaders() });
+      if (r.ok) {
+        const data = await r.json();
+        setSnapSettings(data);
+        const interval = data.interval_minutes;
+        if (INTERVAL_OPTIONS.includes(interval)) {
+          setSettingsInterval(interval);
+          setIsCustom(false);
+          setCustomInterval("");
+        } else {
+          setIsCustom(true);
+          setCustomInterval(String(interval));
+          setSettingsInterval(0);
+        }
+        const ret = data.retention_days || 90;
+        const matchedRetention = RETENTION_OPTIONS.find((o) => o.days === ret);
+        if (matchedRetention) {
+          setRetentionDays(ret);
+          setIsCustomRetention(false);
+          setCustomRetention("");
+        } else {
+          setIsCustomRetention(true);
+          setCustomRetention(String(ret));
+          setRetentionDays(0);
+        }
+      }
+    } catch {}
+  };
+
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    const interval = isCustom ? parseInt(customInterval, 10) : settingsInterval;
+    if (!interval || interval < 1) {
+      Swal.fire("Invalid", "Interval must be at least 1 minute.", "warning");
+      setSettingsSaving(false);
+      return;
+    }
+    const retention = isCustomRetention ? parseInt(customRetention, 10) * 30 : retentionDays;
+    if (!retention || retention < 1) {
+      Swal.fire("Invalid", "Retention period must be at least 1 day.", "warning");
+      setSettingsSaving(false);
+      return;
+    }
+    try {
+      const r = await fetch(`${API}/snapshot-settings/`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ interval_minutes: interval, retention_days: retention, apply_to_all: applyToAll }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setSnapSettings({ ...snapSettings, ...data, device_overrides: applyToAll ? {} : snapSettings.device_overrides });
+        setApplyToAll(false);
+        Swal.fire({ icon: "success", title: "Settings saved", timer: 1500, showConfirmButton: false });
+        setShowSettings(false);
+      } else {
+        Swal.fire("Error", "Could not save settings.", "error");
+      }
+    } catch {
+      Swal.fire("Error", "Could not save settings.", "error");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   useEffect(() => () => { try { wsRef.current?.close(); pcRef.current?.close(); } catch {} }, []);
 
   const onlineCount = devices.filter((d) => d.is_online).length;
@@ -235,7 +373,7 @@ export default function LiveMonitoringPage() {
               <tr><td colSpan={5} className="text-center py-4"><Spinner animation="border" size="sm" /> Loading…</td></tr>
             ) : devices.length === 0 ? (
               <tr><td colSpan={5} className="text-center text-muted py-4">
-                No computers registered yet. Install the monitoring app on an employee's computer and sign in to get started.
+                No computers registered yet. Install the monitoring app on an employee&apos;s computer and sign in to get started.
               </td></tr>
             ) : (
               devices.map((d) => (
@@ -249,9 +387,32 @@ export default function LiveMonitoringPage() {
                     {!d.is_active && <Badge bg="secondary" className="ms-2">revoked</Badge>}
                   </td>
                   <td className="text-muted small">{fmt(d.last_active_at || d.last_seen_at)}</td>
-                  <td className="text-end">
-                    <Button size="sm" variant="primary" className="me-2" disabled={!d.is_online} onClick={() => startWatching(d)}>
-                      <IconEye size={16} /> Watch Live
+                  <td className="text-end d-flex gap-1 justify-content-end">
+                    <Button
+                      size="sm"
+                      variant="outline-success"
+                      disabled={!d.is_online}
+                      onClick={() => startWatching(d)}
+                      title="Watch Live"
+                      style={{ border: "1.5px solid #198754" }}
+                    >
+                      <IconEye size={16} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-primary"
+                      onClick={() => openSnapshots(d.id)}
+                      title="Snapshots"
+                    >
+                      <IconCamera size={16} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={openSettings}
+                      title="Settings"
+                    >
+                      <IconSettings size={16} />
                     </Button>
                     {d.is_active && (
                       <Button size="sm" variant="outline-danger" onClick={() => revoke(d)} title="Deregister device">
@@ -304,6 +465,171 @@ export default function LiveMonitoringPage() {
             </tbody>
           </Table>
         </Modal.Body>
+      </Modal>
+
+      {/* Snapshots modal */}
+      <Modal show={showSnapshots} onHide={() => { setShowSnapshots(false); setPreviewImage(null); }} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-6">Snapshots</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="mb-3">
+            <Form.Select
+              size="sm"
+              value={snapshotDevice}
+              onChange={(e) => loadSnapshotsForDevice(e.target.value)}
+              style={{ maxWidth: 300 }}
+            >
+              <option value="">All devices</option>
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>{d.employee_name} — {d.device_name}</option>
+              ))}
+            </Form.Select>
+          </div>
+
+          {previewImage ? (
+            <div className="text-center">
+              <Button variant="link" size="sm" className="mb-2" onClick={() => setPreviewImage(null)}>← Back to list</Button>
+              <img
+                src={previewImage}
+                alt="Snapshot"
+                style={{ width: "100%", borderRadius: 8, border: "1px solid #dee2e6" }}
+              />
+            </div>
+          ) : snapshotsLoading ? (
+            <div className="text-center py-4"><Spinner animation="border" size="sm" /> Loading…</div>
+          ) : snapshots.length === 0 ? (
+            <div className="text-center text-muted py-4">No snapshots captured yet.</div>
+          ) : (
+            <div className="row g-2">
+              {snapshots.map((snap) => (
+                <div key={snap.id} className="col-6 col-md-4">
+                  <div
+                    className="border rounded overflow-hidden"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setPreviewImage(snap.image)}
+                  >
+                    <img
+                      src={snap.image}
+                      alt={`${snap.employee_name} snapshot`}
+                      style={{ width: "100%", height: 140, objectFit: "cover" }}
+                    />
+                    <div className="p-2 small">
+                      <div className="fw-medium">{snap.employee_name}</div>
+                      <div className="text-muted">{fmt(snap.captured_at)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Settings modal */}
+      <Modal show={showSettings} onHide={() => setShowSettings(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-6">Snapshot Settings</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small mb-3">
+            Set how often automatic screenshots are captured from monitored devices. Default is 30 minutes.
+          </p>
+          <Form.Label className="fw-medium mb-2">Snapshot interval</Form.Label>
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            {INTERVAL_OPTIONS.map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant={!isCustom && settingsInterval === m ? "primary" : "outline-secondary"}
+                onClick={() => { setSettingsInterval(m); setIsCustom(false); setCustomInterval(""); }}
+              >
+                {m < 60 ? `${m} min` : `${m / 60} hour`}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant={isCustom ? "primary" : "outline-secondary"}
+              onClick={() => { setIsCustom(true); setSettingsInterval(0); }}
+            >
+              Custom
+            </Button>
+          </div>
+
+          {isCustom && (
+            <div className="mb-3">
+              <Form.Label className="small">Custom interval (in minutes)</Form.Label>
+              <Form.Control
+                type="number"
+                min={1}
+                placeholder="e.g. 45"
+                value={customInterval}
+                onChange={(e) => setCustomInterval(e.target.value)}
+                style={{ maxWidth: 200 }}
+              />
+            </div>
+          )}
+
+          <hr />
+
+          <Form.Label className="fw-medium mb-2">Auto-delete snapshots after</Form.Label>
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            {RETENTION_OPTIONS.map((opt) => (
+              <Button
+                key={opt.days}
+                size="sm"
+                variant={!isCustomRetention && retentionDays === opt.days ? "primary" : "outline-secondary"}
+                onClick={() => { setRetentionDays(opt.days); setIsCustomRetention(false); setCustomRetention(""); }}
+              >
+                {opt.label}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant={isCustomRetention ? "primary" : "outline-secondary"}
+              onClick={() => { setIsCustomRetention(true); setRetentionDays(0); }}
+            >
+              Custom
+            </Button>
+          </div>
+
+          {isCustomRetention && (
+            <div className="mb-3">
+              <Form.Label className="small">Custom retention (in months)</Form.Label>
+              <Form.Control
+                type="number"
+                min={1}
+                placeholder="e.g. 6"
+                value={customRetention}
+                onChange={(e) => setCustomRetention(e.target.value)}
+                style={{ maxWidth: 200 }}
+              />
+            </div>
+          )}
+
+          <div className="text-muted small mb-3" style={{ background: "#f8f9fa", padding: "8px 12px", borderRadius: 6 }}>
+            Snapshots older than the selected period will be permanently deleted from the server to save storage.
+          </div>
+
+          <hr />
+          <Form.Check
+            type="checkbox"
+            id="apply-to-all"
+            label="Update for all users"
+            className="mb-1"
+            checked={applyToAll}
+            onChange={(e) => setApplyToAll(e.target.checked)}
+          />
+          <div className="text-muted small ms-4">
+            When checked, this interval will apply to all devices and remove any per-device overrides.
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" size="sm" onClick={() => setShowSettings(false)}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={saveSettings} disabled={settingsSaving}>
+            {settingsSaving ? <Spinner animation="border" size="sm" /> : "Save"}
+          </Button>
+        </Modal.Footer>
       </Modal>
     </Fragment>
   );

@@ -7,7 +7,7 @@ from rest_framework import serializers
 from organizations.models import Organization
 from organizations.services import get_organization_for_user
 
-from .models import MonitoredDevice, MonitoringSession
+from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot
 
 User = get_user_model()
 
@@ -143,4 +143,32 @@ class MonitoringSessionSerializer(serializers.ModelSerializer):
             "duration_seconds",
             "viewer_ip",
         ]
+
+
+class SnapshotSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SnapshotSettings
+        fields = ["interval_minutes", "retention_days", "is_enabled", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class DeviceSnapshotOverrideSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceSnapshotOverride
+        fields = ["device", "interval_minutes", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class SnapshotSerializer(serializers.ModelSerializer):
+    device_name = serializers.CharField(source="device.device_name", read_only=True)
+    employee_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Snapshot
+        fields = ["id", "device", "device_name", "employee_name", "image", "captured_at"]
+
+    def get_employee_name(self, obj):
+        if obj.device.employee_id and obj.device.employee:
+            return obj.device.employee.full_name
+        return obj.device.user.get_full_name() or obj.device.user.email
 
