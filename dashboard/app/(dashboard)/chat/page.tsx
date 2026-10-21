@@ -1325,6 +1325,7 @@ function ChatPageContent() {
       (data) => {
         if (data.type === "new_message") {
           const newMsg: Message = data.message;
+          queryClient.cancelQueries({ queryKey: ["messages", activeConversationId] });
           queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
             if (old.some((m) => m.id === newMsg.id)) return old;
             return [...old, newMsg];
@@ -1796,7 +1797,7 @@ function ChatPageContent() {
         replyingTo?.id || null
       );
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       if (!result || !activeConversationId) return;
 
       setInputContent("");
@@ -1812,6 +1813,7 @@ function ChatPageContent() {
       const newMessages = Array.isArray(result) ? result : [result];
       const lastMsg = newMessages[newMessages.length - 1];
 
+      await queryClient.cancelQueries({ queryKey: ["messages", activeConversationId] });
       queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
         const existingIds = new Set(old.map((m) => m.id));
         const toAdd = newMessages.filter((m) => !existingIds.has(m.id));
