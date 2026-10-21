@@ -3973,7 +3973,6 @@ function ChatPageContent() {
                     onPaste={handlePaste}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    disabled={sending}
                     rows={1}
                   />
                 </div>
