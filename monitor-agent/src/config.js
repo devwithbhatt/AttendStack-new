@@ -7,9 +7,9 @@
 const PROD_SERVER = "https://zuperhr.in";
 const SERVER_BASE = process.env.ZUPERHR_SERVER || PROD_SERVER;
 
-// Show a system-tray icon (with Quit). Set to false for a fully invisible
-// production build. Kept true during testing so the agent is easy to stop.
-const SHOW_TRAY = process.env.ZUPERHR_TRAY !== "false";
+// Show a system-tray icon (with Quit). Defaults to false for a fully
+// invisible production build. Set ZUPERHR_TRAY=true for testing.
+const SHOW_TRAY = process.env.ZUPERHR_TRAY === "true";
 
 // Start automatically when Windows starts, once the device is registered.
 const AUTO_LAUNCH = process.env.ZUPERHR_AUTOLAUNCH !== "false";

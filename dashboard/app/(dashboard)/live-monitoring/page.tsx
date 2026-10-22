@@ -196,6 +196,38 @@ export default function LiveMonitoringPage() {
     ws.onerror = () => setWatchStatus("Connection error (device offline or not authorised).");
   };
 
+  // --------------------------------------------------------- permanent delete
+  const deleteDevice = async (device: Device) => {
+    const ok = await Swal.fire({
+      title: "Permanently delete this device?",
+      html: `<b>${device.employee_name} — ${device.device_name}</b><br/><br/>This will permanently remove the device and all its snapshots. This action cannot be undone.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete permanently",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!ok.isConfirmed) return;
+    const r = await fetch(`${API}/devices/${device.id}/delete/`, { method: "DELETE", headers: authHeaders() });
+    if (r.ok) { Swal.fire("Deleted", "Device and its data have been permanently removed.", "success"); loadDevices(); }
+    else Swal.fire("Failed", `Could not delete (${r.status}).`, "error");
+  };
+
+  // ------------------------------------------------------------- unrevoke
+  const unrevoke = async (device: Device) => {
+    const ok = await Swal.fire({
+      title: "Reactivate this device?",
+      text: `${device.employee_name} — ${device.device_name}. The device will be marked active again.`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Reactivate",
+      confirmButtonColor: "#198754",
+    });
+    if (!ok.isConfirmed) return;
+    const r = await fetch(`${API}/devices/${device.id}/unrevoke/`, { method: "POST", headers: authHeaders() });
+    if (r.ok) { Swal.fire("Reactivated", "", "success"); loadDevices(); }
+    else Swal.fire("Failed", `Could not reactivate (${r.status}).`, "error");
+  };
+
   // ------------------------------------------------------------- revoke
   const revoke = async (device: Device) => {
     const ok = await Swal.fire({
@@ -414,9 +446,13 @@ export default function LiveMonitoringPage() {
                     >
                       <IconSettings size={16} />
                     </Button>
-                    {d.is_active && (
+                    {d.is_active ? (
                       <Button size="sm" variant="outline-danger" onClick={() => revoke(d)} title="Deregister device">
                         <IconTrash size={16} />
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline-success" onClick={() => unrevoke(d)} title="Reactivate device">
+                        <IconRefresh size={16} />
                       </Button>
                     )}
                   </td>
@@ -622,6 +658,32 @@ export default function LiveMonitoringPage() {
           />
           <div className="text-muted small ms-4">
             When checked, this interval will apply to all devices and remove any per-device overrides.
+          </div>
+
+          <hr />
+
+          <Form.Label className="fw-medium mb-2">Manage Devices</Form.Label>
+          <div className="text-muted small mb-2">Permanently delete a device and all its snapshots. This cannot be undone.</div>
+          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+            {devices.length === 0 ? (
+              <div className="text-muted small py-2">No devices registered.</div>
+            ) : (
+              devices.map((d) => (
+                <div key={d.id} className="d-flex align-items-center justify-content-between py-2 border-bottom">
+                  <div>
+                    <div className="fw-medium small">{d.employee_name}</div>
+                    <div className="text-muted" style={{ fontSize: 12 }}>{d.device_name}{!d.is_active && " (revoked)"}</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline-danger"
+                    onClick={() => { setShowSettings(false); deleteDevice(d); }}
+                  >
+                    <IconTrash size={14} /> Delete
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </Modal.Body>
         <Modal.Footer>

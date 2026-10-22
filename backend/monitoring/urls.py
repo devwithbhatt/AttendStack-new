@@ -12,6 +12,8 @@ urlpatterns = [
     # Company Admin (JWT)
     path("devices/", views.AdminDeviceListView.as_view(), name="device_list"),
     path("devices/<uuid:device_id>/revoke/", views.AdminDeviceRevokeView.as_view(), name="device_revoke"),
+    path("devices/<uuid:device_id>/unrevoke/", views.AdminDeviceUnrevokeView.as_view(), name="device_unrevoke"),
+    path("devices/<uuid:device_id>/delete/", views.AdminDeviceDeleteView.as_view(), name="device_delete"),
     path("devices/<uuid:device_id>/snapshot-settings/", views.DeviceSnapshotSettingsView.as_view(), name="device_snapshot_settings"),
     path("sessions/", views.MonitoringSessionListView.as_view(), name="session_list"),
     path("snapshot-settings/", views.SnapshotSettingsView.as_view(), name="snapshot_settings"),

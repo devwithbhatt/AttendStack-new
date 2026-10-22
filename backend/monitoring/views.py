@@ -71,6 +71,14 @@ class DeviceRegisterView(APIView):
 
         employee = Employee.objects.filter(organization=org, email__iexact=user.email).first()
 
+        # One user = one active device. Deactivate all previous devices for
+        # this user+org so the latest registration is the only active one.
+        MonitoredDevice.objects.filter(
+            user=user, organization=org, is_active=True
+        ).exclude(device_fingerprint=fingerprint).update(
+            is_active=False, revoked_at=timezone.now()
+        )
+
         device, created = MonitoredDevice.objects.get_or_create(
             device_fingerprint=fingerprint,
             defaults={
@@ -161,6 +169,36 @@ class AdminDeviceRevokeView(APIView):
         if not device:
             raise Http404
         device.revoke()
+        return Response({"ok": True})
+
+
+class AdminDeviceUnrevokeView(APIView):
+    """Re-activate a previously revoked device."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def post(self, request, device_id):
+        org = _admin_org(request)
+        device = MonitoredDevice.objects.filter(id=device_id, organization=org, is_active=False).first()
+        if not device:
+            raise Http404
+        device.unrevoke()
+        return Response({"ok": True})
+
+
+class AdminDeviceDeleteView(APIView):
+    """Permanently delete a device and all its snapshots."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def delete(self, request, device_id):
+        org = _admin_org(request)
+        device = MonitoredDevice.objects.filter(id=device_id, organization=org).first()
+        if not device:
+            raise Http404
+        device.delete()
         return Response({"ok": True})
 
 

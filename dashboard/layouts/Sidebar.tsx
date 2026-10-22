@@ -527,7 +527,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                 <div className='my-3'>
                   <h5 className='mb-1 fs-6'>{isMounted ? (companyName || <Image src={getAssetPath("/images/brand/logo/logo.png")} alt="ZuperHR" style={{ height: "22px", width: "auto" }} />) : <Image src={getAssetPath("/images/brand/logo/logo.png")} alt="ZuperHR" style={{ height: "22px", width: "auto" }} />}</h5>
                   <span className='d-block text-secondary'>{isMounted && currentUser ? (currentUser.full_name || currentUser.name || currentUser.username) : 'HR Administrator'}</span>
-                  <span className='text-secondary'>{isMounted && currentUser ? (currentUser.designation || currentUser.custom_role_title || currentUser.role) : 'Administrator'}</span>
+                  <span className='text-secondary'>{isMounted && currentUser ? (currentUser.role === "SUPER_ADMIN" ? "Company Administrator" : (currentUser.designation || currentUser.custom_role_title || currentUser.role)) : 'Administrator'}</span>
                 </div>
               </div>
             </div>

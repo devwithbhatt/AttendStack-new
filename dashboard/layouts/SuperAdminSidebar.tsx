@@ -27,7 +27,7 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
   currentPath,
   onNavigate,
 }) => {
-  const [user, setUser] = useState<{ full_name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ full_name: string; email: string; role?: string; organization?: any } | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -39,6 +39,7 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
       }
     }
   }, []);
+
 
   const generateLink = (item: MenuItemType) => {
     const isactive = currentPath === item.link || (item.link !== "/" && currentPath.startsWith(item.link || ""));

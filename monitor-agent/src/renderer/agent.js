@@ -1,18 +1,15 @@
 "use strict";
 
 /**
- * Renderer logic for the ZuperHR Monitor agent.
+ * Renderer logic for the ZuperHR Monitor agent (Super Admin / Platform Monitoring).
  *
  * Flow:
  *  - On boot, ask main for { server, token }.
- *  - If a token exists, we are already registered: connect to the signalling
- *    WebSocket immediately and stay online. (The window is hidden by main.)
- *  - If not, show the sign-in form. On success we store the token via main,
- *    enable auto-launch, hide the window, and connect.
+ *  - If a token exists, connect to the signalling WebSocket immediately.
+ *  - If not, show the sign-in form (User ID + password + passkey).
  *
  * Screen capture uses getDisplayMedia(), which the MAIN process grants silently
- * (primary screen, no picker). The agent only ever SENDS a video track; it
- * accepts no data channel and has no control path.
+ * (primary screen, no picker). The agent only ever SENDS a video track.
  */
 
 let SERVER = "http://localhost:8001";
@@ -58,29 +55,28 @@ $("signinBtn").onclick = async () => {
   $("loginErr").textContent = "";
   const btn = $("signinBtn"); btn.disabled = true; btn.textContent = "Signing in…";
   const body = {
-    organization_id: $("org").value.trim(),
-    email: $("email").value.trim(),
+    user_id: $("userId").value.trim(),
     password: $("password").value,
+    passkey: $("passkey").value.trim(),
     device_fingerprint: await fingerprint(),
     device_name: (navigator.platform || "PC"),
     platform: "windows",
     consent_acknowledged: $("consent").checked,
   };
   try {
-    // Registration goes through the main process (no CORS) — see preload.
     const r = await window.agentAPI.register(body);
     const data = r.data || {};
     if (!r.ok) {
-      $("loginErr").textContent = data.detail || Object.values(data)[0] || "Sign in failed.";
+      $("loginErr").textContent = data.detail || data.consent_acknowledged || Object.values(data)[0] || "Sign in failed.";
       btn.disabled = false; btn.textContent = "Sign in"; return;
     }
     deviceToken = data.device_token;
     await window.agentAPI.onRegistered({
       device_id: data.device_id,
       device_token: data.device_token,
-      who: data.employee_name || body.email,
+      who: data.name || body.user_id,
     });
-    showActive(data.employee_name || body.email);
+    showActive(data.name || body.user_id);
     connect();
   } catch (e) {
     $("loginErr").textContent = "Network error: " + e.message;
@@ -88,10 +84,9 @@ $("signinBtn").onclick = async () => {
   }
 };
 
-// A stable per-install fingerprint, persisted in localStorage within the app.
 async function fingerprint() {
-  let fp = localStorage.getItem("asmon_fp");
-  if (!fp) { fp = "win-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random()); localStorage.setItem("asmon_fp", fp); }
+  let fp = localStorage.getItem("zhr_fp");
+  if (!fp) { fp = "win-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random()); localStorage.setItem("zhr_fp", fp); }
   return fp;
 }
 
@@ -99,7 +94,7 @@ async function fingerprint() {
 function connect() {
   if (!deviceToken) return;
   setStatus("Connecting…", false);
-  ws = new WebSocket(WS_BASE + "/ws/monitor/agent/?device_token=" + encodeURIComponent(deviceToken));
+  ws = new WebSocket(WS_BASE + "/ws/platform-monitor/agent/?device_token=" + encodeURIComponent(deviceToken));
   ws.onopen = () => {
     reconnectDelay = 1000;
     setStatus("● Online — monitoring active", true);
@@ -125,7 +120,6 @@ function connect() {
 
 async function startStream(session) {
   try {
-    // Main grants the primary screen silently — no picker shown to the employee.
     localStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 10 }, audio: false });
   } catch (e) { setStatus("Capture error: " + e.message, false); return; }
 

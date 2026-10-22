@@ -2,11 +2,19 @@
 
 from rest_framework import serializers
 
-from .models import PlatformMonitorAccount, PlatformMonitoredDevice, PlatformMonitoringSession
+from .models import (
+    PlatformMonitorAccount,
+    PlatformMonitoredDevice,
+    PlatformMonitoringSession,
+    PlatformSnapshotSettings,
+    PlatformSnapshot,
+    PlatformInactivitySettings,
+    PlatformActivityEntry,
+)
 
 
 class AgentSignInSerializer(serializers.Serializer):
-    """What the Bhatt Square Watch app sends at sign-in. Credentials are compared
+    """What the ZuperHR Monitor app sends at sign-in. Credentials are compared
     exactly (case-sensitive) in the view; nothing is normalised here."""
 
     user_id = serializers.CharField(max_length=10, trim_whitespace=True)
@@ -108,4 +116,41 @@ class SessionSerializer(serializers.ModelSerializer):
             "ended_at",
             "duration_seconds",
             "viewer_ip",
+        ]
+
+
+class PlatformSnapshotSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformSnapshotSettings
+        fields = ["interval_minutes", "retention_days", "is_enabled", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class PlatformSnapshotSerializer(serializers.ModelSerializer):
+    device_name = serializers.CharField(source="device.device_name", read_only=True)
+    account_name = serializers.CharField(source="device.account.name", read_only=True)
+    account_user_id = serializers.CharField(source="device.account.user_id", read_only=True)
+
+    class Meta:
+        model = PlatformSnapshot
+        fields = ["id", "device", "device_name", "account_name", "account_user_id", "image", "captured_at"]
+
+
+class PlatformInactivitySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformInactivitySettings
+        fields = ["idle_threshold_minutes", "long_interval_threshold_minutes", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class PlatformActivityEntrySerializer(serializers.ModelSerializer):
+    device_name = serializers.CharField(source="device.device_name", read_only=True)
+    account_name = serializers.CharField(source="device.account.name", read_only=True)
+    account_user_id = serializers.CharField(source="device.account.user_id", read_only=True)
+
+    class Meta:
+        model = PlatformActivityEntry
+        fields = [
+            "id", "device", "device_name", "account_name", "account_user_id",
+            "title", "app_name", "url", "started_at", "ended_at", "duration_seconds",
         ]

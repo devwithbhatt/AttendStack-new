@@ -6,7 +6,7 @@ Monitoring in ``monitoring/`` (which this app does not touch):
 
 * The Super Admin creates a ``PlatformMonitorAccount`` — a 5-digit User ID plus
   a generated password and passkey. Accounts belong to no company.
-* The person installs the Bhatt Square Watch app and signs in with all three.
+* The person installs the ZuperHR Monitor app and signs in with all three.
   Their computer becomes a ``PlatformMonitoredDevice`` with its own long-lived,
   individually revocable device token (only its SHA-256 hash is stored).
 * Only the Super Admin can watch; every view is recorded as a
@@ -257,3 +257,73 @@ class PlatformMonitoringSession(models.Model):
         if self.ended_at is None:
             self.ended_at = timezone.now()
             self.save(update_fields=["ended_at"])
+
+
+DEFAULT_SNAPSHOT_INTERVAL = 30   # minutes
+DEFAULT_RETENTION_DAYS = 90      # 3 months
+DEFAULT_IDLE_THRESHOLD = 3       # minutes – gap before "Idle"
+DEFAULT_LONG_INTERVAL = 10       # minutes – gap before "Long Interval"
+
+
+def platform_snapshot_upload_path(instance, filename):
+    return f"platform_snapshots/{instance.device_id}/{filename}"
+
+
+class PlatformSnapshotSettings(models.Model):
+    interval_minutes = models.PositiveIntegerField(default=DEFAULT_SNAPSHOT_INTERVAL)
+    retention_days = models.PositiveIntegerField(default=DEFAULT_RETENTION_DAYS)
+    is_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform Snapshot Settings"
+        verbose_name_plural = "Platform Snapshot Settings"
+
+    def __str__(self):
+        return f"Platform snapshot settings (every {self.interval_minutes}m, keep {self.retention_days}d)"
+
+
+class PlatformSnapshot(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device = models.ForeignKey(PlatformMonitoredDevice, on_delete=models.CASCADE, related_name="snapshots")
+    image = models.ImageField(upload_to=platform_snapshot_upload_path)
+    captured_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-captured_at"]
+
+    def __str__(self):
+        return f"Snapshot {self.device} @ {self.captured_at:%Y-%m-%d %H:%M}"
+
+
+class PlatformInactivitySettings(models.Model):
+    idle_threshold_minutes = models.PositiveIntegerField(default=DEFAULT_IDLE_THRESHOLD)
+    long_interval_threshold_minutes = models.PositiveIntegerField(default=DEFAULT_LONG_INTERVAL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform Inactivity Settings"
+        verbose_name_plural = "Platform Inactivity Settings"
+
+    def __str__(self):
+        return f"Inactivity: idle>{self.idle_threshold_minutes}m, long>{self.long_interval_threshold_minutes}m"
+
+
+class PlatformActivityEntry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device = models.ForeignKey(
+        PlatformMonitoredDevice, on_delete=models.CASCADE, related_name="activity_entries"
+    )
+    title = models.CharField(max_length=500, blank=True)
+    app_name = models.CharField(max_length=200, blank=True)
+    url = models.URLField(max_length=2000, blank=True)
+    started_at = models.DateTimeField(db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [models.Index(fields=["device", "started_at"], name="platmon_activity_dev_start")]
+
+    def __str__(self):
+        return f"{self.device} — {self.app_name or self.title[:30]} @ {self.started_at:%H:%M}"

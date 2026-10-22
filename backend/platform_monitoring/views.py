@@ -35,14 +35,29 @@ from .models import (
     PlatformMonitorAccount,
     PlatformMonitoredDevice,
     PlatformMonitoringSession,
+    PlatformSnapshotSettings,
+    PlatformSnapshot,
+    PlatformInactivitySettings,
+    PlatformActivityEntry,
+    DEFAULT_SNAPSHOT_INTERVAL,
+    DEFAULT_IDLE_THRESHOLD,
     agent_group,
     generate_user_id,
 )
-from .serializers import AccountSerializer, AgentSignInSerializer, DeviceSerializer, SessionSerializer
+from .serializers import (
+    AccountSerializer,
+    AgentSignInSerializer,
+    DeviceSerializer,
+    SessionSerializer,
+    PlatformSnapshotSettingsSerializer,
+    PlatformSnapshotSerializer,
+    PlatformInactivitySettingsSerializer,
+    PlatformActivityEntrySerializer,
+)
 
 logger = logging.getLogger(__name__)
 
-INSTALLER_NAME = "BhattSquareWatch.exe"
+INSTALLER_NAME = "ZuperHRMonitor-Setup.exe"
 GENERIC_SIGNIN_ERROR = "User ID, password or passkey is incorrect."
 
 # Compared against when the User ID doesn't exist, so a wrong ID takes as long
@@ -80,7 +95,7 @@ def _credentials_payload(account, password, passkey):
 # Agent endpoints
 # --------------------------------------------------------------------------- #
 class AgentSignInView(APIView):
-    """Sign in the Bhatt Square Watch app. All three credentials must match the
+    """Sign in the ZuperHR Monitor app. All three credentials must match the
     account exactly; on success this computer gets its own device token."""
 
     authentication_classes = []
@@ -159,7 +174,9 @@ class AgentHeartbeatView(APIView):
 
     def post(self, request):
         request.auth.touch_seen(active=bool(request.data.get("active", False)))
-        return Response({"ok": True, "ice_servers": build_ice_servers()})
+        settings_obj = PlatformSnapshotSettings.objects.first()
+        snap_interval = settings_obj.interval_minutes if settings_obj and settings_obj.is_enabled else DEFAULT_SNAPSHOT_INTERVAL
+        return Response({"ok": True, "ice_servers": build_ice_servers(), "snapshot_interval_minutes": snap_interval})
 
 
 # --------------------------------------------------------------------------- #
@@ -288,3 +305,177 @@ class AgentDownloadView(APIView):
         if not path.exists():
             return Response({"detail": "The app installer is not available yet."}, status=status.HTTP_404_NOT_FOUND)
         return FileResponse(open(path, "rb"), as_attachment=True, filename=INSTALLER_NAME)
+
+
+# --------------------------------------------------------------------------- #
+# Snapshot settings & data
+# --------------------------------------------------------------------------- #
+class PlatformSnapshotSettingsView(APIView):
+    """GET / PATCH the platform-wide snapshot settings."""
+
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        settings_obj, _ = PlatformSnapshotSettings.objects.get_or_create(
+            pk=1, defaults={"interval_minutes": DEFAULT_SNAPSHOT_INTERVAL}
+        )
+        return Response(PlatformSnapshotSettingsSerializer(settings_obj).data)
+
+    def patch(self, request):
+        settings_obj, _ = PlatformSnapshotSettings.objects.get_or_create(
+            pk=1, defaults={"interval_minutes": DEFAULT_SNAPSHOT_INTERVAL}
+        )
+        interval = request.data.get("interval_minutes")
+        if interval is not None:
+            interval = int(interval)
+            if interval < 1:
+                return Response({"detail": "Interval must be at least 1 minute."}, status=status.HTTP_400_BAD_REQUEST)
+            settings_obj.interval_minutes = interval
+
+        retention = request.data.get("retention_days")
+        if retention is not None:
+            retention = int(retention)
+            if retention < 1:
+                return Response({"detail": "Retention must be at least 1 day."}, status=status.HTTP_400_BAD_REQUEST)
+            settings_obj.retention_days = retention
+
+        if "is_enabled" in request.data:
+            settings_obj.is_enabled = bool(request.data["is_enabled"])
+
+        settings_obj.save()
+        return Response(PlatformSnapshotSettingsSerializer(settings_obj).data)
+
+
+class PlatformSnapshotListView(generics.ListAPIView):
+    """List all platform snapshots, optionally filtered by device."""
+
+    serializer_class = PlatformSnapshotSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get_queryset(self):
+        qs = PlatformSnapshot.objects.select_related("device", "device__account")
+        device_id = self.request.query_params.get("device")
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        account_id = self.request.query_params.get("account")
+        if account_id:
+            qs = qs.filter(device__account_id=account_id)
+        return qs
+
+
+class PlatformSnapshotUploadView(APIView):
+    """Agent uploads a screenshot."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        device = request.auth
+        if not device.is_active:
+            return Response({"detail": "Device is revoked."}, status=status.HTTP_403_FORBIDDEN)
+        image = request.FILES.get("image")
+        if not image:
+            return Response({"detail": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
+        snapshot = PlatformSnapshot.objects.create(device=device, image=image)
+        return Response({"id": str(snapshot.id), "captured_at": snapshot.captured_at.isoformat()}, status=status.HTTP_201_CREATED)
+
+
+class PlatformSnapshotIntervalView(APIView):
+    """Agent asks what interval to use."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        settings_obj = PlatformSnapshotSettings.objects.first()
+        interval = settings_obj.interval_minutes if settings_obj and settings_obj.is_enabled else 0
+        return Response({"interval_minutes": interval})
+
+
+# --------------------------------------------------------------------------- #
+# Inactivity settings & activity log
+# --------------------------------------------------------------------------- #
+class PlatformInactivitySettingsView(APIView):
+    """GET / PATCH the global inactivity thresholds."""
+
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        obj, _ = PlatformInactivitySettings.objects.get_or_create(
+            pk=1, defaults={"idle_threshold_minutes": DEFAULT_IDLE_THRESHOLD}
+        )
+        return Response(PlatformInactivitySettingsSerializer(obj).data)
+
+    def patch(self, request):
+        obj, _ = PlatformInactivitySettings.objects.get_or_create(
+            pk=1, defaults={"idle_threshold_minutes": DEFAULT_IDLE_THRESHOLD}
+        )
+        idle = request.data.get("idle_threshold_minutes")
+        if idle is not None:
+            idle = int(idle)
+            if idle < 1:
+                return Response({"detail": "Idle threshold must be at least 1 minute."}, status=status.HTTP_400_BAD_REQUEST)
+            obj.idle_threshold_minutes = idle
+
+        long_int = request.data.get("long_interval_threshold_minutes")
+        if long_int is not None:
+            long_int = int(long_int)
+            if long_int < 1:
+                return Response({"detail": "Long interval threshold must be at least 1 minute."}, status=status.HTTP_400_BAD_REQUEST)
+            obj.long_interval_threshold_minutes = long_int
+
+        obj.save()
+        return Response(PlatformInactivitySettingsSerializer(obj).data)
+
+
+class PlatformActivityListView(generics.ListAPIView):
+    """List activity entries, filterable by account and date."""
+
+    serializer_class = PlatformActivityEntrySerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get_queryset(self):
+        qs = PlatformActivityEntry.objects.select_related("device", "device__account")
+        account_id = self.request.query_params.get("account")
+        if account_id:
+            qs = qs.filter(device__account_id=account_id)
+        device_id = self.request.query_params.get("device")
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        date_str = self.request.query_params.get("date")
+        if date_str:
+            from datetime import datetime
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                qs = qs.filter(started_at__date=d)
+            except ValueError:
+                pass
+        return qs
+
+
+class PlatformActivityUploadView(APIView):
+    """Agent uploads batched activity entries."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        device = request.auth
+        if not device.is_active:
+            return Response({"detail": "Device is revoked."}, status=status.HTTP_403_FORBIDDEN)
+        entries = request.data.get("entries", [])
+        if not entries:
+            return Response({"detail": "No entries provided."}, status=status.HTTP_400_BAD_REQUEST)
+        created = 0
+        for entry in entries:
+            PlatformActivityEntry.objects.create(
+                device=device,
+                title=entry.get("title", ""),
+                app_name=entry.get("app_name", ""),
+                url=entry.get("url", ""),
+                started_at=entry["started_at"],
+                ended_at=entry.get("ended_at"),
+                duration_seconds=entry.get("duration_seconds", 0),
+            )
+            created += 1
+        return Response({"created": created}, status=status.HTTP_201_CREATED)

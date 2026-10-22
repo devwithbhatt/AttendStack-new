@@ -72,7 +72,7 @@ class LoginView(TokenObtainPairView):
         serializer.is_valid(raise_exception=True)  # wrong password -> raises here, same as before
         user = serializer.user
 
-        if user.is_admin_account:
+        if user.is_admin_account and not settings.DEBUG:
             request_login_otp(user, requested_ip=request.META.get("REMOTE_ADDR"))
             return Response(
                 {

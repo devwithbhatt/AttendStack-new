@@ -139,6 +139,11 @@ class MonitoredDevice(models.Model):
         self.revoked_at = timezone.now()
         self.save(update_fields=["is_active", "revoked_at"])
 
+    def unrevoke(self):
+        self.is_active = True
+        self.revoked_at = None
+        self.save(update_fields=["is_active", "revoked_at"])
+
     def touch_seen(self, active: bool = False):
         now = timezone.now()
         fields = ["last_seen_at"]

@@ -17,17 +17,21 @@
   "build": {
     "appId": "com.bhattsquare.zuperhr.monitor",
     "productName": "ZuperHR Monitor",
+    "icon": "build/icon.ico",
     "directories": { "output": "dist" },
-    "files": ["src/**/*", "package.json"],
+    "files": ["src/**/*", "build/icon.png", "package.json"],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
       "artifactName": "ZuperHRMonitor-Setup.${ext}"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   }
 }

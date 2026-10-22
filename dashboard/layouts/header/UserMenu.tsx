@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Dropdown, Image } from "react-bootstrap";
 import Link from "next/link";
-import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper } from "@tabler/icons-react";
+import { usePathname } from "next/navigation";
+import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper, IconArrowsExchange } from "@tabler/icons-react";
 import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
@@ -23,7 +24,8 @@ CustomToggle.displayName = "CustomToggle";
 
 const UserMenu = () => {
   const { companyLogo } = useBranding();
-  const [user, setUser] = useState<{ full_name: string; email: string; role: string; custom_role_title?: string } | null>(null);
+  const pathname = usePathname();
+  const [user, setUser] = useState<{ full_name: string; email: string; role: string; custom_role_title?: string; is_superuser?: boolean } | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -131,6 +133,16 @@ const UserMenu = () => {
               },
             ]
           : []),
+        ...(isSuperAdmin
+          ? [
+              {
+                id: "switch-admin",
+                title: pathname.startsWith("/super-admin") ? "Switch to Company Admin" : "Switch to Super Admin",
+                link: pathname.startsWith("/super-admin") ? "/dashboard" : "/super-admin/dashboard",
+                icon: <IconArrowsExchange size={18} strokeWidth={1.5} className="text-primary" />,
+              },
+            ]
+          : []),
       ];
 
   const activePhoto = profilePhoto || (isCompanyUser ? companyLogo : null);
@@ -192,12 +204,12 @@ const UserMenu = () => {
         <div className="d-flex gap-3 align-items-center border-bottom px-4 py-4" style={{ backgroundColor: "#fcfdfe", borderBottomStyle: "dashed" }}>
           {renderAvatarBadge(48)}
           <div className="overflow-hidden">
-            <h5 className="mb-0 fw-bold text-dark text-truncate">{user ? user.full_name : "ZuperHR User"}</h5>
+            <h5 className="mb-0 fw-bold text-dark text-truncate">{user ? (isSuperAdmin ? (pathname.startsWith("/super-admin") ? `${user.full_name} Super Admin` : `${user.full_name} Company Admin`) : user.full_name) : "ZuperHR User"}</h5>
             <p className="mb-0 text-secondary small text-truncate" style={{ fontSize: "0.8rem" }}>
               {user ? user.email : "user@zuperhr.com"}
             </p>
             <span className="badge bg-success-subtle text-success border border-success-subtle mt-1.5 font-monospace rounded-pill text-uppercase px-2 py-1" style={{ fontSize: "0.65rem", fontWeight: 600 }}>
-              {user ? (user.custom_role_title || (user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "EMPLOYEE" ? "Employee" : user.role)) : "Staff"}
+              {user ? (isSuperAdmin ? (pathname.startsWith("/super-admin") ? "Super Admin" : "Company Admin") : (user.custom_role_title || (user.role === "EMPLOYEE" ? "Employee" : user.role))) : "Staff"}
             </span>
           </div>
         </div>
