@@ -23,6 +23,15 @@ urlpatterns = [
     # Agent (device token)
     path("agent/snapshot/upload/", views.SnapshotUploadView.as_view(), name="snapshot_upload"),
     path("agent/snapshot/interval/", views.SnapshotIntervalView.as_view(), name="snapshot_interval"),
+    path("agent/activity/upload/", views.ActivityUploadView.as_view(), name="activity_upload"),
+
+    # Activity log & inactivity settings (Company Admin JWT)
+    path("activity/", views.ActivityListView.as_view(), name="activity_list"),
+    path("inactivity-settings/", views.InactivitySettingsView.as_view(), name="inactivity_settings"),
+
+    # Uninstall protection
+    path("uninstall-password/", views.UninstallPasswordView.as_view(), name="uninstall_password"),
+    path("agent/verify-uninstall-password/", views.AgentVerifyUninstallPasswordView.as_view(), name="verify_uninstall_password"),
 
     # Browser test harness (DEBUG only)
     path("agent/", views.agent_page, name="agent_page"),

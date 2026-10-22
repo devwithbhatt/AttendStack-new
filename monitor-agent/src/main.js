@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * ZuperHR Monitor — Electron main process (Super Admin / Platform Monitoring).
+ * ZuperHR Monitor — Electron main process (Company Admin Monitoring).
  *
  * Responsibilities:
  *  1. Run as a single, background instance.
@@ -11,17 +11,18 @@
  *     runs hidden and starts automatically with Windows.
  *  5. Capture periodic screenshots and upload to the server.
  *  6. Track active window / website and upload activity data.
+ *  7. Uninstall protection: require password before quit/uninstall.
  */
 
-const { app, BrowserWindow, desktopCapturer, session, ipcMain, Tray, Menu, nativeImage } = require("electron");
-const { execFile } = require("child_process");
+const { app, BrowserWindow, desktopCapturer, session, ipcMain, Tray, Menu, nativeImage, dialog } = require("electron");
+const { execFile, exec } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { safeStorage } = require("electron");
 const { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH } = require("./config");
 
-const API_BASE = "/api/v1/platform-monitoring";
+const API_BASE = "/api/v1/monitoring";
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -29,8 +30,10 @@ if (!app.requestSingleInstanceLock()) {
 
 let win = null;
 let tray = null;
+let quitAuthorized = false;
 
 const TOKEN_FILE = () => path.join(app.getPath("userData"), "device.bin");
+const UNINSTALL_HASH_FILE = () => path.join(app.getPath("userData"), "up.bin");
 
 // ---------------------------------------------------------------- token store
 function saveToken(data) {
@@ -123,9 +126,152 @@ function createTray() {
     Menu.buildFromTemplate([
       { label: "ZuperHR Monitor (active)", enabled: false },
       { type: "separator" },
-      { label: "Quit", click: () => { app.isQuitting = true; app.quit(); } },
+      { label: "Quit", click: () => attemptQuit() },
     ])
   );
+}
+
+// --------------------------------------------------------- uninstall protection
+let protectionEnabled = false;
+
+async function fetchProtectionStatus() {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+  try {
+    const r = await fetch(SERVER_BASE + API_BASE + "/agent/verify-uninstall-password/", {
+      headers: { "Authorization": "Device " + tokenData.device_token },
+    });
+    if (r.ok) {
+      const data = await r.json();
+      protectionEnabled = data.protection_enabled;
+    }
+  } catch (_) {}
+}
+
+async function verifyUninstallPassword(password) {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return true;
+  try {
+    const r = await fetch(SERVER_BASE + API_BASE + "/agent/verify-uninstall-password/", {
+      method: "POST",
+      headers: {
+        "Authorization": "Device " + tokenData.device_token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      return data.verified;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+let passwordWindow = null;
+
+function showPasswordPrompt() {
+  return new Promise((resolve) => {
+    if (passwordWindow) {
+      passwordWindow.focus();
+      return resolve(false);
+    }
+
+    passwordWindow = new BrowserWindow({
+      width: 380,
+      height: 220,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      alwaysOnTop: true,
+      title: "ZuperHR Monitor — Authorization Required",
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    passwordWindow.setMenuBarVisibility(false);
+
+    const html = `<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; background: #f8f9fa; }
+  h3 { margin: 0 0 8px; font-size: 15px; color: #333; }
+  p { margin: 0 0 16px; font-size: 12px; color: #666; }
+  input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+  .btns { display: flex; gap: 8px; margin-top: 16px; }
+  button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; }
+  .ok { background: #0d6efd; color: #fff; }
+  .cancel { background: #e9ecef; color: #333; }
+  .err { color: #dc3545; font-size: 12px; margin-top: 8px; display: none; }
+</style></head><body>
+<h3>Admin Password Required</h3>
+<p>Enter the uninstall password to quit or uninstall this application.</p>
+<input type="password" id="pw" placeholder="Password" autofocus>
+<div class="err" id="err">Incorrect password. Try again.</div>
+<div class="btns">
+  <button class="cancel" onclick="window.zuperhrAgent.sendPasswordResult('')">Cancel</button>
+  <button class="ok" onclick="window.zuperhrAgent.sendPasswordResult(document.getElementById('pw').value)">Verify</button>
+</div>
+<script>
+  document.getElementById('pw').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') window.zuperhrAgent.sendPasswordResult(document.getElementById('pw').value);
+  });
+</script>
+</body></html>`;
+
+    const tmpHtml = path.join(os.tmpdir(), "zuperhr-pw-prompt.html");
+    fs.writeFileSync(tmpHtml, html, "utf8");
+    passwordWindow.loadFile(tmpHtml);
+
+    passwordWindow.on("closed", () => {
+      passwordWindow = null;
+      resolve(false);
+    });
+
+    ipcMain.handleOnce("agent:passwordResult", async (_e, password) => {
+      if (!password) {
+        if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+        return resolve(false);
+      }
+      const verified = await verifyUninstallPassword(password);
+      if (verified) {
+        if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+        resolve(true);
+      } else {
+        if (passwordWindow) {
+          passwordWindow.webContents.executeJavaScript(`document.getElementById('err').style.display='block';document.getElementById('pw').value='';document.getElementById('pw').focus();`);
+        }
+        ipcMain.handleOnce("agent:passwordResult", async (_e2, pw2) => {
+          if (!pw2) {
+            if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+            return resolve(false);
+          }
+          const v2 = await verifyUninstallPassword(pw2);
+          if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+          resolve(v2);
+        });
+      }
+    });
+  });
+}
+
+async function attemptQuit() {
+  if (!protectionEnabled || !loadToken()) {
+    quitAuthorized = true;
+    app.isQuitting = true;
+    app.quit();
+    return;
+  }
+  const ok = await showPasswordPrompt();
+  if (ok) {
+    quitAuthorized = true;
+    app.isQuitting = true;
+    app.quit();
+  }
 }
 
 // --------------------------------------------------------------------- IPC
@@ -136,7 +282,7 @@ ipcMain.handle("agent:getBootState", () => ({
 
 ipcMain.handle("agent:register", async (_e, payload) => {
   try {
-    const res = await fetch(SERVER_BASE + API_BASE + "/agent/sign-in/", {
+    const res = await fetch(SERVER_BASE + API_BASE + "/devices/register/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -157,6 +303,8 @@ ipcMain.handle("agent:onRegistered", (_e, data) => {
   if (win) { win.hide(); win.setSkipTaskbar(true); }
   startSnapshotLoop();
   startActivityTracking();
+  fetchProtectionStatus();
+  setupAutoRestart();
   return true;
 });
 
@@ -406,6 +554,16 @@ function stopActivityTracking() {
   if (activityUploadTimer) { clearInterval(activityUploadTimer); activityUploadTimer = null; }
 }
 
+// --------------------------------------------------------- auto-restart
+function setupAutoRestart() {
+  const exePath = process.execPath;
+  const taskName = "ZuperHRMonitorRestart";
+  const cmd = `schtasks /create /tn "${taskName}" /tr "\\"${exePath}\\" --hidden" /sc onlogon /rl highest /f`;
+  exec(cmd, { timeout: 10000 }, (err) => {
+    if (err) console.error("Failed to register auto-restart task:", err.message);
+  });
+}
+
 // --------------------------------------------------------------------- boot
 app.on("second-instance", () => {
   if (win) { win.show(); win.setSkipTaskbar(false); }
@@ -415,7 +573,7 @@ async function validateToken() {
   const tokenData = loadToken();
   if (!tokenData || !tokenData.device_token) return false;
   try {
-    const r = await fetch(SERVER_BASE + API_BASE + "/agent/heartbeat/", {
+    const r = await fetch(SERVER_BASE + API_BASE + "/devices/heartbeat/", {
       method: "POST",
       headers: {
         "Authorization": "Device " + tokenData.device_token,
@@ -428,6 +586,13 @@ async function validateToken() {
     return true;
   }
 }
+
+app.on("before-quit", (e) => {
+  if (!quitAuthorized && protectionEnabled && loadToken()) {
+    e.preventDefault();
+    attemptQuit();
+  }
+});
 
 app.whenReady().then(async () => {
   installDisplayMediaHandler();
@@ -449,6 +614,9 @@ app.whenReady().then(async () => {
   if (hasToken) {
     startSnapshotLoop();
     startActivityTracking();
+    fetchProtectionStatus();
+    setupAutoRestart();
+    setInterval(fetchProtectionStatus, 5 * 60 * 1000);
   }
 
   app.on("activate", () => {

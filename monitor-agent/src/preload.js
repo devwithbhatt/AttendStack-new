@@ -12,3 +12,7 @@ contextBridge.exposeInMainWorld("agentAPI", {
   onRegistered: (data) => ipcRenderer.invoke("agent:onRegistered", data),
   forget: () => ipcRenderer.invoke("agent:forget"),
 });
+
+contextBridge.exposeInMainWorld("zuperhrAgent", {
+  sendPasswordResult: (pw) => ipcRenderer.invoke("agent:passwordResult", pw),
+});

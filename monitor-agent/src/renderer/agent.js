@@ -1,12 +1,12 @@
 "use strict";
 
 /**
- * Renderer logic for the ZuperHR Monitor agent (Super Admin / Platform Monitoring).
+ * Renderer logic for the ZuperHR Monitor agent (Company Admin Monitoring).
  *
  * Flow:
  *  - On boot, ask main for { server, token }.
  *  - If a token exists, connect to the signalling WebSocket immediately.
- *  - If not, show the sign-in form (User ID + password + passkey).
+ *  - If not, show the sign-in form (Organisation ID + email + password).
  *
  * Screen capture uses getDisplayMedia(), which the MAIN process grants silently
  * (primary screen, no picker). The agent only ever SENDS a video track.
@@ -55,9 +55,9 @@ $("signinBtn").onclick = async () => {
   $("loginErr").textContent = "";
   const btn = $("signinBtn"); btn.disabled = true; btn.textContent = "Signing in…";
   const body = {
-    user_id: $("userId").value.trim(),
+    organization_id: $("orgId").value.trim(),
+    email: $("email").value.trim(),
     password: $("password").value,
-    passkey: $("passkey").value.trim(),
     device_fingerprint: await fingerprint(),
     device_name: (navigator.platform || "PC"),
     platform: "windows",
@@ -74,9 +74,9 @@ $("signinBtn").onclick = async () => {
     await window.agentAPI.onRegistered({
       device_id: data.device_id,
       device_token: data.device_token,
-      who: data.name || body.user_id,
+      who: data.employee_name || body.email,
     });
-    showActive(data.name || body.user_id);
+    showActive(data.employee_name || body.email);
     connect();
   } catch (e) {
     $("loginErr").textContent = "Network error: " + e.message;
@@ -94,7 +94,7 @@ async function fingerprint() {
 function connect() {
   if (!deviceToken) return;
   setStatus("Connecting…", false);
-  ws = new WebSocket(WS_BASE + "/ws/platform-monitor/agent/?device_token=" + encodeURIComponent(deviceToken));
+  ws = new WebSocket(WS_BASE + "/ws/monitor/agent/?device_token=" + encodeURIComponent(deviceToken));
   ws.onopen = () => {
     reconnectDelay = 1000;
     setStatus("● Online — monitoring active", true);

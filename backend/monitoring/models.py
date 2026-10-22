@@ -300,3 +300,103 @@ class Snapshot(models.Model):
 
     def __str__(self):
         return f"Snapshot {self.device} @ {self.captured_at:%Y-%m-%d %H:%M}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Activity tracking & inactivity settings
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEFAULT_IDLE_THRESHOLD = 3    # minutes – gap before "Idle"
+DEFAULT_LONG_INTERVAL = 10   # minutes – gap before "Long Interval"
+
+
+class InactivitySettings(models.Model):
+    """Per-organisation inactivity thresholds for the activity log."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.OneToOneField(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="inactivity_settings",
+    )
+    idle_threshold_minutes = models.PositiveIntegerField(default=DEFAULT_IDLE_THRESHOLD)
+    long_interval_threshold_minutes = models.PositiveIntegerField(default=DEFAULT_LONG_INTERVAL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Inactivity Settings"
+        verbose_name_plural = "Inactivity Settings"
+
+    def __str__(self):
+        return f"Inactivity: idle>{self.idle_threshold_minutes}m, long>{self.long_interval_threshold_minutes}m — {self.organization.name}"
+
+
+class ActivityEntry(models.Model):
+    """One tracked window/website activity span from the monitoring agent."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device = models.ForeignKey(
+        MonitoredDevice,
+        on_delete=models.CASCADE,
+        related_name="activity_entries",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="activity_entries",
+    )
+    title = models.CharField(max_length=500, blank=True)
+    app_name = models.CharField(max_length=200, blank=True)
+    url = models.URLField(max_length=2000, blank=True)
+    started_at = models.DateTimeField(db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["device", "started_at"], name="mon_activity_dev_start"),
+            models.Index(fields=["organization", "started_at"], name="mon_activity_org_start"),
+        ]
+
+    def __str__(self):
+        return f"{self.device} — {self.app_name or self.title[:30]} @ {self.started_at:%H:%M}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Uninstall protection
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class UninstallPassword(models.Model):
+    """Per-organisation password that must be entered before the monitoring
+    agent can be quit or uninstalled from an employee's computer."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.OneToOneField(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="uninstall_password",
+    )
+    password_hash = models.CharField(max_length=128)
+    set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Uninstall Password"
+
+    def __str__(self):
+        return f"Uninstall password — {self.organization.name}"
+
+    def set_password(self, raw_password: str):
+        from django.contrib.auth.hashers import make_password
+        self.password_hash = make_password(raw_password)
+
+    def check_password(self, raw_password: str) -> bool:
+        from django.contrib.auth.hashers import check_password
+        return check_password(raw_password, self.password_hash)

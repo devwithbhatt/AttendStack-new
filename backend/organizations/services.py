@@ -218,7 +218,10 @@ def resolve_organization_for_request(request):
         org_id = request.query_params.get("organization_id")
         if org_id:
             return Organization.objects.filter(id=org_id).first()
-        return Organization.objects.filter(owner=user).first()
+        org = Organization.objects.filter(owner=user).first()
+        if org:
+            return org
+        return get_organization_for_user(user)
 
     return get_organization_for_user(user)
 

@@ -23,6 +23,7 @@ import {
   IconTrash,
   IconCamera,
   IconSettings,
+  IconActivity,
 } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
@@ -80,6 +81,23 @@ interface SnapshotItem {
   captured_at: string;
 }
 
+interface ActivityEntryItem {
+  id: string;
+  device: string;
+  device_name: string;
+  employee_name: string;
+  title: string;
+  app_name: string;
+  url: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number;
+}
+interface InactivitySettingsData {
+  idle_threshold_minutes: number;
+  long_interval_threshold_minutes: number;
+}
+
 const fmt = (s: string | null) => (s ? new Date(s).toLocaleString() : "—");
 const fmtDur = (s: number | null) =>
   s == null ? "live / —" : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -121,6 +139,21 @@ export default function LiveMonitoringPage() {
   const [customRetention, setCustomRetention] = useState("");
   const [applyToAll, setApplyToAll] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+
+  // Uninstall protection
+  const [uninstallPwSet, setUninstallPwSet] = useState(false);
+  const [uninstallPw, setUninstallPw] = useState("");
+  const [uninstallPwConfirm, setUninstallPwConfirm] = useState("");
+  const [uninstallSaving, setUninstallSaving] = useState(false);
+
+  // Activity log
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [activityDevice, setActivityDevice] = useState<Device | null>(null);
+  const [activityEntries, setActivityEntries] = useState<ActivityEntryItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [inactivitySettings, setInactivitySettings] = useState<InactivitySettingsData>({ idle_threshold_minutes: 3, long_interval_threshold_minutes: 10 });
+  const [inactSaving, setInactSaving] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -303,8 +336,13 @@ export default function LiveMonitoringPage() {
   // ------------------------------------------------------------- settings
   const openSettings = async () => {
     setShowSettings(true);
+    setUninstallPw("");
+    setUninstallPwConfirm("");
     try {
-      const r = await fetch(`${API}/snapshot-settings/`, { headers: authHeaders() });
+      const [r, upRes] = await Promise.all([
+        fetch(`${API}/snapshot-settings/`, { headers: authHeaders() }),
+        fetch(`${API}/uninstall-password/`, { headers: authHeaders() }),
+      ]);
       if (r.ok) {
         const data = await r.json();
         setSnapSettings(data);
@@ -329,6 +367,55 @@ export default function LiveMonitoringPage() {
           setCustomRetention(String(ret));
           setRetentionDays(0);
         }
+      }
+      if (upRes.ok) {
+        const upData = await upRes.json();
+        setUninstallPwSet(upData.is_set);
+      }
+    } catch {}
+  };
+
+  const saveUninstallPassword = async () => {
+    if (!uninstallPw || uninstallPw.length < 4) {
+      Swal.fire("Invalid", "Password must be at least 4 characters.", "warning");
+      return;
+    }
+    if (uninstallPw !== uninstallPwConfirm) {
+      Swal.fire("Mismatch", "Passwords do not match.", "warning");
+      return;
+    }
+    setUninstallSaving(true);
+    try {
+      const r = await fetch(`${API}/uninstall-password/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ password: uninstallPw }),
+      });
+      if (r.ok) {
+        setUninstallPwSet(true);
+        setUninstallPw("");
+        setUninstallPwConfirm("");
+        Swal.fire({ icon: "success", title: "Uninstall password set", timer: 1500, showConfirmButton: false });
+      } else Swal.fire("Error", "Could not set password.", "error");
+    } catch { Swal.fire("Error", "Could not set password.", "error"); }
+    finally { setUninstallSaving(false); }
+  };
+
+  const removeUninstallPassword = async () => {
+    const ok = await Swal.fire({
+      title: "Remove uninstall protection?",
+      text: "Employees will be able to quit or uninstall the monitoring app without a password.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Remove",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      const r = await fetch(`${API}/uninstall-password/`, { method: "DELETE", headers: authHeaders() });
+      if (r.ok) {
+        setUninstallPwSet(false);
+        Swal.fire({ icon: "success", title: "Uninstall protection removed", timer: 1500, showConfirmButton: false });
       }
     } catch {}
   };
@@ -367,6 +454,80 @@ export default function LiveMonitoringPage() {
     } finally {
       setSettingsSaving(false);
     }
+  };
+
+  // ------------------------------------------------------------- activity log
+  const openActivityLog = async (device: Device) => {
+    setShowActivityLog(true);
+    setActivityDevice(device);
+    setActivityLoading(true);
+    const today = new Date().toISOString().slice(0, 10);
+    setActivityDate(today);
+    try {
+      const [actRes, settRes] = await Promise.all([
+        fetch(`${API}/activity/?device=${device.id}&date=${today}`, { headers: authHeaders() }),
+        fetch(`${API}/inactivity-settings/`, { headers: authHeaders() }),
+      ]);
+      if (actRes.ok) { const d = await actRes.json(); setActivityEntries(d.results || d); }
+      else setActivityEntries([]);
+      if (settRes.ok) { const s = await settRes.json(); setInactivitySettings(s); }
+    } catch { setActivityEntries([]); }
+    finally { setActivityLoading(false); }
+  };
+
+  const loadActivityForDate = async (date: string) => {
+    if (!activityDevice) return;
+    setActivityDate(date);
+    setActivityLoading(true);
+    try {
+      const r = await fetch(`${API}/activity/?device=${activityDevice.id}&date=${date}`, { headers: authHeaders() });
+      if (r.ok) { const d = await r.json(); setActivityEntries(d.results || d); }
+      else setActivityEntries([]);
+    } catch { setActivityEntries([]); }
+    finally { setActivityLoading(false); }
+  };
+
+  const saveInactivitySettings = async () => {
+    setInactSaving(true);
+    try {
+      const r = await fetch(`${API}/inactivity-settings/`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(inactivitySettings),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setInactivitySettings(d);
+        Swal.fire({ icon: "success", title: "Inactivity settings saved", timer: 1500, showConfirmButton: false });
+      } else Swal.fire("Error", "Could not save.", "error");
+    } catch { Swal.fire("Error", "Could not save.", "error"); }
+    finally { setInactSaving(false); }
+  };
+
+  const getActivityStatus = (durationSec: number) => {
+    const mins = durationSec / 60;
+    if (mins >= inactivitySettings.long_interval_threshold_minutes) return { label: "Long Interval", bg: "danger" };
+    if (mins >= inactivitySettings.idle_threshold_minutes) return { label: "Idle", bg: "warning" };
+    return { label: "Active", bg: "success" };
+  };
+
+  const activitySummary = () => {
+    let totalActive = 0, totalIdle = 0, totalLong = 0;
+    activityEntries.forEach((e) => {
+      const mins = e.duration_seconds / 60;
+      if (mins >= inactivitySettings.long_interval_threshold_minutes) totalLong += e.duration_seconds;
+      else if (mins >= inactivitySettings.idle_threshold_minutes) totalIdle += e.duration_seconds;
+      else totalActive += e.duration_seconds;
+    });
+    const totalTracked = totalActive + totalIdle + totalLong;
+    const workdaySec = 8 * 3600;
+    const totalOffline = Math.max(0, workdaySec - totalTracked);
+    const fmtH = (s: number) => {
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    };
+    return { totalActive: fmtH(totalActive), totalIdle: fmtH(totalIdle), totalLong: fmtH(totalLong), totalOffline: fmtH(totalOffline) };
   };
 
   useEffect(() => () => { try { wsRef.current?.close(); pcRef.current?.close(); } catch {} }, []);
@@ -437,6 +598,14 @@ export default function LiveMonitoringPage() {
                       title="Snapshots"
                     >
                       <IconCamera size={16} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-info"
+                      onClick={() => openActivityLog(d)}
+                      title="Activity Log"
+                    >
+                      <IconActivity size={16} />
                     </Button>
                     <Button
                       size="sm"
@@ -559,6 +728,120 @@ export default function LiveMonitoringPage() {
               ))}
             </div>
           )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Activity Log modal */}
+      <Modal show={showActivityLog} onHide={() => setShowActivityLog(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-6">
+            Activity Log — {activityDevice?.employee_name} ({activityDevice?.device_name})
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="d-flex gap-3 align-items-center mb-3">
+            <Form.Control
+              type="date"
+              value={activityDate}
+              onChange={(e) => loadActivityForDate(e.target.value)}
+              style={{ maxWidth: 200 }}
+            />
+          </div>
+
+          {/* Daily summary */}
+          {!activityLoading && activityEntries.length > 0 && (() => {
+            const s = activitySummary();
+            return (
+              <div className="d-flex flex-wrap gap-3 mb-3">
+                <div className="border rounded px-3 py-2 text-center" style={{ minWidth: 120 }}>
+                  <div className="text-success fw-bold">{s.totalActive}</div>
+                  <div className="text-muted small">Active</div>
+                </div>
+                <div className="border rounded px-3 py-2 text-center" style={{ minWidth: 120 }}>
+                  <div className="text-warning fw-bold">{s.totalIdle}</div>
+                  <div className="text-muted small">Idle</div>
+                </div>
+                <div className="border rounded px-3 py-2 text-center" style={{ minWidth: 120 }}>
+                  <div className="text-danger fw-bold">{s.totalLong}</div>
+                  <div className="text-muted small">Long Interval</div>
+                </div>
+                <div className="border rounded px-3 py-2 text-center" style={{ minWidth: 120 }}>
+                  <div className="text-secondary fw-bold">{s.totalOffline}</div>
+                  <div className="text-muted small">Offline</div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Activity timeline */}
+          {activityLoading ? (
+            <div className="text-center py-4"><Spinner animation="border" size="sm" /> Loading…</div>
+          ) : activityEntries.length === 0 ? (
+            <div className="text-center text-muted py-4">No activity recorded for this date.</div>
+          ) : (
+            <div style={{ maxHeight: 400, overflowY: "auto" }}>
+              <Table responsive size="sm" hover>
+                <thead className="table-light">
+                  <tr>
+                    <th>Time</th>
+                    <th>Application / Website</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityEntries.map((e) => {
+                    const st = getActivityStatus(e.duration_seconds);
+                    const timeStr = new Date(e.started_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    const display = e.url || e.title || e.app_name || "Unknown";
+                    return (
+                      <tr key={e.id}>
+                        <td className="small text-nowrap">{timeStr}</td>
+                        <td className="small">
+                          <div className="fw-medium">{display}</div>
+                          {e.url && e.app_name && <div className="text-muted" style={{ fontSize: 11 }}>{e.app_name}</div>}
+                          {!e.url && e.app_name && e.title && <div className="text-muted" style={{ fontSize: 11 }}>{e.app_name}</div>}
+                        </td>
+                        <td className="small text-nowrap">{fmtDur(e.duration_seconds)}</td>
+                        <td><Badge bg={st.bg} className="text-uppercase" style={{ fontSize: 10 }}>{st.label}</Badge></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </div>
+          )}
+
+          {/* Inactivity module settings */}
+          <hr />
+          <h6 className="fw-bold mb-3">Inactivity Module Settings</h6>
+          <div className="d-flex flex-wrap gap-3 mb-3">
+            <div>
+              <Form.Label className="small mb-1">Idle threshold (minutes)</Form.Label>
+              <Form.Control
+                type="number"
+                min={1}
+                value={inactivitySettings.idle_threshold_minutes}
+                onChange={(e) => setInactivitySettings({ ...inactivitySettings, idle_threshold_minutes: parseInt(e.target.value, 10) || 1 })}
+                style={{ maxWidth: 120 }}
+              />
+              <div className="text-muted" style={{ fontSize: 11 }}>Inactivity above this = Idle</div>
+            </div>
+            <div>
+              <Form.Label className="small mb-1">Long interval threshold (minutes)</Form.Label>
+              <Form.Control
+                type="number"
+                min={1}
+                value={inactivitySettings.long_interval_threshold_minutes}
+                onChange={(e) => setInactivitySettings({ ...inactivitySettings, long_interval_threshold_minutes: parseInt(e.target.value, 10) || 1 })}
+                style={{ maxWidth: 120 }}
+              />
+              <div className="text-muted" style={{ fontSize: 11 }}>Inactivity above this = Long Interval</div>
+            </div>
+          </div>
+          <Button size="sm" variant="primary" onClick={saveInactivitySettings} disabled={inactSaving}>
+            {inactSaving ? <Spinner animation="border" size="sm" /> : "Save Inactivity Settings"}
+          </Button>
         </Modal.Body>
       </Modal>
 
@@ -685,6 +968,49 @@ export default function LiveMonitoringPage() {
               ))
             )}
           </div>
+
+          <hr />
+
+          <Form.Label className="fw-medium mb-2">Uninstall Protection</Form.Label>
+          <div className="text-muted small mb-2">
+            Require a password before the monitoring app can be quit or uninstalled from an employee&apos;s computer.
+          </div>
+
+          {uninstallPwSet ? (
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <Badge bg="success">Password is set</Badge>
+              <Button size="sm" variant="outline-warning" onClick={() => setUninstallPwSet(false)}>
+                Change
+              </Button>
+              <Button size="sm" variant="outline-danger" onClick={removeUninstallPassword}>
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <div>
+              <div className="d-flex flex-wrap gap-2 mb-2">
+                <Form.Control
+                  type="password"
+                  placeholder="New password"
+                  value={uninstallPw}
+                  onChange={(e) => setUninstallPw(e.target.value)}
+                  style={{ maxWidth: 180 }}
+                  size="sm"
+                />
+                <Form.Control
+                  type="password"
+                  placeholder="Confirm password"
+                  value={uninstallPwConfirm}
+                  onChange={(e) => setUninstallPwConfirm(e.target.value)}
+                  style={{ maxWidth: 180 }}
+                  size="sm"
+                />
+              </div>
+              <Button size="sm" variant="primary" onClick={saveUninstallPassword} disabled={uninstallSaving}>
+                {uninstallSaving ? <Spinner animation="border" size="sm" /> : "Set Uninstall Password"}
+              </Button>
+            </div>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" size="sm" onClick={() => setShowSettings(false)}>Cancel</Button>

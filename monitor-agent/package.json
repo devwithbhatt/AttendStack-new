@@ -26,12 +26,14 @@
       "artifactName": "ZuperHRMonitor-Setup.${ext}"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
       "perMachine": false,
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": true,
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/uninstaller.nsh"
     }
   }
 }

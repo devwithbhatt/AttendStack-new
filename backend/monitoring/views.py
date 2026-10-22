@@ -25,13 +25,19 @@ from organizations.services import get_organization_for_user, resolve_organizati
 from .access import is_full_monitor, visible_devices
 from .auth import DeviceTokenAuthentication
 from .ice import build_ice_servers
-from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot, DEFAULT_SNAPSHOT_INTERVAL
+from .models import (
+    MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot,
+    InactivitySettings, ActivityEntry, UninstallPassword,
+    DEFAULT_SNAPSHOT_INTERVAL, DEFAULT_IDLE_THRESHOLD,
+)
 from .serializers import (
     DeviceRegisterSerializer,
     MonitoredDeviceSerializer,
     MonitoringSessionSerializer,
     SnapshotSettingsSerializer,
     SnapshotSerializer,
+    InactivitySettingsSerializer,
+    ActivityEntrySerializer,
 )
 
 
@@ -383,6 +389,168 @@ class SnapshotIntervalView(APIView):
         org_settings = SnapshotSettings.objects.filter(organization=device.organization).first()
         interval = org_settings.interval_minutes if org_settings and org_settings.is_enabled else 0
         return Response({"interval_minutes": interval})
+
+
+# --------------------------------------------------------------------------- #
+# Activity log & inactivity settings
+# --------------------------------------------------------------------------- #
+class InactivitySettingsView(APIView):
+    """GET / PATCH per-org inactivity thresholds."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def get(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        obj, _ = InactivitySettings.objects.get_or_create(
+            organization=org,
+            defaults={"idle_threshold_minutes": DEFAULT_IDLE_THRESHOLD},
+        )
+        return Response(InactivitySettingsSerializer(obj).data)
+
+    def patch(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        obj, _ = InactivitySettings.objects.get_or_create(
+            organization=org,
+            defaults={"idle_threshold_minutes": DEFAULT_IDLE_THRESHOLD},
+        )
+        idle = request.data.get("idle_threshold_minutes")
+        if idle is not None:
+            idle = int(idle)
+            if idle < 1:
+                return Response({"detail": "Idle threshold must be at least 1 minute."}, status=400)
+            obj.idle_threshold_minutes = idle
+
+        long_int = request.data.get("long_interval_threshold_minutes")
+        if long_int is not None:
+            long_int = int(long_int)
+            if long_int < 1:
+                return Response({"detail": "Long interval threshold must be at least 1 minute."}, status=400)
+            obj.long_interval_threshold_minutes = long_int
+
+        obj.save()
+        return Response(InactivitySettingsSerializer(obj).data)
+
+
+class ActivityListView(generics.ListAPIView):
+    """List activity entries for the org, filterable by device and date."""
+
+    serializer_class = ActivityEntrySerializer
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def get_queryset(self):
+        org = _admin_org(self.request)
+        if not org:
+            return ActivityEntry.objects.none()
+        qs = ActivityEntry.objects.filter(organization=org).select_related(
+            "device", "device__employee", "device__user"
+        )
+        device_id = self.request.query_params.get("device")
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        date_str = self.request.query_params.get("date")
+        if date_str:
+            from datetime import datetime
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                qs = qs.filter(started_at__date=d)
+            except ValueError:
+                pass
+        return qs
+
+
+class ActivityUploadView(APIView):
+    """Agent uploads batched activity entries. Authenticated by device token."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        device = request.auth
+        if not device.is_active:
+            return Response({"detail": "Device is revoked."}, status=403)
+        entries = request.data.get("entries", [])
+        if not entries:
+            return Response({"detail": "No entries provided."}, status=400)
+        created = 0
+        for entry in entries:
+            ActivityEntry.objects.create(
+                device=device,
+                organization=device.organization,
+                title=entry.get("title", ""),
+                app_name=entry.get("app_name", ""),
+                url=entry.get("url", ""),
+                started_at=entry["started_at"],
+                ended_at=entry.get("ended_at"),
+                duration_seconds=entry.get("duration_seconds", 0),
+            )
+            created += 1
+        return Response({"created": created}, status=201)
+
+
+# --------------------------------------------------------------------------- #
+# Uninstall protection
+# --------------------------------------------------------------------------- #
+class UninstallPasswordView(APIView):
+    """Company Admin sets or resets the uninstall protection password."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def get(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        exists = UninstallPassword.objects.filter(organization=org).exists()
+        return Response({"is_set": exists})
+
+    def post(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        password = request.data.get("password", "").strip()
+        if not password or len(password) < 4:
+            return Response({"detail": "Password must be at least 4 characters."}, status=400)
+        obj, _ = UninstallPassword.objects.get_or_create(organization=org)
+        obj.set_password(password)
+        obj.set_by = request.user
+        obj.save()
+        return Response({"ok": True, "message": "Uninstall password set."})
+
+    def delete(self, request):
+        org = _admin_org(request)
+        if not org:
+            return Response({"detail": "No organisation."}, status=400)
+        UninstallPassword.objects.filter(organization=org).delete()
+        return Response({"ok": True, "message": "Uninstall password removed."})
+
+
+class AgentVerifyUninstallPasswordView(APIView):
+    """Agent verifies the uninstall password before allowing quit/uninstall."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Check whether an uninstall password is set for this device's org."""
+        device = request.auth
+        exists = UninstallPassword.objects.filter(organization=device.organization).exists()
+        return Response({"protection_enabled": exists})
+
+    def post(self, request):
+        device = request.auth
+        password = request.data.get("password", "")
+        obj = UninstallPassword.objects.filter(organization=device.organization).first()
+        if not obj:
+            return Response({"verified": True})
+        if obj.check_password(password):
+            return Response({"verified": True})
+        return Response({"verified": False, "detail": "Incorrect password."}, status=403)
 
 
 # --------------------------------------------------------------------------- #

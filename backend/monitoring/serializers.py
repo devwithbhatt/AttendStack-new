@@ -7,7 +7,7 @@ from rest_framework import serializers
 from organizations.models import Organization
 from organizations.services import get_organization_for_user
 
-from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot
+from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot, InactivitySettings, ActivityEntry
 
 User = get_user_model()
 
@@ -166,6 +166,30 @@ class SnapshotSerializer(serializers.ModelSerializer):
     class Meta:
         model = Snapshot
         fields = ["id", "device", "device_name", "employee_name", "image", "captured_at"]
+
+    def get_employee_name(self, obj):
+        if obj.device.employee_id and obj.device.employee:
+            return obj.device.employee.full_name
+        return obj.device.user.get_full_name() or obj.device.user.email
+
+
+class InactivitySettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InactivitySettings
+        fields = ["idle_threshold_minutes", "long_interval_threshold_minutes", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class ActivityEntrySerializer(serializers.ModelSerializer):
+    device_name = serializers.CharField(source="device.device_name", read_only=True)
+    employee_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ActivityEntry
+        fields = [
+            "id", "device", "device_name", "employee_name",
+            "title", "app_name", "url", "started_at", "ended_at", "duration_seconds",
+        ]
 
     def get_employee_name(self, obj):
         if obj.device.employee_id and obj.device.employee:
