@@ -13,4 +13,5 @@ contextBridge.exposeInMainWorld("agentAPI", {
   signedOut: () => ipcRenderer.invoke("agent:signedOut"),
   showAdminMessage: (msg) => ipcRenderer.invoke("agent:showAdminMessage", msg),
   acknowledgeMessage: (messageId) => ipcRenderer.invoke("agent:acknowledgeMessage", messageId),
+  sendPasswordResult: (pw) => ipcRenderer.invoke("agent:passwordResult", pw),
 });

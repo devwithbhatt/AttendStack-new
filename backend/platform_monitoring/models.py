@@ -377,3 +377,31 @@ class PlatformMonitorMessage(models.Model):
 
     def __str__(self):
         return f"Message → {self.account_name} @ {self.created_at:%H:%M} [{self.status}]"
+
+
+class PlatformUninstallPassword(models.Model):
+    """Global password that must be entered before the platform monitoring
+    agent can be quit or uninstalled from an employee's computer."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    password_hash = models.CharField(max_length=128)
+    set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform Uninstall Password"
+
+    def __str__(self):
+        return "Platform uninstall password"
+
+    def set_password(self, raw_password: str):
+        self.password_hash = make_password(raw_password)
+
+    def check_password(self, raw_password: str) -> bool:
+        return check_password(raw_password, self.password_hash)

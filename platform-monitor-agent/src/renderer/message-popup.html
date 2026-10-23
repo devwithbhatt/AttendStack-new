@@ -83,15 +83,17 @@
   let currentMessageId = null;
 
   function escapeHtml(str) {
+    if (!str) return "";
     const d = document.createElement("div");
-    d.textContent = str;
+    d.textContent = String(str);
     return d.innerHTML;
   }
 
   window.messageAPI.onDisplayMessage((msg) => {
-    currentMessageId = msg.message_id;
+    currentMessageId = msg.message_id || msg.id;
     document.getElementById("sender").textContent = msg.sender_name ? "From: " + msg.sender_name : "";
-    document.getElementById("content").innerHTML = escapeHtml(msg.content).replace(/\n/g, "<br>");
+    const text = msg.content || msg.message || msg.text || "";
+    document.getElementById("content").innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
     if (msg.created_at) {
       try {
         document.getElementById("timestamp").textContent = new Date(msg.created_at).toLocaleString();
@@ -102,18 +104,11 @@
   document.getElementById("okBtn").onclick = async () => {
     if (!currentMessageId) return;
     const btn = document.getElementById("okBtn");
-    const retry = document.getElementById("retryMsg");
     btn.disabled = true;
-    btn.textContent = "Acknowledging…";
-    retry.style.display = "none";
-
-    const result = await window.messageAPI.acknowledge(currentMessageId);
-    if (result && result.ok) {
-      return;
-    }
-    btn.disabled = false;
-    btn.textContent = "OK";
-    retry.style.display = "block";
+    btn.textContent = "Closing…";
+    try {
+      await window.messageAPI.acknowledge(currentMessageId);
+    } catch (_) {}
   };
 
   document.addEventListener("keydown", (e) => {

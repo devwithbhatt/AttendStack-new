@@ -23,7 +23,9 @@ const { app, BrowserWindow, desktopCapturer, session, ipcMain, Tray, Menu, nativ
 const fs = require("fs");
 const path = require("path");
 const { safeStorage } = require("electron");
-const { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH } = require("./config");
+const os = require("os");
+const { spawn, execFile } = require("child_process");
+const { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH, APP_VERSION } = require("./config");
 
 const APP_TITLE = "Bhatt Square Watch";
 
@@ -37,6 +39,9 @@ let tray = null;
 let messagePopup = null;
 const messageQueue = [];
 let processingMessage = false;
+let quitAuthorized = false;
+let protectionEnabled = false;
+let passwordWindow = null;
 
 const TOKEN_FILE = () => path.join(app.getPath("userData"), "device.bin");
 
@@ -137,7 +142,7 @@ function createTray() {
       { label: `${APP_TITLE} (active)`, enabled: false },
       { label: "Show status", click: showWindow },
       { type: "separator" },
-      { label: "Quit", click: () => { app.isQuitting = true; app.quit(); } },
+      { label: "Quit", click: attemptQuit },
     ])
   );
 }
@@ -171,6 +176,9 @@ ipcMain.handle("agent:onSignedIn", (_e, data) => {
     app.setLoginItemSettings({ openAtLogin: true, args: ["--hidden"] });
   }
   if (win) { win.hide(); win.setSkipTaskbar(true); }
+  startSnapshotLoop();
+  startActivityTracking();
+  fetchProtectionStatus();
   return true;
 });
 
@@ -233,7 +241,10 @@ ipcMain.handle("agent:showAdminMessage", (_e, msg) => {
 
 ipcMain.handle("agent:acknowledgeMessage", async (_e, messageId) => {
   const tokenData = loadToken();
-  if (!tokenData || !tokenData.device_token) return { ok: false };
+  if (!tokenData || !tokenData.device_token) {
+    dismissMessagePopup();
+    return { ok: true };
+  }
   try {
     const res = await fetch(
       SERVER_BASE + `/api/v1/platform-monitoring/agent/messages/${messageId}/acknowledge/`,
@@ -245,21 +256,456 @@ ipcMain.handle("agent:acknowledgeMessage", async (_e, messageId) => {
         },
       }
     );
-    if (res.ok) {
-      messageQueue.shift();
-      processingMessage = false;
-      if (messagePopup) { messagePopup.destroy(); messagePopup = null; }
-      showNextMessage();
-      return { ok: true };
-    }
-    return { ok: false, status: res.status };
+    dismissMessagePopup();
+    return { ok: true };
   } catch (e) {
-    return { ok: false, error: e.message };
+    dismissMessagePopup();
+    return { ok: true };
   }
 });
 
+function dismissMessagePopup() {
+  messageQueue.shift();
+  processingMessage = false;
+  if (messagePopup) { messagePopup.destroy(); messagePopup = null; }
+  showNextMessage();
+}
+
+// --------------------------------------------------------- auto screenshots
+let snapshotTimer = null;
+let snapshotIntervalMs = 30 * 60 * 1000;
+
+async function captureAndUpload() {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 1920, height: 1080 },
+    });
+    if (!sources.length) return;
+
+    const screenshot = sources[0].thumbnail.toJPEG(80);
+    const boundary = "----BSWatch" + Date.now();
+    const filename = "screenshot.jpg";
+    const header = `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="${filename}"\r\nContent-Type: image/jpeg\r\n\r\n`;
+    const footer = `\r\n--${boundary}--\r\n`;
+    const body = Buffer.concat([Buffer.from(header), screenshot, Buffer.from(footer)]);
+
+    await fetch(SERVER_BASE + "/api/v1/platform-monitoring/agent/snapshot/upload/", {
+      method: "POST",
+      headers: {
+        Authorization: "Device " + tokenData.device_token,
+        "Content-Type": "multipart/form-data; boundary=" + boundary,
+      },
+      body,
+    });
+  } catch (e) {
+    console.error("Snapshot capture/upload failed:", e.message);
+  }
+}
+
+async function fetchSnapshotInterval() {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+  try {
+    const r = await fetch(SERVER_BASE + "/api/v1/platform-monitoring/agent/snapshot/interval/", {
+      headers: { Authorization: "Device " + tokenData.device_token },
+    });
+    if (r.ok) {
+      const data = await r.json();
+      if (data.interval_minutes && data.interval_minutes > 0) {
+        snapshotIntervalMs = data.interval_minutes * 60 * 1000;
+      }
+    }
+  } catch (_) {}
+}
+
+function startSnapshotLoop() {
+  stopSnapshotLoop();
+  fetchSnapshotInterval().then(() => {
+    captureAndUpload();
+    snapshotTimer = setInterval(() => {
+      fetchSnapshotInterval();
+      captureAndUpload();
+    }, snapshotIntervalMs);
+    setInterval(async () => {
+      const oldInterval = snapshotIntervalMs;
+      await fetchSnapshotInterval();
+      if (snapshotIntervalMs !== oldInterval && snapshotTimer) {
+        clearInterval(snapshotTimer);
+        snapshotTimer = setInterval(() => {
+          fetchSnapshotInterval();
+          captureAndUpload();
+        }, snapshotIntervalMs);
+      }
+    }, 5 * 60 * 1000);
+  });
+}
+
+function stopSnapshotLoop() {
+  if (snapshotTimer) { clearInterval(snapshotTimer); snapshotTimer = null; }
+}
+
+// --------------------------------------------------------- activity tracking
+const ACTIVITY_POLL_MS = 10 * 1000;
+const ACTIVITY_UPLOAD_MS = 2 * 60 * 1000;
+const ACTIVITY_SCRIPT = path.join(os.tmpdir(), "bswatch-activity.ps1");
+
+let activityPollTimer = null;
+let activityUploadTimer = null;
+let currentActivity = null;
+let pendingEntries = [];
+
+function ensureActivityScript() {
+  try {
+    if (fs.existsSync(ACTIVITY_SCRIPT)) return;
+    const script = [
+      'Add-Type @"',
+      "using System;",
+      "using System.Runtime.InteropServices;",
+      "using System.Text;",
+      "using System.Diagnostics;",
+      "public class BSWAW {",
+      '    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();',
+      '    [DllImport("user32.dll")] static extern int GetWindowText(IntPtr h, StringBuilder t, int n);',
+      '    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);',
+      "    [StructLayout(LayoutKind.Sequential)] struct LII { public uint s; public uint t; }",
+      '    [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LII i);',
+      "    public static string G() {",
+      "        var h = GetForegroundWindow();",
+      "        var b = new StringBuilder(512);",
+      "        GetWindowText(h, b, 512);",
+      "        uint p; GetWindowThreadProcessId(h, out p);",
+      '        string n = "";',
+      "        try { n = Process.GetProcessById((int)p).ProcessName; } catch {}",
+      "        LII i = new LII(); i.s = 8; GetLastInputInfo(ref i);",
+      '        return n + "<|>" + b.ToString() + "<|>" + ((Environment.TickCount - i.t) / 1000);',
+      "    }",
+      "}",
+      '"@',
+      "[BSWAW]::G()",
+    ].join("\n");
+    fs.writeFileSync(ACTIVITY_SCRIPT, script, "utf8");
+  } catch (e) {
+    console.error("ensureActivityScript:", e.message);
+  }
+}
+
+function getActiveWindow() {
+  return new Promise((resolve) => {
+    ensureActivityScript();
+    execFile(
+      "powershell",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ACTIVITY_SCRIPT],
+      { timeout: 8000 },
+      (err, stdout) => {
+        if (err || !stdout) return resolve(null);
+        const parts = stdout.trim().split("<|>");
+        if (parts.length < 3) return resolve(null);
+        resolve({
+          processName: parts[0] || "",
+          title: parts[1] || "",
+          idleSeconds: parseInt(parts[2], 10) || 0,
+        });
+      }
+    );
+  });
+}
+
+function parseBrowserTitle(processName, title) {
+  const browsers = {
+    chrome: " - Google Chrome",
+    msedge: " - Microsoft Edge",
+    firefox: " — Mozilla Firefox",
+    brave: " - Brave",
+    opera: " - Opera",
+  };
+  const pn = processName.toLowerCase();
+  for (const [key, suffix] of Object.entries(browsers)) {
+    if (pn.includes(key)) {
+      const idx = title.lastIndexOf(suffix);
+      return idx > 0 ? title.substring(0, idx).trim() : title;
+    }
+  }
+  return "";
+}
+
+function closeCurrentActivity() {
+  if (!currentActivity) return;
+  const now = new Date();
+  const started = new Date(currentActivity.started_at);
+  const durationSec = Math.round((now.getTime() - started.getTime()) / 1000);
+  if (durationSec >= 5) {
+    pendingEntries.push({
+      ...currentActivity,
+      ended_at: now.toISOString(),
+      duration_seconds: durationSec,
+    });
+  }
+  currentActivity = null;
+}
+
+async function pollActivity() {
+  const info = await getActiveWindow();
+  if (!info) return;
+
+  if (info.idleSeconds > 60) {
+    if (currentActivity) closeCurrentActivity();
+    return;
+  }
+
+  const appName = info.processName;
+  const rawTitle = info.title;
+  const pageTitle = parseBrowserTitle(appName, rawTitle);
+  const displayTitle = pageTitle || rawTitle;
+
+  if (currentActivity && currentActivity.app_name === appName && currentActivity.title === displayTitle) {
+    return;
+  }
+
+  if (currentActivity) closeCurrentActivity();
+
+  currentActivity = {
+    app_name: appName,
+    title: displayTitle,
+    url: "",
+    started_at: new Date().toISOString(),
+  };
+}
+
+async function uploadActivityEntries() {
+  if (pendingEntries.length === 0) return;
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+
+  const entries = [...pendingEntries];
+  pendingEntries = [];
+
+  try {
+    const r = await fetch(SERVER_BASE + "/api/v1/platform-monitoring/agent/activity/upload/", {
+      method: "POST",
+      headers: {
+        Authorization: "Device " + tokenData.device_token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ entries }),
+    });
+    if (!r.ok) {
+      pendingEntries = entries.concat(pendingEntries);
+    }
+  } catch {
+    pendingEntries = entries.concat(pendingEntries);
+  }
+}
+
+function startActivityTracking() {
+  stopActivityTracking();
+  activityPollTimer = setInterval(pollActivity, ACTIVITY_POLL_MS);
+  activityUploadTimer = setInterval(uploadActivityEntries, ACTIVITY_UPLOAD_MS);
+}
+
+function stopActivityTracking() {
+  if (activityPollTimer) { clearInterval(activityPollTimer); activityPollTimer = null; }
+  if (activityUploadTimer) { clearInterval(activityUploadTimer); activityUploadTimer = null; }
+}
+
+// --------------------------------------------------------- uninstall protection
+async function fetchProtectionStatus() {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+  try {
+    const r = await fetch(SERVER_BASE + "/api/v1/platform-monitoring/agent/verify-uninstall-password/", {
+      headers: { Authorization: "Device " + tokenData.device_token },
+    });
+    if (r.ok) {
+      const data = await r.json();
+      protectionEnabled = data.protection_enabled;
+    }
+  } catch (_) {}
+}
+
+async function verifyUninstallPassword(password) {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return true;
+  try {
+    const r = await fetch(SERVER_BASE + "/api/v1/platform-monitoring/agent/verify-uninstall-password/", {
+      method: "POST",
+      headers: {
+        Authorization: "Device " + tokenData.device_token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      return data.verified;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function showPasswordPrompt() {
+  return new Promise((resolve) => {
+    if (passwordWindow) {
+      passwordWindow.focus();
+      return resolve(false);
+    }
+
+    passwordWindow = new BrowserWindow({
+      width: 380,
+      height: 220,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      alwaysOnTop: true,
+      title: "Bhatt Square Watch — Authorization Required",
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    passwordWindow.setMenuBarVisibility(false);
+    passwordWindow.loadFile(path.join(__dirname, "renderer", "password-prompt.html"));
+
+    passwordWindow.on("closed", () => {
+      passwordWindow = null;
+      resolve(false);
+    });
+
+    ipcMain.handleOnce("agent:passwordResult", async (_e, password) => {
+      if (!password) {
+        if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+        return resolve(false);
+      }
+      const verified = await verifyUninstallPassword(password);
+      if (verified) {
+        if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+        resolve(true);
+      } else {
+        if (passwordWindow) {
+          passwordWindow.webContents.executeJavaScript(
+            `document.getElementById('err').style.display='block';document.getElementById('pw').value='';document.getElementById('pw').focus();`
+          );
+        }
+        ipcMain.handleOnce("agent:passwordResult", async (_e2, pw2) => {
+          if (!pw2) {
+            if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+            return resolve(false);
+          }
+          const v2 = await verifyUninstallPassword(pw2);
+          if (passwordWindow) { passwordWindow.close(); passwordWindow = null; }
+          resolve(v2);
+        });
+      }
+    });
+  });
+}
+
+async function attemptQuit() {
+  if (!protectionEnabled || !loadToken()) {
+    quitAuthorized = true;
+    app.isQuitting = true;
+    app.quit();
+    return;
+  }
+  const ok = await showPasswordPrompt();
+  if (ok) {
+    quitAuthorized = true;
+    app.isQuitting = true;
+    app.quit();
+  }
+}
+
+// ------------------------------------------------------------ auto-update
+let updateInProgress = false;
+const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+async function checkForUpdates() {
+  if (updateInProgress) return;
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+
+  try {
+    const res = await fetch(
+      `${SERVER_BASE}/api/v1/platform-monitoring/agent/check-update/?v=${APP_VERSION}`,
+      { headers: { Authorization: `Device ${tokenData.device_token}` } }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.update_available) return;
+
+    updateInProgress = true;
+    const updatePath = portableExe + ".update";
+
+    const dlRes = await fetch(
+      `${SERVER_BASE}/api/v1/platform-monitoring/agent/download-update/`,
+      { headers: { Authorization: `Device ${tokenData.device_token}` } }
+    );
+    if (!dlRes.ok) { updateInProgress = false; return; }
+
+    const buffer = Buffer.from(await dlRes.arrayBuffer());
+    fs.writeFileSync(updatePath, buffer);
+
+    const scriptPath = path.join(path.dirname(portableExe), "_bsw_update.bat");
+    const script = [
+      "@echo off",
+      "timeout /t 3 /nobreak >nul",
+      ":wait",
+      `tasklist /fi "PID eq ${process.pid}" 2>nul | find "${process.pid}" >nul`,
+      "if not errorlevel 1 (",
+      "    timeout /t 2 /nobreak >nul",
+      "    goto wait",
+      ")",
+      "timeout /t 1 /nobreak >nul",
+      `move /y "${updatePath}" "${portableExe}"`,
+      `start "" "${portableExe}" --hidden`,
+      `del "%~f0"`,
+    ].join("\r\n");
+    fs.writeFileSync(scriptPath, script);
+
+    const child = spawn("cmd.exe", ["/c", scriptPath], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    child.unref();
+
+    quitAuthorized = true;
+    app.isQuitting = true;
+    app.quit();
+  } catch (e) {
+    console.error("Update check failed:", e.message);
+    updateInProgress = false;
+  }
+}
+
+function cleanupStaleUpdate() {
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+  try { fs.existsSync(portableExe + ".update") && fs.unlinkSync(portableExe + ".update"); } catch (_) {}
+  try {
+    const bat = path.join(path.dirname(portableExe), "_bsw_update.bat");
+    fs.existsSync(bat) && fs.unlinkSync(bat);
+  } catch (_) {}
+}
+
 // --------------------------------------------------------------------- boot
 app.on("second-instance", showWindow);
+
+app.on("before-quit", (e) => {
+  if (!quitAuthorized && protectionEnabled && loadToken()) {
+    e.preventDefault();
+    attemptQuit();
+  }
+});
 
 app.whenReady().then(() => {
   installDisplayMediaHandler();
@@ -269,6 +715,17 @@ app.whenReady().then(() => {
 
   createWindow(/* showForSignIn */ !hasToken && !launchedHidden);
   createTray();
+  cleanupStaleUpdate();
+
+  if (hasToken) {
+    startSnapshotLoop();
+    startActivityTracking();
+    fetchProtectionStatus();
+    setInterval(fetchProtectionStatus, 5 * 60 * 1000);
+  }
+
+  setTimeout(checkForUpdates, 10_000);
+  setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(!loadToken());

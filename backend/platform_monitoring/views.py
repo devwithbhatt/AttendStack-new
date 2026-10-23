@@ -40,6 +40,7 @@ from .models import (
     PlatformInactivitySettings,
     PlatformActivityEntry,
     PlatformMonitorMessage,
+    PlatformUninstallPassword,
     MessageStatus,
     DEFAULT_SNAPSHOT_INTERVAL,
     DEFAULT_IDLE_THRESHOLD,
@@ -62,6 +63,15 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 INSTALLER_NAME = "ZuperHRMonitor-Setup.exe"
+AGENT_VERSION_FILE = "version.json"
+
+
+def _parse_version(v):
+    """Parse '1.2.3' into (1, 2, 3) for comparison."""
+    try:
+        return tuple(int(x) for x in v.strip().split("."))
+    except (ValueError, AttributeError):
+        return (0, 0, 0)
 GENERIC_SIGNIN_ERROR = "User ID, password or passkey is incorrect."
 
 # Compared against when the User ID doesn't exist, so a wrong ID takes as long
@@ -309,6 +319,45 @@ class AgentDownloadView(APIView):
         if not path.exists():
             return Response({"detail": "The app installer is not available yet."}, status=status.HTTP_404_NOT_FOUND)
         return FileResponse(open(path, "rb"), as_attachment=True, filename=INSTALLER_NAME)
+
+
+class AgentCheckUpdateView(APIView):
+    """Agent checks whether a newer version of the app is available."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import json as _json
+
+        version_path = settings.MEDIA_ROOT / "platform_monitoring" / "agent" / AGENT_VERSION_FILE
+        if not version_path.exists():
+            return Response({"update_available": False})
+        try:
+            with open(version_path) as f:
+                info = _json.load(f)
+        except Exception:
+            return Response({"update_available": False})
+
+        latest = info.get("version", "0.0.0")
+        current = request.query_params.get("v", "0.0.0")
+        return Response({
+            "update_available": _parse_version(latest) > _parse_version(current),
+            "latest_version": latest,
+        })
+
+
+class AgentDownloadUpdateView(APIView):
+    """Agent downloads the latest app binary for auto-update."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        file_path = settings.MEDIA_ROOT / "platform_monitoring" / "agent" / INSTALLER_NAME
+        if not file_path.exists():
+            return Response({"detail": "Update not available."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(open(file_path, "rb"), as_attachment=True, filename=INSTALLER_NAME)
 
 
 # --------------------------------------------------------------------------- #
@@ -604,3 +653,52 @@ class AgentAcknowledgeMessageView(APIView):
                 pass
 
         return Response({"ok": True})
+
+
+# --------------------------------------------------------------------------- #
+# Uninstall protection
+# --------------------------------------------------------------------------- #
+class PlatformUninstallPasswordView(APIView):
+    """Super Admin sets, checks or removes the uninstall protection password."""
+
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        exists = PlatformUninstallPassword.objects.exists()
+        return Response({"is_set": exists})
+
+    def post(self, request):
+        password = request.data.get("password", "").strip()
+        if not password or len(password) < 4:
+            return Response({"detail": "Password must be at least 4 characters."}, status=status.HTTP_400_BAD_REQUEST)
+        obj = PlatformUninstallPassword.objects.first()
+        if obj is None:
+            obj = PlatformUninstallPassword()
+        obj.set_password(password)
+        obj.set_by = request.user
+        obj.save()
+        return Response({"ok": True, "message": "Uninstall password set."})
+
+    def delete(self, request):
+        PlatformUninstallPassword.objects.all().delete()
+        return Response({"ok": True, "message": "Uninstall password removed."})
+
+
+class AgentVerifyUninstallPasswordView(APIView):
+    """Agent checks protection status (GET) or verifies password (POST)."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        exists = PlatformUninstallPassword.objects.exists()
+        return Response({"protection_enabled": exists})
+
+    def post(self, request):
+        password = request.data.get("password", "")
+        obj = PlatformUninstallPassword.objects.first()
+        if not obj:
+            return Response({"verified": True})
+        if obj.check_password(password):
+            return Response({"verified": True})
+        return Response({"verified": False, "detail": "Incorrect password."}, status=status.HTTP_403_FORBIDDEN)

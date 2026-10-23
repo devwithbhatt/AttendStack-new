@@ -11,6 +11,8 @@ import {
   IconEye,
   IconHistory,
   IconKey,
+  IconLock,
+  IconLockOpen,
   IconMessage,
   IconRefresh,
   IconSettings,
@@ -177,6 +179,11 @@ export default function SuperAdminLiveMonitoringPage() {
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messageStatuses, setMessageStatuses] = useState<Record<string, string>>({});
+
+  // Uninstall protection
+  const [uninstallPasswordSet, setUninstallPasswordSet] = useState(false);
+  const [newUninstallPassword, setNewUninstallPassword] = useState("");
+  const [savingUninstallPassword, setSavingUninstallPassword] = useState(false);
 
   // Selected user context for per-user modals
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
@@ -449,11 +456,14 @@ export default function SuperAdminLiveMonitoringPage() {
   const openUserSettings = async (a: Account) => {
     setSelectedAccount(a);
     setShowSettings(true);
+    setNewUninstallPassword("");
     try {
-      const [snapRes, inactRes] = await Promise.all([
+      const [snapRes, inactRes, upRes] = await Promise.all([
         apiClient.get(`${API}/snapshot-settings/`),
         apiClient.get(`${API}/inactivity-settings/`),
+        apiClient.get(`${API}/uninstall-password/`),
       ]);
+      setUninstallPasswordSet(upRes.data?.is_set || false);
       if (snapRes.data) {
         const interval = snapRes.data.interval_minutes;
         if (INTERVAL_OPTIONS.includes(interval)) {
@@ -709,7 +719,13 @@ export default function SuperAdminLiveMonitoringPage() {
                       {a.note && <div className="text-muted small">{a.note}</div>}
                     </td>
                     <td>
-                      {a.is_active ? <Badge bg="success-subtle" text="success">Active</Badge> : <Badge bg="secondary">Disabled</Badge>}
+                      {!a.is_active ? (
+                        <Badge bg="secondary">Disabled</Badge>
+                      ) : a.online_count > 0 ? (
+                        <Badge bg="success">Online</Badge>
+                      ) : (
+                        <Badge bg="secondary-subtle" text="secondary">Offline</Badge>
+                      )}
                       {a.is_locked && <Badge bg="warning" text="dark" className="ms-1" title="Too many wrong attempts; unlocks after 15 minutes, or reset credentials.">Locked</Badge>}
                     </td>
                     <td>
@@ -1024,6 +1040,75 @@ export default function SuperAdminLiveMonitoringPage() {
                 onChange={(e) => setLongIntervalThreshold(parseInt(e.target.value, 10) || 1)} style={{ maxWidth: 150 }} />
               <Form.Text className="text-muted">Inactivity above this = Long Interval</Form.Text>
             </div>
+          </div>
+
+          <hr />
+
+          {/* Uninstall protection */}
+          <h6 className="fw-semibold mb-2"><IconLock size={16} className="me-1" />Uninstall Protection</h6>
+          <p className="text-muted small mb-2">
+            When set, employees must enter this password to quit or uninstall the monitoring app from their computer.
+          </p>
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <Badge bg={uninstallPasswordSet ? "success" : "secondary"}>
+              {uninstallPasswordSet ? "Password is set" : "Not set"}
+            </Badge>
+          </div>
+          <div className="d-flex gap-2 mb-3">
+            <Form.Control
+              type="password"
+              size="sm"
+              placeholder={uninstallPasswordSet ? "Enter new password to change" : "Set a password (min 4 chars)"}
+              value={newUninstallPassword}
+              onChange={(e) => setNewUninstallPassword(e.target.value)}
+              style={{ maxWidth: 250 }}
+            />
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={savingUninstallPassword || newUninstallPassword.trim().length < 4}
+              onClick={async () => {
+                setSavingUninstallPassword(true);
+                try {
+                  await apiClient.post(`${API}/uninstall-password/`, { password: newUninstallPassword.trim() });
+                  setUninstallPasswordSet(true);
+                  setNewUninstallPassword("");
+                  Swal.fire({ icon: "success", title: "Uninstall password set", timer: 1500, showConfirmButton: false });
+                } catch (err: any) {
+                  Swal.fire("Error", errorText(err, "Could not set password."), "error");
+                } finally {
+                  setSavingUninstallPassword(false);
+                }
+              }}
+            >
+              {savingUninstallPassword ? <Spinner animation="border" size="sm" /> : <><IconLock size={14} className="me-1" />Set</>}
+            </Button>
+            {uninstallPasswordSet && (
+              <Button
+                size="sm"
+                variant="outline-danger"
+                onClick={async () => {
+                  const ok = await Swal.fire({
+                    title: "Remove uninstall protection?",
+                    text: "Employees will be able to quit or uninstall the app without a password.",
+                    icon: "warning",
+                    showCancelButton: true,
+                    confirmButtonText: "Remove",
+                    confirmButtonColor: "#ef4444",
+                  });
+                  if (!ok.isConfirmed) return;
+                  try {
+                    await apiClient.delete(`${API}/uninstall-password/`);
+                    setUninstallPasswordSet(false);
+                    setNewUninstallPassword("");
+                  } catch (err: any) {
+                    Swal.fire("Error", errorText(err, "Could not remove password."), "error");
+                  }
+                }}
+              >
+                <IconLockOpen size={14} className="me-1" />Remove
+              </Button>
+            )}
           </div>
 
           <hr />

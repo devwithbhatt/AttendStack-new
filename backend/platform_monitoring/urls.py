@@ -17,6 +17,8 @@ urlpatterns = [
     path("devices/<uuid:device_id>/revoke/", views.DeviceRevokeView.as_view(), name="device_revoke"),
     path("sessions/", views.SessionListView.as_view(), name="session_list"),
     path("agent/download/", views.AgentDownloadView.as_view(), name="agent_download"),
+    path("agent/check-update/", views.AgentCheckUpdateView.as_view(), name="agent_check_update"),
+    path("agent/download-update/", views.AgentDownloadUpdateView.as_view(), name="agent_download_update"),
 
     # Snapshots
     path("snapshot-settings/", views.PlatformSnapshotSettingsView.as_view(), name="snapshot_settings"),
@@ -34,4 +36,8 @@ urlpatterns = [
     path("messages/", views.MessageStatusView.as_view(), name="message_list"),
     path("agent/messages/pending/", views.AgentPendingMessagesView.as_view(), name="agent_pending_messages"),
     path("agent/messages/<uuid:message_id>/acknowledge/", views.AgentAcknowledgeMessageView.as_view(), name="agent_acknowledge_message"),
+
+    # Uninstall protection
+    path("uninstall-password/", views.PlatformUninstallPasswordView.as_view(), name="uninstall_password"),
+    path("agent/verify-uninstall-password/", views.AgentVerifyUninstallPasswordView.as_view(), name="agent_verify_uninstall_password"),
 ]
