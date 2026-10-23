@@ -1,7 +1,7 @@
 {
-  "name": "bhattsquare-watch",
-  "version": "1.2.1",
-  "description": "Bhatt Square Watch — background screen app for the Super Admin's Live Monitoring (read-only).",
+  "name": "zuperhr-monitor",
+  "version": "1.3.0",
+  "description": "ZuperHR Monitor — background screen app for the Super Admin's Live Monitoring (read-only).",
   "main": "src/main.js",
   "author": "Bhatt Square Private Limited",
   "license": "UNLICENSED",
@@ -15,7 +15,7 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.bhattsquare.watch",
+    "appId": "com.zuperhr.monitor",
     "productName": "ZuperHR Monitor",
     "directories": {
       "output": "dist"
