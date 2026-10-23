@@ -62,7 +62,7 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-INSTALLER_NAME = "ZuperHRMonitor-Setup.exe"
+INSTALLER_NAME = "BhattSquareWatch.exe"
 AGENT_VERSION_FILE = "version.json"
 
 

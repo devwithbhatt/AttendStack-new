@@ -27,7 +27,7 @@ import apiClient from "app/services/api";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const API = "/api/v1/platform-monitoring";
-const INSTALLER_NAME = "ZuperHRMonitor-Setup.exe";
+const INSTALLER_NAME = "BhattSquareWatch.exe";
 
 const wsHost = () => {
   const raw = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").trim();
