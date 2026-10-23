@@ -644,6 +644,17 @@ export default function SuperAdminLiveMonitoringPage() {
       a.download = INSTALLER_NAME;
       a.click();
       URL.revokeObjectURL(a.href);
+      Swal.fire({
+        icon: "info",
+        title: "Installation Instructions",
+        html: `<ol style="text-align:left;margin:0;padding-left:1.2rem;line-height:1.8">
+          <li>If the old app is running, <b>close it first</b> — right-click the tray icon → Quit, or end the task from Task Manager.</li>
+          <li>Run the downloaded <b>${INSTALLER_NAME}</b> file.</li>
+          <li>Sign in with User ID, Password, and Passkey.</li>
+          <li>The app will run in the background automatically.</li>
+        </ol>`,
+        confirmButtonText: "Got it",
+      });
     } catch (err: any) {
       if (err?.response?.status === 404) {
         Swal.fire("Not available yet", "The ZuperHR Monitor installer hasn't been published yet.", "info");
