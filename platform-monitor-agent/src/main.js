@@ -27,7 +27,7 @@ const os = require("os");
 const { spawn, execFile } = require("child_process");
 const { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH, APP_VERSION } = require("./config");
 
-const APP_TITLE = "Bhatt Square Watch";
+const APP_TITLE = "ZuperHR Monitor";
 
 // --- Single instance: a second launch just exits (app already running). ---
 if (!app.requestSingleInstanceLock()) {
@@ -562,7 +562,7 @@ function showPasswordPrompt() {
       minimizable: false,
       maximizable: false,
       alwaysOnTop: true,
-      title: "Bhatt Square Watch — Authorization Required",
+      title: "ZuperHR Monitor — Authorization Required",
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,
