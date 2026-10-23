@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.bhattsquare.watch",
-    "productName": "Bhatt Square Watch",
+    "productName": "ZuperHR Monitor",
     "directories": {
       "output": "dist"
     },
@@ -33,7 +33,7 @@
           ]
         }
       ],
-      "artifactName": "BhattSquareWatch.${ext}"
+      "artifactName": "ZuperHRMonitor-Setup.${ext}"
     }
   },
   "allowScripts": {
