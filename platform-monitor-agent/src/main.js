@@ -179,6 +179,8 @@ ipcMain.handle("agent:onSignedIn", (_e, data) => {
   startSnapshotLoop();
   startActivityTracking();
   fetchProtectionStatus();
+  setupWatchdog();
+  lockExeFile();
   return true;
 });
 
@@ -608,6 +610,7 @@ function showPasswordPrompt() {
 
 async function attemptQuit() {
   if (!protectionEnabled || !loadToken()) {
+    removeWatchdog();
     quitAuthorized = true;
     app.isQuitting = true;
     app.quit();
@@ -615,6 +618,7 @@ async function attemptQuit() {
   }
   const ok = await showPasswordPrompt();
   if (ok) {
+    removeWatchdog();
     quitAuthorized = true;
     app.isQuitting = true;
     app.quit();
@@ -678,6 +682,7 @@ async function checkForUpdates() {
     });
     child.unref();
 
+    removeWatchdog();
     quitAuthorized = true;
     app.isQuitting = true;
     app.quit();
@@ -695,6 +700,82 @@ function cleanupStaleUpdate() {
     const bat = path.join(path.dirname(portableExe), "_bsw_update.bat");
     fs.existsSync(bat) && fs.unlinkSync(bat);
   } catch (_) {}
+}
+
+// --------------------------------------------------------- watchdog & file lock
+const TASK_NAME = "ZuperHRMonitorWatchdog";
+
+function setupWatchdog() {
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+
+  const vbsPath = path.join(path.dirname(portableExe), "_zuperhr_watchdog.vbs");
+  const vbs = [
+    'Set WshShell = CreateObject("WScript.Shell")',
+    'exePath = "' + portableExe.replace(/"/g, '""') + '"',
+    'Do While True',
+    '  On Error Resume Next',
+    '  Set objWMI = GetObject("winmgmts:\\\\.\\" & "root\\cimv2")',
+    '  Set procs = objWMI.ExecQuery("SELECT * FROM Win32_Process WHERE ExecutablePath=\'" & Replace(exePath, "\\", "\\\\") & "\'")',
+    '  If procs.Count = 0 Then',
+    '    WshShell.Run """" & exePath & """ --hidden", 0, False',
+    '  End If',
+    '  On Error GoTo 0',
+    '  WScript.Sleep 30000',
+    'Loop',
+  ].join("\r\n");
+  try { fs.writeFileSync(vbsPath, vbs, "utf8"); } catch (_) {}
+
+  const { exec } = require("child_process");
+
+  const taskCmd = `schtasks /create /tn "${TASK_NAME}" /tr "wscript.exe \\"${vbsPath}\\"" /sc onlogon /rl highest /f`;
+  exec(taskCmd, { timeout: 10000 }, () => {});
+
+  const checkCmd = `schtasks /create /tn "${TASK_NAME}_Check" /tr "wscript.exe \\"${vbsPath}\\"" /sc minute /mo 2 /rl highest /f`;
+  exec(checkCmd, { timeout: 10000 }, () => {});
+
+  const { spawn: sp } = require("child_process");
+  try {
+    const isRunning = require("child_process").execSync(
+      `tasklist /fi "IMAGENAME eq wscript.exe" /fo csv /nh`,
+      { timeout: 5000 }
+    ).toString();
+    if (!isRunning.includes("_zuperhr_watchdog.vbs")) {
+      const child = sp("wscript.exe", [vbsPath], { detached: true, stdio: "ignore", windowsHide: true });
+      child.unref();
+    }
+  } catch (_) {
+    const child = sp("wscript.exe", [vbsPath], { detached: true, stdio: "ignore", windowsHide: true });
+    child.unref();
+  }
+}
+
+let exeFileHandle = null;
+
+function lockExeFile() {
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+  try {
+    exeFileHandle = fs.openSync(portableExe, "r");
+  } catch (_) {}
+}
+
+function removeWatchdog() {
+  const { exec } = require("child_process");
+  exec(`schtasks /delete /tn "${TASK_NAME}" /f`, { timeout: 5000 }, () => {});
+  exec(`schtasks /delete /tn "${TASK_NAME}_Check" /f`, { timeout: 5000 }, () => {});
+  exec(`taskkill /f /fi "WINDOWTITLE eq _zuperhr_watchdog.vbs"`, { timeout: 5000 }, () => {});
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (portableExe) {
+    try {
+      const vbsPath = path.join(path.dirname(portableExe), "_zuperhr_watchdog.vbs");
+      fs.existsSync(vbsPath) && fs.unlinkSync(vbsPath);
+    } catch (_) {}
+  }
+  if (exeFileHandle !== null) {
+    try { fs.closeSync(exeFileHandle); } catch (_) {}
+    exeFileHandle = null;
+  }
 }
 
 // --------------------------------------------------------------------- boot
@@ -722,6 +803,8 @@ app.whenReady().then(() => {
     startActivityTracking();
     fetchProtectionStatus();
     setInterval(fetchProtectionStatus, 5 * 60 * 1000);
+    setupWatchdog();
+    lockExeFile();
   }
 
   setTimeout(checkForUpdates, 10_000);

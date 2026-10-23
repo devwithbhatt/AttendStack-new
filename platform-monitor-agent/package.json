@@ -1,6 +1,6 @@
 {
   "name": "zuperhr-monitor",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "ZuperHR Monitor — background screen app for the Super Admin's Live Monitoring (read-only).",
   "main": "src/main.js",
   "author": "Bhatt Square Private Limited",
