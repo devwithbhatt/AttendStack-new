@@ -111,6 +111,18 @@ class PlatformAgentConsumer(AsyncWebsocketConsumer):
     async def agent_kick(self, event):
         await self.close(code=CLOSE_SIGNED_OUT)
 
+    async def admin_message(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "admin_message",
+            "message_id": event["message_id"],
+            "sender_name": event.get("sender_name", ""),
+            "content": event["content"],
+            "created_at": event.get("created_at", ""),
+        }))
+
+    async def message_acknowledged(self, event):
+        pass
+
     # ---- db helpers ---- #
     @database_sync_to_async
     def _mark_seen(self, active=False):
@@ -205,8 +217,16 @@ class PlatformViewerConsumer(AsyncWebsocketConsumer):
         pass
 
     async def agent_kick(self, event):
-        # The watched computer was signed out; end the view too.
         await self.close()
+
+    async def admin_message(self, event):
+        pass
+
+    async def message_acknowledged(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message_acknowledged",
+            "message_id": event["message_id"],
+        }))
 
     # ---- db helpers ---- #
     @database_sync_to_async

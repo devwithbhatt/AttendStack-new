@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';">
+<title>Message from Super Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fff;
+    color: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    border: 2px solid #e74c3c;
+    border-radius: 8px;
+    user-select: none;
+    -webkit-app-region: no-drag;
+  }
+  .header {
+    background: #e74c3c;
+    color: #fff;
+    padding: 14px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .sender {
+    padding: 10px 20px 0;
+    font-size: 12px;
+    color: #888;
+  }
+  .content {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-y: auto;
+    word-wrap: break-word;
+  }
+  .timestamp {
+    padding: 0 20px 8px;
+    font-size: 11px;
+    color: #aaa;
+  }
+  .footer {
+    padding: 12px 20px 16px;
+    text-align: center;
+  }
+  .ok-btn {
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    padding: 10px 48px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .ok-btn:hover { background: #c0392b; }
+  .ok-btn:disabled { background: #bbb; cursor: wait; }
+  .retry-msg {
+    color: #e74c3c;
+    font-size: 12px;
+    margin-top: 6px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div class="header">Message from Super Admin</div>
+  <div class="sender" id="sender"></div>
+  <div class="content" id="content"></div>
+  <div class="timestamp" id="timestamp"></div>
+  <div class="footer">
+    <button class="ok-btn" id="okBtn">OK</button>
+    <div class="retry-msg" id="retryMsg">Acknowledgement failed. Click OK to retry.</div>
+  </div>
+<script>
+  let currentMessageId = null;
+
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  window.messageAPI.onDisplayMessage((msg) => {
+    currentMessageId = msg.message_id;
+    document.getElementById("sender").textContent = msg.sender_name ? "From: " + msg.sender_name : "";
+    document.getElementById("content").innerHTML = escapeHtml(msg.content).replace(/\n/g, "<br>");
+    if (msg.created_at) {
+      try {
+        document.getElementById("timestamp").textContent = new Date(msg.created_at).toLocaleString();
+      } catch (_) {}
+    }
+  });
+
+  document.getElementById("okBtn").onclick = async () => {
+    if (!currentMessageId) return;
+    const btn = document.getElementById("okBtn");
+    const retry = document.getElementById("retryMsg");
+    btn.disabled = true;
+    btn.textContent = "Acknowledging…";
+    retry.style.display = "none";
+
+    const result = await window.messageAPI.acknowledge(currentMessageId);
+    if (result && result.ok) {
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = "OK";
+    retry.style.display = "block";
+  };
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") e.preventDefault();
+  });
+</script>
+</body>
+</html>

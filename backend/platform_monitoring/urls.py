@@ -28,4 +28,10 @@ urlpatterns = [
     path("inactivity-settings/", views.PlatformInactivitySettingsView.as_view(), name="inactivity_settings"),
     path("activity/", views.PlatformActivityListView.as_view(), name="activity_list"),
     path("agent/activity/upload/", views.PlatformActivityUploadView.as_view(), name="activity_upload"),
+
+    # Messaging
+    path("messages/send/", views.SendMessageView.as_view(), name="message_send"),
+    path("messages/", views.MessageStatusView.as_view(), name="message_list"),
+    path("agent/messages/pending/", views.AgentPendingMessagesView.as_view(), name="agent_pending_messages"),
+    path("agent/messages/<uuid:message_id>/acknowledge/", views.AgentAcknowledgeMessageView.as_view(), name="agent_acknowledge_message"),
 ]

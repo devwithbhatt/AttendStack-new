@@ -34,6 +34,9 @@ if (!app.requestSingleInstanceLock()) {
 
 let win = null;
 let tray = null;
+let messagePopup = null;
+const messageQueue = [];
+let processingMessage = false;
 
 const TOKEN_FILE = () => path.join(app.getPath("userData"), "device.bin");
 
@@ -178,6 +181,81 @@ ipcMain.handle("agent:signedOut", () => {
   app.setLoginItemSettings({ openAtLogin: false });
   showWindow();
   return true;
+});
+
+// ------------------------------------------------------------ message popup
+function showNextMessage() {
+  if (processingMessage || messageQueue.length === 0) return;
+  processingMessage = true;
+  const msg = messageQueue[0];
+
+  const { screen } = require("electron");
+  const primary = screen.getPrimaryDisplay();
+  const { width, height } = primary.workAreaSize;
+  const popW = 480, popH = 340;
+
+  messagePopup = new BrowserWindow({
+    width: popW,
+    height: popH,
+    x: Math.round((width - popW) / 2),
+    y: Math.round((height - popH) / 2),
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    frame: false,
+    transparent: false,
+    focusable: true,
+    webPreferences: {
+      preload: path.join(__dirname, "message-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  messagePopup.setAlwaysOnTop(true, "screen-saver");
+  messagePopup.loadFile(path.join(__dirname, "renderer", "message-popup.html"));
+  messagePopup.webContents.on("did-finish-load", () => {
+    messagePopup.webContents.send("display-message", msg);
+  });
+  messagePopup.on("closed", () => { messagePopup = null; });
+  messagePopup.show();
+  messagePopup.focus();
+}
+
+ipcMain.handle("agent:showAdminMessage", (_e, msg) => {
+  messageQueue.push(msg);
+  if (!processingMessage) showNextMessage();
+  return true;
+});
+
+ipcMain.handle("agent:acknowledgeMessage", async (_e, messageId) => {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return { ok: false };
+  try {
+    const res = await fetch(
+      SERVER_BASE + `/api/v1/platform-monitoring/agent/messages/${messageId}/acknowledge/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Device ${tokenData.device_token}`,
+        },
+      }
+    );
+    if (res.ok) {
+      messageQueue.shift();
+      processingMessage = false;
+      if (messagePopup) { messagePopup.destroy(); messagePopup = null; }
+      showNextMessage();
+      return { ok: true };
+    }
+    return { ok: false, status: res.status };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 });
 
 // --------------------------------------------------------------------- boot

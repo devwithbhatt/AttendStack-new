@@ -327,3 +327,53 @@ class PlatformActivityEntry(models.Model):
 
     def __str__(self):
         return f"{self.device} — {self.app_name or self.title[:30]} @ {self.started_at:%H:%M}"
+
+
+class MessageStatus(models.TextChoices):
+    CREATED = "CREATED", "Created"
+    SENT = "SENT", "Sent"
+    DELIVERED = "DELIVERED", "Delivered"
+    ACKNOWLEDGED = "ACKNOWLEDGED", "Acknowledged"
+    FAILED = "FAILED", "Failed"
+
+
+class PlatformMonitorMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="platform_monitor_messages_sent",
+    )
+    sender_name = models.CharField(max_length=254, blank=True)
+    device = models.ForeignKey(
+        PlatformMonitoredDevice,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    account_name = models.CharField(max_length=150, blank=True)
+    content = models.TextField(max_length=1000)
+    status = models.CharField(
+        max_length=20,
+        choices=MessageStatus.choices,
+        default=MessageStatus.CREATED,
+        db_index=True,
+    )
+    session = models.ForeignKey(
+        PlatformMonitoringSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["device", "status"], name="platmon_msg_dev_status"),
+        ]
+
+    def __str__(self):
+        return f"Message → {self.account_name} @ {self.created_at:%H:%M} [{self.status}]"

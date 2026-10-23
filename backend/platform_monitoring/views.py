@@ -39,6 +39,8 @@ from .models import (
     PlatformSnapshot,
     PlatformInactivitySettings,
     PlatformActivityEntry,
+    PlatformMonitorMessage,
+    MessageStatus,
     DEFAULT_SNAPSHOT_INTERVAL,
     DEFAULT_IDLE_THRESHOLD,
     agent_group,
@@ -53,6 +55,8 @@ from .serializers import (
     PlatformSnapshotSerializer,
     PlatformInactivitySettingsSerializer,
     PlatformActivityEntrySerializer,
+    PlatformMonitorMessageSerializer,
+    SendMessageSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -479,3 +483,124 @@ class PlatformActivityUploadView(APIView):
             )
             created += 1
         return Response({"created": created}, status=status.HTTP_201_CREATED)
+
+
+# --------------------------------------------------------------------------- #
+# Super Admin → Employee messaging
+# --------------------------------------------------------------------------- #
+class SendMessageView(APIView):
+    """Super Admin sends a message to a monitored device."""
+
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def post(self, request):
+        serializer = SendMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        device = PlatformMonitoredDevice.objects.select_related("account").filter(
+            id=serializer.validated_data["device_id"],
+            is_active=True,
+        ).first()
+        if device is None:
+            return Response({"detail": "Device not found or inactive."}, status=status.HTTP_404_NOT_FOUND)
+
+        content = serializer.validated_data["content"].strip()
+        if not content:
+            return Response({"detail": "Message cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        msg = PlatformMonitorMessage.objects.create(
+            sender=request.user,
+            sender_name=request.user.get_full_name() or request.user.email,
+            device=device,
+            account_name=device.account.name,
+            content=content,
+            status=MessageStatus.CREATED,
+        )
+
+        layer = get_channel_layer()
+        if layer:
+            try:
+                async_to_sync(layer.group_send)(agent_group(device.id), {
+                    "type": "admin.message",
+                    "message_id": str(msg.id),
+                    "sender_name": msg.sender_name,
+                    "content": msg.content,
+                    "created_at": msg.created_at.isoformat(),
+                })
+                msg.status = MessageStatus.SENT
+                msg.save(update_fields=["status"])
+            except Exception:
+                msg.status = MessageStatus.FAILED
+                msg.save(update_fields=["status"])
+
+        return Response(PlatformMonitorMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+
+class MessageStatusView(generics.ListAPIView):
+    """Super Admin views message statuses for a device."""
+
+    serializer_class = PlatformMonitorMessageSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get_queryset(self):
+        qs = PlatformMonitorMessage.objects.select_related("device", "device__account")
+        device_id = self.request.query_params.get("device")
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        return qs[:50]
+
+
+class AgentPendingMessagesView(APIView):
+    """Agent fetches its unacknowledged messages."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        device = request.auth
+        pending = PlatformMonitorMessage.objects.filter(
+            device=device,
+            status__in=[MessageStatus.CREATED, MessageStatus.SENT, MessageStatus.DELIVERED],
+        ).order_by("created_at")
+        data = [
+            {
+                "id": str(m.id),
+                "sender_name": m.sender_name,
+                "content": m.content,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in pending
+        ]
+        pending.filter(status__in=[MessageStatus.CREATED, MessageStatus.SENT]).update(
+            status=MessageStatus.DELIVERED, delivered_at=timezone.now()
+        )
+        return Response(data)
+
+
+class AgentAcknowledgeMessageView(APIView):
+    """Agent acknowledges a specific message (employee clicked OK)."""
+
+    authentication_classes = [PlatformDeviceAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, message_id):
+        device = request.auth
+        msg = PlatformMonitorMessage.objects.filter(id=message_id, device=device).first()
+        if msg is None:
+            return Response({"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        msg.status = MessageStatus.ACKNOWLEDGED
+        msg.acknowledged_at = timezone.now()
+        msg.save(update_fields=["status", "acknowledged_at"])
+
+        layer = get_channel_layer()
+        if layer:
+            try:
+                async_to_sync(layer.group_send)(agent_group(device.id), {
+                    "type": "message.acknowledged",
+                    "message_id": str(msg.id),
+                })
+            except Exception:
+                pass
+
+        return Response({"ok": True})

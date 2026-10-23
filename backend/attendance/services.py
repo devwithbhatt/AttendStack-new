@@ -654,3 +654,33 @@ def auto_mark_absent_yesterday():
         return {"status": "skipped", "reason": "Prior to absent tracking start date"}
     result = auto_mark_absent_employees(yesterday, yesterday)
     return {"status": "completed", "marked_absent": result["created"]}
+
+
+@transaction.atomic
+def auto_convert_half_day_to_full_day():
+    """Convert pending half-day leave requests to full-day when the date has
+    passed and the employee has no checkout for that day."""
+    yesterday = timezone.localdate() - timedelta(days=1)
+
+    pending_half_days = LeaveRequest.objects.filter(
+        is_half_day=True,
+        status=LeaveStatus.PENDING,
+        start_date__lte=yesterday,
+    )
+
+    converted = 0
+    for leave_req in pending_half_days:
+        record = AttendanceRecord.objects.filter(
+            employee=leave_req.employee,
+            date=leave_req.start_date,
+        ).first()
+
+        has_checkout = record is not None and record.check_out is not None
+        if has_checkout:
+            continue
+
+        leave_req.is_half_day = False
+        leave_req.save(update_fields=["is_half_day", "updated_at"])
+        converted += 1
+
+    return {"converted": converted}

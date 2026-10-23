@@ -10,6 +10,7 @@ from .models import (
     PlatformSnapshot,
     PlatformInactivitySettings,
     PlatformActivityEntry,
+    PlatformMonitorMessage,
 )
 
 
@@ -154,3 +155,24 @@ class PlatformActivityEntrySerializer(serializers.ModelSerializer):
             "id", "device", "device_name", "account_name", "account_user_id",
             "title", "app_name", "url", "started_at", "ended_at", "duration_seconds",
         ]
+
+
+class PlatformMonitorMessageSerializer(serializers.ModelSerializer):
+    device_name = serializers.CharField(source="device.device_name", read_only=True)
+    account_name = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = PlatformMonitorMessage
+        fields = [
+            "id", "sender_name", "device", "device_name", "account_name",
+            "content", "status", "created_at", "delivered_at", "acknowledged_at",
+        ]
+        read_only_fields = [
+            "id", "sender_name", "device_name", "account_name",
+            "status", "created_at", "delivered_at", "acknowledged_at",
+        ]
+
+
+class SendMessageSerializer(serializers.Serializer):
+    device_id = serializers.UUIDField()
+    content = serializers.CharField(max_length=1000, min_length=1)

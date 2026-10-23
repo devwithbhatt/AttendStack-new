@@ -3,7 +3,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 # Set the default Django settings module for the 'celery' program.
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "zuperhr_backend.settings")
 
 app = Celery("backend")
 
@@ -18,7 +18,11 @@ app.autodiscover_tasks()
 app.conf.beat_schedule = {
     'mark-absent-employees-every-morning': {
         'task': 'attendance.tasks.mark_absent_employees_task',
-        'schedule': crontab(hour=7, minute=0),  # Every day at 7 AM
+        'schedule': crontab(hour=7, minute=0),
+    },
+    'convert-half-day-leaves-every-morning': {
+        'task': 'attendance.tasks.convert_half_day_leaves_task',
+        'schedule': crontab(hour=0, minute=15),
     },
 }
 

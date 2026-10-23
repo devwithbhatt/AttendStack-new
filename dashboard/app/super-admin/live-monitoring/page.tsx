@@ -11,6 +11,7 @@ import {
   IconEye,
   IconHistory,
   IconKey,
+  IconMessage,
   IconRefresh,
   IconSettings,
   IconTrash,
@@ -170,6 +171,12 @@ export default function SuperAdminLiveMonitoringPage() {
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // Messaging
+  const [showComposer, setShowComposer] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageStatuses, setMessageStatuses] = useState<Record<string, string>>({});
 
   // Selected user context for per-user modals
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
@@ -332,9 +339,27 @@ export default function SuperAdminLiveMonitoringPage() {
     load();
   }, [load]);
 
+  const sendMessage = async () => {
+    if (!watching || !messageText.trim() || sendingMessage) return;
+    setSendingMessage(true);
+    try {
+      const r = await apiClient.post(`${API}/messages/send/`, { device_id: watching.id, content: messageText.trim() });
+      const msgId = r.data.id;
+      setMessageStatuses((prev) => ({ ...prev, [msgId]: r.data.status }));
+      setMessageText("");
+      setShowComposer(false);
+      Swal.fire({ icon: "success", title: "Message sent", text: `Status: ${r.data.status}`, timer: 2000, showConfirmButton: false });
+    } catch (err: any) {
+      Swal.fire("Failed", errorText(err, "Could not send message."), "error");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   const startWatching = (device: Device) => {
     setWatching(device);
     setWatchStatus("Connecting…");
+    setMessageStatuses({});
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const token = localStorage.getItem("authToken") || "";
     const ws = new WebSocket(`${proto}//${wsHost()}/ws/platform-monitor/view/${device.id}/?token=${encodeURIComponent(token)}`);
@@ -363,6 +388,8 @@ export default function SuperAdminLiveMonitoringPage() {
         ws.send(JSON.stringify({ action: "answer", session: msg.session, payload: { type: answer.type, sdp: answer.sdp } }));
       } else if (msg.type === "ice" && pcRef.current && msg.payload) {
         try { await pcRef.current.addIceCandidate(msg.payload); } catch {}
+      } else if (msg.type === "message_acknowledged" && msg.message_id) {
+        setMessageStatuses((prev) => ({ ...prev, [msg.message_id]: "ACKNOWLEDGED" }));
       }
     };
     ws.onclose = () => setWatchStatus((s) => (s === "● Live" ? "Stream ended / computer went offline." : s || "Disconnected."));
@@ -820,18 +847,63 @@ export default function SuperAdminLiveMonitoringPage() {
 
       {/* Watch */}
       <Modal show={!!watching} onHide={stopWatching} size="xl" centered>
-        <Modal.Header closeButton>
-          <Modal.Title className="fs-6">
+        <Modal.Header>
+          <Modal.Title className="fs-6 me-auto">
             {watching?.account_name} ({watching?.account_user_id}) — {watching?.device_name}
             <span className="ms-3 small fw-normal text-success">{watchStatus}</span>
           </Modal.Title>
+          <Button variant="outline-primary" size="sm" className="me-2" onClick={() => { setMessageText(""); setShowComposer(true); }}>
+            <IconMessage size={16} className="me-1" />Send Message
+          </Button>
+          <button type="button" className="btn-close" aria-label="Close" onClick={stopWatching}></button>
         </Modal.Header>
         <Modal.Body className="bg-dark p-2">
           <video ref={videoRef} autoPlay playsInline style={{ width: "100%", borderRadius: 8, background: "#000" }} />
+          {Object.keys(messageStatuses).length > 0 && (
+            <div className="mt-2 d-flex flex-wrap gap-2">
+              {Object.entries(messageStatuses).map(([id, st]) => (
+                <Badge key={id} bg={st === "ACKNOWLEDGED" ? "success" : st === "FAILED" ? "danger" : "warning"} text={st === "ACKNOWLEDGED" ? "light" : "dark"} className="small">
+                  Message: {st === "ACKNOWLEDGED" ? "Acknowledged ✓" : st === "SENT" ? "Sent" : st === "DELIVERED" ? "Delivered" : st === "FAILED" ? "Failed" : st}
+                </Badge>
+              ))}
+            </div>
+          )}
         </Modal.Body>
         <Modal.Footer className="py-2">
           <span className="text-muted small me-auto">This view is being recorded.</span>
           <Button variant="secondary" onClick={stopWatching}>Stop watching</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Send Message Composer */}
+      <Modal show={showComposer} onHide={() => setShowComposer(false)} centered backdrop="static">
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-6">Send Message to Employee</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="mb-3">
+            <Form.Label className="small fw-medium">Employee</Form.Label>
+            <div className="fw-semibold">{watching?.account_name} <span className="text-muted font-monospace">({watching?.account_user_id})</span></div>
+          </div>
+          <Form.Group>
+            <Form.Label className="small fw-medium">Message</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={4}
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Type your message to the employee…"
+              maxLength={1000}
+              autoFocus
+            />
+            <Form.Text className="text-muted">{messageText.length}/1000 characters</Form.Text>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="light" onClick={() => setShowComposer(false)} disabled={sendingMessage}>Cancel</Button>
+          <Button variant="primary" onClick={sendMessage} disabled={sendingMessage || !messageText.trim()}>
+            {sendingMessage ? <><Spinner animation="border" size="sm" className="me-1" />Sending…</> : "Send"}
+          </Button>
         </Modal.Footer>
       </Modal>
 
