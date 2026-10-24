@@ -24,6 +24,7 @@ import {
   IconCamera,
   IconSettings,
   IconActivity,
+  IconMessage,
 } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
@@ -154,6 +155,12 @@ export default function LiveMonitoringPage() {
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [inactivitySettings, setInactivitySettings] = useState<InactivitySettingsData>({ idle_threshold_minutes: 3, long_interval_threshold_minutes: 10 });
   const [inactSaving, setInactSaving] = useState(false);
+
+  // Messaging
+  const [showSendMessage, setShowSendMessage] = useState(false);
+  const [messageDevice, setMessageDevice] = useState<Device | null>(null);
+  const [messageContent, setMessageContent] = useState("");
+  const [messageSending, setMessageSending] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -504,6 +511,37 @@ export default function LiveMonitoringPage() {
     finally { setInactSaving(false); }
   };
 
+  // ------------------------------------------------------------- send message
+  const openSendMessage = (device: Device) => {
+    setMessageDevice(device);
+    setMessageContent("");
+    setShowSendMessage(true);
+  };
+
+  const sendMessage = async () => {
+    if (!messageDevice || !messageContent.trim()) return;
+    setMessageSending(true);
+    try {
+      const r = await fetch(`${API}/messages/send/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ device_id: messageDevice.id, content: messageContent.trim() }),
+      });
+      if (r.ok) {
+        Swal.fire({ icon: "success", title: "Message sent", timer: 1500, showConfirmButton: false });
+        setShowSendMessage(false);
+        setMessageContent("");
+      } else {
+        const data = await r.json().catch(() => ({}));
+        Swal.fire("Failed", data.detail || `Could not send message (${r.status}).`, "error");
+      }
+    } catch {
+      Swal.fire("Error", "Could not send message.", "error");
+    } finally {
+      setMessageSending(false);
+    }
+  };
+
   const getActivityStatus = (durationSec: number) => {
     const mins = durationSec / 60;
     if (mins >= inactivitySettings.long_interval_threshold_minutes) return { label: "Long Interval", bg: "danger" };
@@ -609,6 +647,15 @@ export default function LiveMonitoringPage() {
                     </Button>
                     <Button
                       size="sm"
+                      variant="outline-warning"
+                      disabled={!d.is_online}
+                      onClick={() => openSendMessage(d)}
+                      title="Send Message"
+                    >
+                      <IconMessage size={16} />
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="outline-secondary"
                       onClick={openSettings}
                       title="Settings"
@@ -645,6 +692,11 @@ export default function LiveMonitoringPage() {
         </Modal.Body>
         <Modal.Footer className="py-2">
           <span className="text-muted small me-auto">This view is being recorded in the activity log.</span>
+          {watching && (
+            <Button variant="warning" size="sm" className="me-2" onClick={() => openSendMessage(watching)}>
+              <IconMessage size={16} className="me-1" /> Send Message
+            </Button>
+          )}
           <Button variant="secondary" onClick={stopWatching}>Stop watching</Button>
         </Modal.Footer>
       </Modal>
@@ -843,6 +895,43 @@ export default function LiveMonitoringPage() {
             {inactSaving ? <Spinner animation="border" size="sm" /> : "Save Inactivity Settings"}
           </Button>
         </Modal.Body>
+      </Modal>
+
+      {/* Send Message modal */}
+      <Modal show={showSendMessage} onHide={() => setShowSendMessage(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-6">
+            Send Message — {messageDevice?.employee_name}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small mb-3">
+            This message will appear as a popup on the employee&apos;s screen. They must click OK to dismiss it.
+          </p>
+          <Form.Group>
+            <Form.Label className="fw-medium">Message</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={4}
+              placeholder="Type your message here…"
+              value={messageContent}
+              onChange={(e) => setMessageContent(e.target.value)}
+              maxLength={1000}
+            />
+            <div className="text-muted small mt-1 text-end">{messageContent.length}/1000</div>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" size="sm" onClick={() => setShowSendMessage(false)}>Cancel</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={sendMessage}
+            disabled={messageSending || !messageContent.trim()}
+          >
+            {messageSending ? <Spinner animation="border" size="sm" /> : "Send Message"}
+          </Button>
+        </Modal.Footer>
       </Modal>
 
       {/* Settings modal */}

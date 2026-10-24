@@ -107,6 +107,14 @@ function connect() {
     else if (msg.type === "viewer_left") { setStatus("● Online — monitoring active", true); stopStream(); }
     else if (msg.type === "answer" && pc) await pc.setRemoteDescription(msg.payload);
     else if (msg.type === "ice" && pc && msg.payload) { try { await pc.addIceCandidate(msg.payload); } catch (_) {} }
+    else if (msg.type === "admin_message") {
+      window.agentAPI.showAdminMessage({
+        message_id: msg.message_id,
+        sender_name: msg.sender_name,
+        content: msg.content,
+        created_at: msg.created_at,
+      });
+    }
   };
   ws.onclose = () => {
     clearInterval(heartbeat); stopStream();

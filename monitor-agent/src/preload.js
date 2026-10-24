@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("agentAPI", {
   register: (payload) => ipcRenderer.invoke("agent:register", payload),
   onRegistered: (data) => ipcRenderer.invoke("agent:onRegistered", data),
   forget: () => ipcRenderer.invoke("agent:forget"),
+  showAdminMessage: (msg) => ipcRenderer.invoke("agent:showAdminMessage", msg),
 });
 
 contextBridge.exposeInMainWorld("zuperhrAgent", {

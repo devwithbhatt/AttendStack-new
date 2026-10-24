@@ -7,7 +7,7 @@ from rest_framework import serializers
 from organizations.models import Organization
 from organizations.services import get_organization_for_user
 
-from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot, InactivitySettings, ActivityEntry
+from .models import MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot, InactivitySettings, ActivityEntry, MonitorMessage
 
 User = get_user_model()
 
@@ -195,4 +195,18 @@ class ActivityEntrySerializer(serializers.ModelSerializer):
         if obj.device.employee_id and obj.device.employee:
             return obj.device.employee.full_name
         return obj.device.user.get_full_name() or obj.device.user.email
+
+
+class MonitorMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MonitorMessage
+        fields = [
+            "id", "sender_name", "device", "employee_name", "content",
+            "status", "created_at", "delivered_at", "acknowledged_at",
+        ]
+
+
+class SendMessageSerializer(serializers.Serializer):
+    device_id = serializers.UUIDField()
+    content = serializers.CharField(max_length=1000)
 

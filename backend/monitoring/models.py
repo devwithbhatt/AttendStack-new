@@ -38,6 +38,11 @@ PRESENCE_TTL_SECONDS = 60
 DEVICE_TOKEN_PREFIX = "astk_dev_"
 
 
+def agent_group(device_id) -> str:
+    """Channels group shared by one device's agent and its Company Admin viewer."""
+    return f"monitor_device_{device_id}"
+
+
 def generate_device_token() -> str:
     """A long-lived opaque bearer token for one registered device agent."""
     return DEVICE_TOKEN_PREFIX + secrets.token_urlsafe(36)
@@ -366,6 +371,63 @@ class ActivityEntry(models.Model):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Uninstall protection
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class MessageStatus(models.TextChoices):
+    CREATED = "CREATED", "Created"
+    SENT = "SENT", "Sent"
+    DELIVERED = "DELIVERED", "Delivered"
+    ACKNOWLEDGED = "ACKNOWLEDGED", "Acknowledged"
+    FAILED = "FAILED", "Failed"
+
+
+class MonitorMessage(models.Model):
+    """A message sent by a Company Admin to an employee's monitored device."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="monitor_messages_sent",
+    )
+    sender_name = models.CharField(max_length=254, blank=True)
+    device = models.ForeignKey(
+        MonitoredDevice,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="monitor_messages",
+    )
+    employee_name = models.CharField(max_length=150, blank=True)
+    content = models.TextField(max_length=1000)
+    status = models.CharField(
+        max_length=20,
+        choices=MessageStatus.choices,
+        default=MessageStatus.CREATED,
+        db_index=True,
+    )
+    session = models.ForeignKey(
+        MonitoringSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["device", "status"], name="mon_msg_dev_status"),
+        ]
+
+    def __str__(self):
+        return f"Message → {self.employee_name} @ {self.created_at:%H:%M} [{self.status}]"
+
 
 class UninstallPassword(models.Model):
     """Per-organisation password that must be entered before the monitoring

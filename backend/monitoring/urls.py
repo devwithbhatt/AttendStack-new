@@ -29,6 +29,16 @@ urlpatterns = [
     path("activity/", views.ActivityListView.as_view(), name="activity_list"),
     path("inactivity-settings/", views.InactivitySettingsView.as_view(), name="inactivity_settings"),
 
+    # Auto-update (agent)
+    path("agent/check-update/", views.AgentCheckUpdateView.as_view(), name="agent_check_update"),
+    path("agent/download-update/", views.AgentDownloadUpdateView.as_view(), name="agent_download_update"),
+
+    # Messaging
+    path("messages/send/", views.SendMessageView.as_view(), name="send_message"),
+    path("messages/", views.MessageStatusView.as_view(), name="message_status"),
+    path("agent/messages/pending/", views.AgentPendingMessagesView.as_view(), name="agent_pending_messages"),
+    path("agent/messages/<uuid:message_id>/acknowledge/", views.AgentAcknowledgeMessageView.as_view(), name="agent_acknowledge_message"),
+
     # Uninstall protection
     path("uninstall-password/", views.UninstallPasswordView.as_view(), name="uninstall_password"),
     path("agent/verify-uninstall-password/", views.AgentVerifyUninstallPasswordView.as_view(), name="verify_uninstall_password"),

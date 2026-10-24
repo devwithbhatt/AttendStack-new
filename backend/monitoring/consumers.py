@@ -123,6 +123,18 @@ class AgentConsumer(AsyncWebsocketConsumer):
             "session": event.get("session"),
         }))
 
+    async def admin_message(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "admin_message",
+            "message_id": event["message_id"],
+            "sender_name": event.get("sender_name", ""),
+            "content": event["content"],
+            "created_at": event.get("created_at", ""),
+        }))
+
+    async def message_acknowledged(self, event):
+        pass
+
     @database_sync_to_async
     def _mark_seen(self, active=False):
         self.device.touch_seen(active=active)
@@ -205,11 +217,19 @@ class ViewerConsumer(AsyncWebsocketConsumer):
         }))
 
     async def viewer_joined(self, event):
-        # Only the agent needs this; ignore on the viewer side.
         pass
 
     async def viewer_left(self, event):
         pass
+
+    async def admin_message(self, event):
+        pass
+
+    async def message_acknowledged(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "message_acknowledged",
+            "message_id": event["message_id"],
+        }))
 
     # ---- db helpers ---- #
     @database_sync_to_async

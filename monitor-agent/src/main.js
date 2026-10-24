@@ -20,7 +20,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { safeStorage } = require("electron");
-const { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH } = require("./config");
+const { spawn } = require("child_process");
+const { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH, APP_VERSION } = require("./config");
 
 const API_BASE = "/api/v1/monitoring";
 
@@ -30,6 +31,9 @@ if (!app.requestSingleInstanceLock()) {
 
 let win = null;
 let tray = null;
+let messagePopup = null;
+const messageQueue = [];
+let processingMessage = false;
 let quitAuthorized = false;
 
 const TOKEN_FILE = () => path.join(app.getPath("userData"), "device.bin");
@@ -261,6 +265,7 @@ function showPasswordPrompt() {
 
 async function attemptQuit() {
   if (!protectionEnabled || !loadToken()) {
+    removeWatchdog();
     quitAuthorized = true;
     app.isQuitting = true;
     app.quit();
@@ -268,9 +273,236 @@ async function attemptQuit() {
   }
   const ok = await showPasswordPrompt();
   if (ok) {
+    removeWatchdog();
     quitAuthorized = true;
     app.isQuitting = true;
     app.quit();
+  }
+}
+
+// ------------------------------------------------------------ message popup
+function showNextMessage() {
+  if (processingMessage || messageQueue.length === 0) return;
+  processingMessage = true;
+  const msg = messageQueue[0];
+
+  const { screen } = require("electron");
+  const primary = screen.getPrimaryDisplay();
+  const { width, height } = primary.workAreaSize;
+  const popW = 480, popH = 340;
+
+  messagePopup = new BrowserWindow({
+    width: popW,
+    height: popH,
+    x: Math.round((width - popW) / 2),
+    y: Math.round((height - popH) / 2),
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    frame: false,
+    transparent: false,
+    focusable: true,
+    webPreferences: {
+      preload: path.join(__dirname, "message-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  messagePopup.setAlwaysOnTop(true, "screen-saver");
+  messagePopup.loadFile(path.join(__dirname, "renderer", "message-popup.html"));
+  messagePopup.webContents.on("did-finish-load", () => {
+    messagePopup.webContents.send("display-message", msg);
+  });
+  messagePopup.on("closed", () => { messagePopup = null; });
+  messagePopup.show();
+  messagePopup.focus();
+}
+
+ipcMain.handle("agent:showAdminMessage", (_e, msg) => {
+  messageQueue.push(msg);
+  if (!processingMessage) showNextMessage();
+  return true;
+});
+
+ipcMain.handle("agent:acknowledgeMessage", async (_e, messageId) => {
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) {
+    dismissMessagePopup();
+    return { ok: true };
+  }
+  try {
+    await fetch(
+      SERVER_BASE + API_BASE + `/agent/messages/${messageId}/acknowledge/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Device ${tokenData.device_token}`,
+        },
+      }
+    );
+  } catch (_) {}
+  dismissMessagePopup();
+  return { ok: true };
+});
+
+function dismissMessagePopup() {
+  messageQueue.shift();
+  processingMessage = false;
+  if (messagePopup) { messagePopup.destroy(); messagePopup = null; }
+  showNextMessage();
+}
+
+// ------------------------------------------------------------ auto-update
+let updateInProgress = false;
+const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000;
+
+async function checkForUpdates() {
+  if (updateInProgress) return;
+  const tokenData = loadToken();
+  if (!tokenData || !tokenData.device_token) return;
+
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+
+  try {
+    const res = await fetch(
+      `${SERVER_BASE}${API_BASE}/agent/check-update/?v=${APP_VERSION}`,
+      { headers: { Authorization: `Device ${tokenData.device_token}` } }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.update_available) return;
+
+    updateInProgress = true;
+    const updatePath = portableExe + ".update";
+
+    const dlRes = await fetch(
+      `${SERVER_BASE}${API_BASE}/agent/download-update/`,
+      { headers: { Authorization: `Device ${tokenData.device_token}` } }
+    );
+    if (!dlRes.ok) { updateInProgress = false; return; }
+
+    const buffer = Buffer.from(await dlRes.arrayBuffer());
+    fs.writeFileSync(updatePath, buffer);
+
+    const scriptPath = path.join(path.dirname(portableExe), "_zhr_update.bat");
+    const script = [
+      "@echo off",
+      "timeout /t 3 /nobreak >nul",
+      ":wait",
+      `tasklist /fi "PID eq ${process.pid}" 2>nul | find "${process.pid}" >nul`,
+      "if not errorlevel 1 (",
+      "    timeout /t 2 /nobreak >nul",
+      "    goto wait",
+      ")",
+      "timeout /t 1 /nobreak >nul",
+      `move /y "${updatePath}" "${portableExe}"`,
+      `start "" "${portableExe}" --hidden`,
+      `del "%~f0"`,
+    ].join("\r\n");
+    fs.writeFileSync(scriptPath, script);
+
+    const child = spawn("cmd.exe", ["/c", scriptPath], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    child.unref();
+
+    removeWatchdog();
+    quitAuthorized = true;
+    app.isQuitting = true;
+    app.quit();
+  } catch (e) {
+    console.error("Update check failed:", e.message);
+    updateInProgress = false;
+  }
+}
+
+function cleanupStaleUpdate() {
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+  try { fs.existsSync(portableExe + ".update") && fs.unlinkSync(portableExe + ".update"); } catch (_) {}
+  try {
+    const bat = path.join(path.dirname(portableExe), "_zhr_update.bat");
+    fs.existsSync(bat) && fs.unlinkSync(bat);
+  } catch (_) {}
+}
+
+// --------------------------------------------------------- watchdog & file lock
+const TASK_NAME = "ZuperHRCompanyMonitorWatchdog";
+
+function setupWatchdog() {
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+
+  const vbsPath = path.join(path.dirname(portableExe), "_zuperhr_co_watchdog.vbs");
+  const vbs = [
+    'Set WshShell = CreateObject("WScript.Shell")',
+    'exePath = "' + portableExe.replace(/"/g, '""') + '"',
+    'Do While True',
+    '  On Error Resume Next',
+    '  Set objWMI = GetObject("winmgmts:\\\\.\\" & "root\\cimv2")',
+    '  Set procs = objWMI.ExecQuery("SELECT * FROM Win32_Process WHERE ExecutablePath=\'" & Replace(exePath, "\\", "\\\\") & "\'")',
+    '  If procs.Count = 0 Then',
+    '    WshShell.Run """" & exePath & """ --hidden", 0, False',
+    '  End If',
+    '  On Error GoTo 0',
+    '  WScript.Sleep 30000',
+    'Loop',
+  ].join("\r\n");
+  try { fs.writeFileSync(vbsPath, vbs, "utf8"); } catch (_) {}
+
+  const taskCmd = `schtasks /create /tn "${TASK_NAME}" /tr "wscript.exe \\"${vbsPath}\\"" /sc onlogon /rl highest /f`;
+  exec(taskCmd, { timeout: 10000 }, () => {});
+
+  const checkCmd = `schtasks /create /tn "${TASK_NAME}_Check" /tr "wscript.exe \\"${vbsPath}\\"" /sc minute /mo 2 /rl highest /f`;
+  exec(checkCmd, { timeout: 10000 }, () => {});
+
+  try {
+    const isRunning = require("child_process").execSync(
+      `tasklist /fi "IMAGENAME eq wscript.exe" /fo csv /nh`,
+      { timeout: 5000 }
+    ).toString();
+    if (!isRunning.includes("_zuperhr_co_watchdog.vbs")) {
+      const child = spawn("wscript.exe", [vbsPath], { detached: true, stdio: "ignore", windowsHide: true });
+      child.unref();
+    }
+  } catch (_) {
+    const child = spawn("wscript.exe", [vbsPath], { detached: true, stdio: "ignore", windowsHide: true });
+    child.unref();
+  }
+}
+
+let exeFileHandle = null;
+
+function lockExeFile() {
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!portableExe) return;
+  try {
+    exeFileHandle = fs.openSync(portableExe, "r");
+  } catch (_) {}
+}
+
+function removeWatchdog() {
+  exec(`schtasks /delete /tn "${TASK_NAME}" /f`, { timeout: 5000 }, () => {});
+  exec(`schtasks /delete /tn "${TASK_NAME}_Check" /f`, { timeout: 5000 }, () => {});
+  exec(`taskkill /f /fi "WINDOWTITLE eq _zuperhr_co_watchdog.vbs"`, { timeout: 5000 }, () => {});
+  const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (portableExe) {
+    try {
+      const vbsPath = path.join(path.dirname(portableExe), "_zuperhr_co_watchdog.vbs");
+      fs.existsSync(vbsPath) && fs.unlinkSync(vbsPath);
+    } catch (_) {}
+  }
+  if (exeFileHandle !== null) {
+    try { fs.closeSync(exeFileHandle); } catch (_) {}
+    exeFileHandle = null;
   }
 }
 
@@ -305,6 +537,8 @@ ipcMain.handle("agent:onRegistered", (_e, data) => {
   startActivityTracking();
   fetchProtectionStatus();
   setupAutoRestart();
+  setupWatchdog();
+  lockExeFile();
   return true;
 });
 
@@ -591,6 +825,7 @@ app.on("before-quit", (e) => {
   if (!quitAuthorized && protectionEnabled && loadToken()) {
     e.preventDefault();
     attemptQuit();
+    return;
   }
 });
 
@@ -610,6 +845,7 @@ app.whenReady().then(async () => {
 
   createWindow(!hasToken && !launchedHidden);
   createTray();
+  cleanupStaleUpdate();
 
   if (hasToken) {
     startSnapshotLoop();
@@ -617,7 +853,12 @@ app.whenReady().then(async () => {
     fetchProtectionStatus();
     setupAutoRestart();
     setInterval(fetchProtectionStatus, 5 * 60 * 1000);
+    setupWatchdog();
+    lockExeFile();
   }
+
+  setTimeout(checkForUpdates, 10_000);
+  setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(!loadToken());

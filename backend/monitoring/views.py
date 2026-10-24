@@ -8,6 +8,8 @@ The live screen stream itself is WebRTC and does not touch these views — see
 ``consumers.py`` for signalling.
 """
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
 from django.http import FileResponse, Http404
 from django.shortcuts import render
@@ -27,7 +29,8 @@ from .auth import DeviceTokenAuthentication
 from .ice import build_ice_servers
 from .models import (
     MonitoredDevice, MonitoringSession, SnapshotSettings, DeviceSnapshotOverride, Snapshot,
-    InactivitySettings, ActivityEntry, UninstallPassword,
+    InactivitySettings, ActivityEntry, UninstallPassword, MonitorMessage, MessageStatus,
+    agent_group,
     DEFAULT_SNAPSHOT_INTERVAL, DEFAULT_IDLE_THRESHOLD,
 )
 from .serializers import (
@@ -38,6 +41,8 @@ from .serializers import (
     SnapshotSerializer,
     InactivitySettingsSerializer,
     ActivityEntrySerializer,
+    MonitorMessageSerializer,
+    SendMessageSerializer,
 )
 
 
@@ -551,6 +556,194 @@ class AgentVerifyUninstallPasswordView(APIView):
         if obj.check_password(password):
             return Response({"verified": True})
         return Response({"verified": False, "detail": "Incorrect password."}, status=403)
+
+
+INSTALLER_NAME = "ZuperHRMonitor-Setup.exe"
+AGENT_VERSION_FILE = "version.json"
+
+
+def _parse_version(v):
+    try:
+        return tuple(int(x) for x in v.strip().split("."))
+    except (ValueError, AttributeError):
+        return (0, 0, 0)
+
+
+# --------------------------------------------------------------------------- #
+# Auto-update (agent endpoints)
+# --------------------------------------------------------------------------- #
+class AgentCheckUpdateView(APIView):
+    """Agent checks whether a newer version of the app is available."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import json as _json
+
+        version_path = settings.MEDIA_ROOT / "monitoring" / "agent" / AGENT_VERSION_FILE
+        if not version_path.exists():
+            return Response({"update_available": False})
+        try:
+            with open(version_path) as f:
+                info = _json.load(f)
+        except Exception:
+            return Response({"update_available": False})
+
+        latest = info.get("version", "0.0.0")
+        current = request.query_params.get("v", "0.0.0")
+        return Response({
+            "update_available": _parse_version(latest) > _parse_version(current),
+            "latest_version": latest,
+        })
+
+
+class AgentDownloadUpdateView(APIView):
+    """Agent downloads the latest app binary for auto-update."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        file_path = settings.MEDIA_ROOT / "monitoring" / "agent" / INSTALLER_NAME
+        if not file_path.exists():
+            return Response({"detail": "Update not available."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(open(file_path, "rb"), as_attachment=True, filename=INSTALLER_NAME)
+
+
+# --------------------------------------------------------------------------- #
+# Company Admin → Employee messaging
+# --------------------------------------------------------------------------- #
+class SendMessageView(APIView):
+    """Company Admin sends a message to a monitored device."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def post(self, request):
+        serializer = SendMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        org = _admin_org(request)
+        device = MonitoredDevice.objects.select_related("user", "employee").filter(
+            id=serializer.validated_data["device_id"],
+            organization=org,
+            is_active=True,
+        ).first()
+        if device is None:
+            return Response({"detail": "Device not found or inactive."}, status=status.HTTP_404_NOT_FOUND)
+
+        content = serializer.validated_data["content"].strip()
+        if not content:
+            return Response({"detail": "Message cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        employee_name = ""
+        if device.employee:
+            employee_name = device.employee.full_name
+        if not employee_name:
+            employee_name = device.user.get_full_name() or device.user.email
+
+        msg = MonitorMessage.objects.create(
+            sender=request.user,
+            sender_name=request.user.get_full_name() or request.user.email,
+            device=device,
+            organization=org,
+            employee_name=employee_name,
+            content=content,
+            status=MessageStatus.CREATED,
+        )
+
+        layer = get_channel_layer()
+        if layer:
+            try:
+                async_to_sync(layer.group_send)(agent_group(device.id), {
+                    "type": "admin.message",
+                    "message_id": str(msg.id),
+                    "sender_name": msg.sender_name,
+                    "content": msg.content,
+                    "created_at": msg.created_at.isoformat(),
+                })
+                msg.status = MessageStatus.SENT
+                msg.save(update_fields=["status"])
+            except Exception:
+                msg.status = MessageStatus.FAILED
+                msg.save(update_fields=["status"])
+
+        return Response(MonitorMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+
+class MessageStatusView(generics.ListAPIView):
+    """Company Admin views message statuses for a device."""
+
+    serializer_class = MonitorMessageSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrHR]
+    permission_module = "monitoring"
+
+    def get_queryset(self):
+        org = _admin_org(self.request)
+        if not org:
+            return MonitorMessage.objects.none()
+        qs = MonitorMessage.objects.filter(organization=org).select_related("device")
+        device_id = self.request.query_params.get("device")
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        return qs[:50]
+
+
+class AgentPendingMessagesView(APIView):
+    """Agent fetches its unacknowledged messages."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        device = request.auth
+        pending = MonitorMessage.objects.filter(
+            device=device,
+            status__in=[MessageStatus.CREATED, MessageStatus.SENT, MessageStatus.DELIVERED],
+        ).order_by("created_at")
+        data = [
+            {
+                "id": str(m.id),
+                "sender_name": m.sender_name,
+                "content": m.content,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in pending
+        ]
+        pending.filter(status__in=[MessageStatus.CREATED, MessageStatus.SENT]).update(
+            status=MessageStatus.DELIVERED, delivered_at=timezone.now()
+        )
+        return Response(data)
+
+
+class AgentAcknowledgeMessageView(APIView):
+    """Agent acknowledges a specific message (employee clicked OK)."""
+
+    authentication_classes = [DeviceTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, message_id):
+        device = request.auth
+        msg = MonitorMessage.objects.filter(id=message_id, device=device).first()
+        if msg is None:
+            return Response({"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        msg.status = MessageStatus.ACKNOWLEDGED
+        msg.acknowledged_at = timezone.now()
+        msg.save(update_fields=["status", "acknowledged_at"])
+
+        layer = get_channel_layer()
+        if layer:
+            try:
+                async_to_sync(layer.group_send)(agent_group(device.id), {
+                    "type": "message.acknowledged",
+                    "message_id": str(msg.id),
+                })
+            except Exception:
+                pass
+
+        return Response({"ok": True})
 
 
 # --------------------------------------------------------------------------- #

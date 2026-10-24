@@ -14,4 +14,6 @@ const SHOW_TRAY = process.env.ZUPERHR_TRAY === "true";
 // Start automatically when Windows starts, once the device is registered.
 const AUTO_LAUNCH = process.env.ZUPERHR_AUTOLAUNCH !== "false";
 
-module.exports = { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH };
+const APP_VERSION = require("../package.json").version;
+
+module.exports = { SERVER_BASE, SHOW_TRAY, AUTO_LAUNCH, APP_VERSION };
