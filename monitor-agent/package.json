@@ -1,6 +1,6 @@
 {
   "name": "zuperhr-monitor-agent",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "ZuperHR Live Monitoring — background screen agent for company computers (read-only).",
   "main": "src/main.js",
   "author": "Bhatt Square Private Limited",

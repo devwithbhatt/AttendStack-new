@@ -17,6 +17,8 @@ let WS_BASE = "ws://localhost:8001";
 let deviceToken = null;
 
 let ws = null, pc = null, localStream = null, heartbeat = null, iceServers = [], reconnectDelay = 1000;
+const deliveredMessageIds = new Set();
+let pendingPollTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -90,6 +92,38 @@ async function fingerprint() {
   return fp;
 }
 
+// ----------------------------------------------------- pending messages (HTTP fallback)
+async function fetchPendingMessages() {
+  if (!deviceToken) return;
+  try {
+    const res = await fetch(SERVER + "/api/v1/monitoring/agent/messages/pending/", {
+      headers: { Authorization: "Device " + deviceToken },
+    });
+    if (!res.ok) return;
+    const messages = await res.json();
+    for (const msg of messages) {
+      if (deliveredMessageIds.has(msg.id)) continue;
+      deliveredMessageIds.add(msg.id);
+      window.agentAPI.showAdminMessage({
+        message_id: msg.id,
+        sender_name: msg.sender_name,
+        content: msg.content,
+        created_at: msg.created_at,
+      });
+    }
+  } catch (_) {}
+}
+
+function startPendingPoll() {
+  stopPendingPoll();
+  fetchPendingMessages();
+  pendingPollTimer = setInterval(fetchPendingMessages, 30000);
+}
+
+function stopPendingPoll() {
+  if (pendingPollTimer) { clearInterval(pendingPollTimer); pendingPollTimer = null; }
+}
+
 // ----------------------------------------------------- signalling (always on)
 function connect() {
   if (!deviceToken) return;
@@ -102,12 +136,13 @@ function connect() {
   };
   ws.onmessage = async (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === "ready") iceServers = msg.ice_servers || [];
+    if (msg.type === "ready") { iceServers = msg.ice_servers || []; startPendingPoll(); }
     else if (msg.type === "viewer_joined") { setStatus("● Admin is viewing", true); await startStream(msg.session); }
     else if (msg.type === "viewer_left") { setStatus("● Online — monitoring active", true); stopStream(); }
     else if (msg.type === "answer" && pc) await pc.setRemoteDescription(msg.payload);
     else if (msg.type === "ice" && pc && msg.payload) { try { await pc.addIceCandidate(msg.payload); } catch (_) {} }
-    else if (msg.type === "admin_message") {
+    else if (msg.type === "admin_message" && msg.message_id && !deliveredMessageIds.has(msg.message_id)) {
+      deliveredMessageIds.add(msg.message_id);
       window.agentAPI.showAdminMessage({
         message_id: msg.message_id,
         sender_name: msg.sender_name,
@@ -117,7 +152,7 @@ function connect() {
     }
   };
   ws.onclose = () => {
-    clearInterval(heartbeat); stopStream();
+    clearInterval(heartbeat); stopStream(); stopPendingPoll();
     if (deviceToken) {
       setStatus("Reconnecting…", false);
       setTimeout(connect, reconnectDelay);

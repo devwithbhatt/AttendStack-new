@@ -120,6 +120,7 @@ function fingerprint() {
 
 // ----------------------------------------------------- pending messages
 const deliveredMessageIds = new Set();
+let pendingPollTimer = null;
 
 async function fetchPendingMessages() {
   if (!deviceToken) return;
@@ -142,6 +143,16 @@ async function fetchPendingMessages() {
   } catch (_) {}
 }
 
+function startPendingPoll() {
+  stopPendingPoll();
+  fetchPendingMessages();
+  pendingPollTimer = setInterval(fetchPendingMessages, 30000);
+}
+
+function stopPendingPoll() {
+  if (pendingPollTimer) { clearInterval(pendingPollTimer); pendingPollTimer = null; }
+}
+
 // ----------------------------------------------------- signalling (always on)
 function connect() {
   if (!deviceToken) return;
@@ -154,7 +165,7 @@ function connect() {
   };
   ws.onmessage = async (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === "ready") { iceServers = msg.ice_servers || []; fetchPendingMessages(); }
+    if (msg.type === "ready") { iceServers = msg.ice_servers || []; startPendingPoll(); }
     else if (msg.type === "viewer_joined") { setStatus("● Administrator is viewing", true); await startStream(msg.session); }
     else if (msg.type === "viewer_left") { setStatus("● Online — monitoring active", true); stopStream(); }
     else if (msg.type === "answer" && pc) await pc.setRemoteDescription(msg.payload);
@@ -165,7 +176,7 @@ function connect() {
     }
   };
   ws.onclose = async (ev) => {
-    clearInterval(heartbeat); stopStream();
+    clearInterval(heartbeat); stopStream(); stopPendingPoll();
     if (ev.code === CLOSE_SIGNED_OUT) {
       deviceToken = null;
       await window.agentAPI.signedOut();

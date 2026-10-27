@@ -124,6 +124,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
         }))
 
     async def admin_message(self, event):
+        logger.info("AgentConsumer.admin_message CALLED device=%s", getattr(self, "device_id", "?"))
         await self.send(text_data=json.dumps({
             "type": "admin_message",
             "message_id": event["message_id"],
@@ -131,6 +132,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
             "content": event["content"],
             "created_at": event.get("created_at", ""),
         }))
+        logger.info("AgentConsumer.admin_message SENT to websocket")
 
     async def message_acknowledged(self, event):
         pass

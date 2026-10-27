@@ -294,9 +294,12 @@ export default function LiveMonitoringPage() {
       }
       if (!r.ok) throw new Error(`(${r.status})`);
       const blob = await r.blob();
+      const cd = r.headers.get("content-disposition") || "";
+      const match = cd.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+      const serverName = match ? decodeURIComponent(match[1].replace(/"$/, "")) : "";
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "ZuperHRMonitor-Setup.exe";
+      a.download = serverName || "ZuperHR Monitor.exe";
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (e: any) {
