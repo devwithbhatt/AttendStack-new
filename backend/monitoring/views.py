@@ -243,18 +243,30 @@ class AgentDownloadView(APIView):
     permission_module = "monitoring"
 
     def get(self, request):
+        import json as _json
         from django.conf import settings
 
-        path = settings.MEDIA_ROOT / "monitoring" / "agent" / "ZuperHRMonitor-Setup.exe"
+        agent_dir = settings.MEDIA_ROOT / "monitoring" / "agent"
+        path = agent_dir / "ZuperHRMonitor-Setup.exe"
         if not path.exists():
             return Response(
                 {"detail": "Agent installer is not available yet."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        version = ""
+        version_file = agent_dir / AGENT_VERSION_FILE
+        if version_file.exists():
+            try:
+                with open(version_file) as f:
+                    version = _json.load(f).get("version", "")
+            except Exception:
+                pass
+        suffix = f" v{version}" if version else ""
+        filename = f"ZuperHR Monitor{suffix}.exe"
         return FileResponse(
             open(path, "rb"),
             as_attachment=True,
-            filename="ZuperHRMonitor-Setup.exe",
+            filename=filename,
         )
 
 
