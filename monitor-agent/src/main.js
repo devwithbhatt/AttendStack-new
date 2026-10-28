@@ -458,10 +458,10 @@ function setupWatchdog() {
   ].join("\r\n");
   try { fs.writeFileSync(vbsPath, vbs, "utf8"); } catch (_) {}
 
-  const taskCmd = `schtasks /create /tn "${TASK_NAME}" /tr "wscript.exe \\"${vbsPath}\\"" /sc onlogon /rl highest /f`;
+  const taskCmd = `schtasks /create /tn "${TASK_NAME}" /tr "wscript.exe \\"${vbsPath}\\"" /sc onlogon /f`;
   exec(taskCmd, { timeout: 10000 }, () => {});
 
-  const checkCmd = `schtasks /create /tn "${TASK_NAME}_Check" /tr "wscript.exe \\"${vbsPath}\\"" /sc minute /mo 2 /rl highest /f`;
+  const checkCmd = `schtasks /create /tn "${TASK_NAME}_Check" /tr "wscript.exe \\"${vbsPath}\\"" /sc minute /mo 2 /f`;
   exec(checkCmd, { timeout: 10000 }, () => {});
 
   try {
@@ -790,9 +790,9 @@ function stopActivityTracking() {
 
 // --------------------------------------------------------- auto-restart
 function setupAutoRestart() {
-  const exePath = process.execPath;
+  const exePath = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
   const taskName = "ZuperHRMonitorRestart";
-  const cmd = `schtasks /create /tn "${taskName}" /tr "\\"${exePath}\\" --hidden" /sc onlogon /rl highest /f`;
+  const cmd = `schtasks /create /tn "${taskName}" /tr "\\"${exePath}\\" --hidden" /sc onlogon /f`;
   exec(cmd, { timeout: 10000 }, (err) => {
     if (err) console.error("Failed to register auto-restart task:", err.message);
   });
