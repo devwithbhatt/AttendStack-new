@@ -1372,7 +1372,7 @@ function ChatPageContent() {
   const handleScrollArea = () => {
     if (!chatMessagesAreaRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatMessagesAreaRef.current;
-    const isUp = scrollHeight - scrollTop - clientHeight > 180;
+    const isUp = scrollHeight - scrollTop - clientHeight > 120;
     setShowScrollBottom(isUp);
 
     // Load older messages when scrolled near the top
@@ -3713,7 +3713,7 @@ function ChatPageContent() {
                     onClick={() => scrollToBottom(true)}
                     title="Scroll to bottom"
                   >
-                    <ChevronDown size={18} />
+                    <ChevronDown size={22} strokeWidth={2.5} />
                   </button>
                 )}
 
@@ -5659,28 +5659,34 @@ function ChatPageContent() {
         /* Floating Scroll to bottom button */
         .chat-scroll-bottom-btn {
           position: absolute;
-          bottom: 16px;
+          bottom: 20px;
           right: 24px;
-          width: 36px;
-          height: 36px;
+          width: 42px;
+          height: 42px;
           border-radius: 50%;
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          color: #475569;
+          background: #4f46e5;
+          border: none;
+          color: #ffffff;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           z-index: 30;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
           transition: all 0.2s ease;
+          animation: scrollBtnPulse 0.3s ease-out;
+        }
+
+        @keyframes scrollBtnPulse {
+          0% { transform: scale(0.7); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
         }
 
         .chat-scroll-bottom-btn:hover {
-          background: #4f46e5;
+          background: #4338ca;
           color: #ffffff;
-          border-color: #4f46e5;
           transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(79, 70, 229, 0.45);
         }
 
         /* Reply preview bar */
