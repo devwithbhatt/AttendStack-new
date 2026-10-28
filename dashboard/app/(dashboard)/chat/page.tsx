@@ -3645,86 +3645,88 @@ function ChatPageContent() {
                 </div>
               )}
 
-              {/* Messages Flex Scroll Area */}
-              <div
-                className="chat-messages-area"
-                ref={chatMessagesAreaRef}
-                onScroll={handleScrollArea}
-              >
-                {loadingMessages ? (
-                  <div className="chat-empty-state">
-                    <Spinner animation="border" variant="primary" />
-                    <p className="mt-2">Loading messages...</p>
-                  </div>
-                ) : displayedMessages.length === 0 ? (
-                  <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
-                    <div
-                      className="chat-mascot-wrapper"
-                      style={{
-                        width: "120px",
-                        height: "120px",
-                        margin: "0 auto 12px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <img
-                        src="/images/chat/smiling-mascot.svg"
-                        alt="Chat Mascot"
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                        onError={(e) => {
-                          // Fallback to /smiling-mascot.svg or icon if path fails
-                          const target = e.currentTarget;
-                          if (target.src.indexOf("/images/chat/smiling-mascot.svg") !== -1) {
-                            target.src = "/smiling-mascot.svg";
-                          } else {
-                            target.style.display = "none";
-                            const fallback = target.parentElement?.querySelector(".chat-mascot-fallback") as HTMLElement | null;
-                            if (fallback) fallback.style.display = "flex";
-                          }
-                        }}
-                      />
-                      <div className="chat-mascot-fallback" style={{ display: "none", alignItems: "center", justifyContent: "center" }}>
-                        <MessageSquare size={48} className="text-primary opacity-50" />
-                      </div>
+              {/* Messages Flex Scroll Area + Floating Button Wrapper */}
+              <div className="chat-messages-wrapper">
+                <div
+                  className="chat-messages-area"
+                  ref={chatMessagesAreaRef}
+                  onScroll={handleScrollArea}
+                >
+                  {loadingMessages ? (
+                    <div className="chat-empty-state">
+                      <Spinner animation="border" variant="primary" />
+                      <p className="mt-2">Loading messages...</p>
                     </div>
-                    <h6>{inChatMessageQuery ? "No matching messages" : "No messages yet"}</h6>
-                    <p>{inChatMessageQuery ? "Try a different search keyword" : `Send a message to start conversation with ${activeConversation.display_name}`}</p>
-                  </div>
-                ) : (
-                  <div className="chat-messages-flex">
-                    {loadingOlder && (
-                      <div className="text-center py-3">
-                        <Spinner animation="border" size="sm" variant="secondary" />
-                        <span className="ms-2 text-muted small">Loading older messages...</span>
+                  ) : displayedMessages.length === 0 ? (
+                    <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
+                      <div
+                        className="chat-mascot-wrapper"
+                        style={{
+                          width: "120px",
+                          height: "120px",
+                          margin: "0 auto 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <img
+                          src="/images/chat/smiling-mascot.svg"
+                          alt="Chat Mascot"
+                          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                          onError={(e) => {
+                            // Fallback to /smiling-mascot.svg or icon if path fails
+                            const target = e.currentTarget;
+                            if (target.src.indexOf("/images/chat/smiling-mascot.svg") !== -1) {
+                              target.src = "/smiling-mascot.svg";
+                            } else {
+                              target.style.display = "none";
+                              const fallback = target.parentElement?.querySelector(".chat-mascot-fallback") as HTMLElement | null;
+                              if (fallback) fallback.style.display = "flex";
+                            }
+                          }}
+                        />
+                        <div className="chat-mascot-fallback" style={{ display: "none", alignItems: "center", justifyContent: "center" }}>
+                          <MessageSquare size={48} className="text-primary opacity-50" />
+                        </div>
                       </div>
-                    )}
-                    {renderMessagesWithDateSeparators()}
-                    <div ref={messagesEndRef} />
-                  </div>
-                )}
+                      <h6>{inChatMessageQuery ? "No matching messages" : "No messages yet"}</h6>
+                      <p>{inChatMessageQuery ? "Try a different search keyword" : `Send a message to start conversation with ${activeConversation.display_name}`}</p>
+                    </div>
+                  ) : (
+                    <div className="chat-messages-flex">
+                      {loadingOlder && (
+                        <div className="text-center py-3">
+                          <Spinner animation="border" size="sm" variant="secondary" />
+                          <span className="ms-2 text-muted small">Loading older messages...</span>
+                        </div>
+                      )}
+                      {renderMessagesWithDateSeparators()}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )}
 
-                {/* Floating Scroll to Bottom Button */}
+                  {/* Real-time Typing Indicator */}
+                  {typingUser && (
+                    <div className="chat-typing-indicator">
+                      <div className="chat-typing-dots">
+                        <span /><span /><span />
+                      </div>
+                      <span>{typingUser} is typing...</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Floating Scroll to Bottom Button — outside scrollable area */}
                 {showScrollBottom && (
                   <button
                     type="button"
                     className="chat-scroll-bottom-btn shadow-lg"
                     onClick={() => scrollToBottom(true)}
-                    title="Scroll to bottom"
+                    title="Scroll to latest messages"
                   >
                     <ChevronDown size={22} strokeWidth={2.5} />
                   </button>
-                )}
-
-                {/* Real-time Typing Indicator */}
-                {typingUser && (
-                  <div className="chat-typing-indicator">
-                    <div className="chat-typing-dots">
-                      <span /><span /><span />
-                    </div>
-                    <span>{typingUser} is typing...</span>
-                  </div>
                 )}
               </div>
 
@@ -5280,6 +5282,14 @@ function ChatPageContent() {
         }
 
         /* Message scroll area */
+        .chat-messages-wrapper {
+          flex: 1 1 0%;
+          min-height: 0;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+        }
+
         .chat-messages-area {
           flex: 1 1 0%;
           min-height: 0;
