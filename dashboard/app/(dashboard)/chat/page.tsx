@@ -962,6 +962,12 @@ function ChatPageContent() {
   const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
   const [showScrollBottom, setShowScrollBottom] = useState<boolean>(false);
 
+  // Infinite scroll pagination state
+  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+  const [nextPage, setNextPage] = useState<number | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
+  const loadingOlderRef = useRef<boolean>(false);
+
   // The sidebar keeps whatever state the user chose — chat no longer collapses it.
 
   // Marking a conversation read also refreshes the sidebar's unread badge
@@ -1215,7 +1221,19 @@ function ChatPageContent() {
       });
   }, [activeConversation, mentionQuery]);
 
-  // TanStack Query: Fetch Messages for active conversation
+  // Reset pagination when switching conversations
+  const prevConvIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeConversationId !== prevConvIdRef.current) {
+      prevConvIdRef.current = activeConversationId;
+      setOlderMessages([]);
+      setNextPage(null);
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [activeConversationId]);
+
+  // TanStack Query: Fetch Messages for active conversation (page 1 only)
   const {
     data: messagesData,
     isLoading: loadingMessages,
@@ -1234,13 +1252,58 @@ function ChatPageContent() {
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
         old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );
+      // Set nextPage to 2 only on initial load (no older messages loaded yet)
+      if (res.next && olderMessages.length === 0 && nextPage === null) {
+        setNextPage(2);
+      }
       return (res.results || []).slice().reverse();
     },
     enabled: !!activeConversationId,
     refetchInterval: 5000,
   });
 
-  const messages = useMemo(() => messagesData || [], [messagesData]);
+  // Load older messages when scrolling to top
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeConversationId || !nextPage || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const res = await fetchMessages(activeConversationId, nextPage);
+      const older = (res.results || []).slice().reverse();
+      if (older.length > 0) {
+        setOlderMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newOlder = older.filter((m: Message) => !existingIds.has(m.id));
+          return [...newOlder, ...prev];
+        });
+      }
+      if (res.next) {
+        setNextPage((prev) => (prev || 2) + 1);
+      } else {
+        setNextPage(null);
+      }
+    } catch (err) {
+      console.error("Failed to load older messages:", err);
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [activeConversationId, nextPage]);
+
+  // Combine older + current page messages, deduplicated
+  const messages = useMemo(() => {
+    const current = messagesData || [];
+    if (olderMessages.length === 0) return current;
+    const seen = new Set<string>();
+    const combined: Message[] = [];
+    for (const m of olderMessages) {
+      if (!seen.has(m.id)) { seen.add(m.id); combined.push(m); }
+    }
+    for (const m of current) {
+      if (!seen.has(m.id)) { seen.add(m.id); combined.push(m); }
+    }
+    return combined;
+  }, [messagesData, olderMessages]);
 
   // Track pinned announcement in active conversation
   const pinnedAnnouncement = useMemo(() => {
@@ -1284,16 +1347,23 @@ function ChatPageContent() {
   }, [activeConversationId, scrollToBottom]);
 
   const prevMsgLenRef = useRef<number>(0);
+  const prevLastMsgIdRef = useRef<string | null>(null);
   useEffect(() => {
     const prevLen = prevMsgLenRef.current;
     prevMsgLenRef.current = messages.length;
+    const lastMsgId = messages.length > 0 ? messages[messages.length - 1]?.id : null;
+    const prevLastMsgId = prevLastMsgIdRef.current;
+    prevLastMsgIdRef.current = lastMsgId;
+
     const isInitialLoad = prevLen === 0 && messages.length > 0;
     if (isInitialLoad) {
       scrollToBottom(false);
-    } else if (messages.length > prevLen) {
+    } else if (messages.length > prevLen && lastMsgId !== prevLastMsgId) {
+      // Only scroll to bottom when a NEW message arrives at the end,
+      // not when older messages are prepended at the top
       scrollToBottom(true);
     }
-  }, [messages.length, scrollToBottom]);
+  }, [messages.length, messages, scrollToBottom]);
 
   useEffect(() => {
     if (typingUser) scrollToBottom(true);
@@ -1304,6 +1374,20 @@ function ChatPageContent() {
     const { scrollTop, scrollHeight, clientHeight } = chatMessagesAreaRef.current;
     const isUp = scrollHeight - scrollTop - clientHeight > 180;
     setShowScrollBottom(isUp);
+
+    // Load older messages when scrolled near the top
+    if (scrollTop < 100 && nextPage && !loadingOlderRef.current) {
+      const prevScrollHeight = chatMessagesAreaRef.current.scrollHeight;
+      loadOlderMessages().then(() => {
+        // Preserve scroll position after prepending older messages
+        requestAnimationFrame(() => {
+          if (chatMessagesAreaRef.current) {
+            const newScrollHeight = chatMessagesAreaRef.current.scrollHeight;
+            chatMessagesAreaRef.current.scrollTop = newScrollHeight - prevScrollHeight;
+          }
+        });
+      });
+    }
   };
 
   // WebSocket Connection with real-time query cache synchronization
@@ -3610,6 +3694,12 @@ function ChatPageContent() {
                   </div>
                 ) : (
                   <div className="chat-messages-flex">
+                    {loadingOlder && (
+                      <div className="text-center py-3">
+                        <Spinner animation="border" size="sm" variant="secondary" />
+                        <span className="ms-2 text-muted small">Loading older messages...</span>
+                      </div>
+                    )}
                     {renderMessagesWithDateSeparators()}
                     <div ref={messagesEndRef} />
                   </div>
