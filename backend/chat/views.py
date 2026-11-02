@@ -469,8 +469,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        if is_sender and not is_admin:
+            age_seconds = (tz.now() - message.created_at).total_seconds()
+            if age_seconds > 1800:
+                return Response(
+                    {"error": "Messages can only be deleted within 30 minutes of sending."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         message.is_deleted = True
-        message.content = "This message was deleted"
+        message.content = "This message was deleted for everyone"
         message.save()
 
         # Delete physical files from storage disk before removing database attachment entries

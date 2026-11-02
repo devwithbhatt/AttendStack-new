@@ -126,6 +126,7 @@ import {
   renameGroup,
   addGroupMembers,
   removeGroupMember,
+  sendPresenceHeartbeat,
 } from "../../../helper/chatApi";
 
 // Redux for sidebar control & Branding context
@@ -153,6 +154,38 @@ const getAvatarColor = (name: string) => {
   return solidColors[Math.abs(hash) % solidColors.length];
 };
 
+// Compute activity status from user's online/last-seen data
+const getActivityStatus = (user?: UserMinimal | null): "online" | "idle" | "offline" => {
+  if (!user) return "offline";
+  if (user.is_online) return "online";
+  if (user.chat_last_seen_at) {
+    const lastSeen = new Date(user.chat_last_seen_at).getTime();
+    const now = Date.now();
+    const twentyMinutes = 20 * 60 * 1000;
+    if (now - lastSeen <= twentyMinutes) return "idle";
+  }
+  return "offline";
+};
+
+// Format "Last seen" text from user data
+const formatLastSeen = (user?: UserMinimal | null): string => {
+  if (!user) return "";
+  if (user.is_online) return "Active Now";
+  if (!user.chat_last_seen_at) return "Offline";
+  const lastSeen = new Date(user.chat_last_seen_at);
+  const now = new Date();
+  const diffMs = now.getTime() - lastSeen.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Last seen just now";
+  if (diffMins < 60) return `Last seen ${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `Last seen ${diffHours}h ago`;
+  const day = lastSeen.getDate();
+  const month = lastSeen.toLocaleString("en-US", { month: "short" });
+  const time = lastSeen.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `Last seen ${day} ${month} at ${time}`;
+};
+
 // Safe Avatar Component with graceful fallback
 interface SafeAvatarProps {
   src?: string | null;
@@ -163,6 +196,7 @@ interface SafeAvatarProps {
   style?: React.CSSProperties;
   isGroup?: boolean;
   showOnlineDot?: boolean;
+  activityStatus?: "online" | "idle" | "offline" | null;
 }
 
 const SafeAvatar: React.FC<SafeAvatarProps> = ({
@@ -174,6 +208,7 @@ const SafeAvatar: React.FC<SafeAvatarProps> = ({
   style = {},
   isGroup = false,
   showOnlineDot = false,
+  activityStatus = null,
 }) => {
   const [imgError, setImgError] = useState(false);
   const initial = (name || "U")[0]?.toUpperCase() || "U";
@@ -184,6 +219,7 @@ const SafeAvatar: React.FC<SafeAvatarProps> = ({
   }, [src]);
 
   const hasValidImg = Boolean(src && !imgError && src.trim() !== "");
+  const showRing = activityStatus === "online" || activityStatus === "idle";
 
   return (
     <div
@@ -191,17 +227,30 @@ const SafeAvatar: React.FC<SafeAvatarProps> = ({
       style={{
         width: `${size}px`,
         height: `${size}px`,
-        backgroundColor: hasValidImg ? "#e2e8f0" : bg,
-        color: "#ffffff",
-        fontWeight: 700,
-        fontSize: `${fontSize}px`,
         overflow: "visible",
         ...style,
       }}
     >
+      {showRing && (
+        <span
+          className={`activity-ring ${activityStatus === "online" ? "activity-ring-green" : "activity-ring-golden"}`}
+          style={{
+            width: `${size + 6}px`,
+            height: `${size + 6}px`,
+          }}
+        />
+      )}
       <div
-        className="w-100 h-100 rounded-circle d-flex align-items-center justify-content-center overflow-hidden position-relative"
-        style={{ backgroundColor: hasValidImg ? "#e2e8f0" : bg }}
+        className="rounded-circle d-flex align-items-center justify-content-center overflow-hidden position-relative"
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          backgroundColor: hasValidImg ? "#e2e8f0" : bg,
+          color: "#ffffff",
+          fontWeight: 700,
+          fontSize: `${fontSize}px`,
+          zIndex: 2,
+        }}
       >
         {hasValidImg ? (
           <img
@@ -544,6 +593,7 @@ function ChatPageContent() {
   // Helper to format clean preview text for sidebar and quoted cards (WhatsApp style)
   const getCleanMessagePreview = (msg: any) => {
     if (!msg) return "No messages yet";
+    if (msg.is_deleted) return "This message was deleted for everyone";
 
     if (msg.message_type === "STICKER") {
       if (msg.content?.includes("giphy.com") || msg.content?.match(/\.(gif|webp)(\?.*)?$/i)) {
@@ -1040,6 +1090,13 @@ function ChatPageContent() {
     };
   }, []);
 
+  // Presence heartbeat: update chat_last_seen_at every 60 seconds
+  useEffect(() => {
+    sendPresenceHeartbeat();
+    const interval = setInterval(() => sendPresenceHeartbeat(), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleToggleSound = () => {
     const next = !isSoundMuted;
     setIsSoundMuted(next);
@@ -1414,6 +1471,10 @@ function ChatPageContent() {
             if (old.some((m) => m.id === newMsg.id)) return old;
             return [...old, newMsg];
           });
+          // Safety net: re-fetch after a short delay so the 5s polling doesn't overwrite WS data
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
+          }, 300);
 
           queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
             old.map((c) =>
@@ -1584,7 +1645,7 @@ function ChatPageContent() {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       Swal.fire({
         title: "Message Deleted",
-        text: "The message was deleted successfully.",
+        text: "Message deleted for everyone.",
         icon: "success",
         timer: 1500,
         showConfirmButton: false,
@@ -1597,13 +1658,13 @@ function ChatPageContent() {
 
   const handleDeleteMessage = (messageId: string) => {
     Swal.fire({
-      title: "Delete Message?",
-      text: "Are you sure you want to delete this message?",
+      title: "Delete for Everyone?",
+      text: "This message will be deleted for all participants in this conversation.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
       cancelButtonColor: "#64748b",
-      confirmButtonText: "Yes, delete",
+      confirmButtonText: "Yes, delete for everyone",
       cancelButtonText: "Cancel",
       reverseButtons: true,
       customClass: {
@@ -2673,7 +2734,12 @@ function ChatPageContent() {
 
       const isMe = String(msg.sender?.id) === String(currentUserId);
       const timeStr = formatMessageTime(msg.created_at);
-      const canDelete = isMe || activeConversation?.members?.some((m) => String(m.user.id) === String(currentUserId) && m.role === "ADMIN");
+      const isGroupAdmin = activeConversation?.members?.some((m) => String(m.user.id) === String(currentUserId) && m.role === "ADMIN");
+      const isCompanyAdmin = userRole !== "EMPLOYEE";
+      const isAnyAdmin = isGroupAdmin || isCompanyAdmin;
+      const msgAge = Date.now() - new Date(msg.created_at).getTime();
+      const withinThirtyMins = msgAge <= 30 * 60 * 1000;
+      const canDelete = (isMe && withinThirtyMins) || isAnyAdmin;
 
       const senderPhoto = (msg.sender as any)?.profile_photo_url || (msg.sender as any)?.avatar || (isMe ? myProfilePhoto : null);
       const senderName = msg.sender?.name || msg.sender?.email || (isMe ? myUserName || "You" : "User");
@@ -2744,7 +2810,7 @@ function ChatPageContent() {
                     onClick={() => handleDeleteMessage(msgForAction.id)}
                   >
                     <Trash2 size={13} />
-                    <span>Delete</span>
+                    <span>Delete for Everyone</span>
                   </Dropdown.Item>
                 </>
               )}
@@ -3041,7 +3107,7 @@ function ChatPageContent() {
                 </span>
                 <span className="chat-quoted-snippet text-truncate d-block small" style={{ fontSize: "12px", color: "#475569" }}>
                   {msg.reply_to.is_deleted ? (
-                    <em className="text-muted">This message was deleted</em>
+                    <em className="text-muted">This message was deleted for everyone</em>
                   ) : (
                     getCleanMessagePreview(msg.reply_to)
                   )}
@@ -3122,7 +3188,7 @@ function ChatPageContent() {
             {/* Deleted message placeholder */}
             {msg.is_deleted && (
               <p className="chat-text fst-italic text-muted" style={{ fontSize: "13px" }}>
-                This message was deleted
+                This message was deleted for everyone
               </p>
             )}
 
@@ -3428,6 +3494,7 @@ function ChatPageContent() {
                       fontSize={15}
                       isGroup={conv.type === "GROUP"}
                       showOnlineDot={conv.unread_count > 0}
+                      activityStatus={conv.type === "DIRECT" ? getActivityStatus(conv.other_user) : null}
                       className="flex-shrink-0"
                     />
 
@@ -3520,6 +3587,7 @@ function ChatPageContent() {
                     fontSize={15}
                     isGroup={activeConversation.type === "GROUP"}
                     showOnlineDot={false}
+                    activityStatus={activeConversation.type === "DIRECT" ? getActivityStatus(activeConversation.other_user) : null}
                     className="flex-shrink-0 shadow-xs"
                   />
 
@@ -3539,11 +3607,24 @@ function ChatPageContent() {
                         </span>
                       ) : (
                         <div className="d-flex align-items-center gap-2">
-                          {/* <span className="chat-online-status-text">Active Now</span> */}
+                          {(() => {
+                            const lastSeenText = formatLastSeen(activeConversation.other_user);
+                            const isOnline = activeConversation.other_user?.is_online;
+                            return lastSeenText ? (
+                              <span className={isOnline ? "chat-online-status-text" : "chat-last-seen-text"}>
+                                {lastSeenText}
+                              </span>
+                            ) : null;
+                          })()}
                           {activeConversation.other_user?.department && (
-                            <span className="chat-meta-dept">
-                              {activeConversation.other_user.department}
-                            </span>
+                            <>
+                              {formatLastSeen(activeConversation.other_user) && (
+                                <span className="chat-meta-separator">•</span>
+                              )}
+                              <span className="chat-meta-dept">
+                                {activeConversation.other_user.department}
+                              </span>
+                            </>
                           )}
                         </div>
                       )}
@@ -5027,6 +5108,60 @@ function ChatPageContent() {
 
         .chat-conv-item.active {
           background: #eef2ff;
+        }
+
+        /* Activity ring around avatar */
+        .activity-ring {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          border-radius: 50%;
+          z-index: 1;
+          pointer-events: none;
+        }
+
+        .activity-ring::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          padding: 2.5px;
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+        }
+
+        .activity-ring-green::before {
+          background: conic-gradient(
+            #10b981 0deg,
+            #34d399 90deg,
+            transparent 180deg,
+            transparent 360deg
+          );
+          animation: activityRingSpin 1.5s linear infinite;
+        }
+
+        .activity-ring-golden::before {
+          background: conic-gradient(
+            #f59e0b 0deg,
+            #fbbf24 90deg,
+            transparent 180deg,
+            transparent 360deg
+          );
+          animation: activityRingSpin 2.5s linear infinite;
+        }
+
+        @keyframes activityRingSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .chat-last-seen-text {
+          font-size: 12px;
+          font-weight: 500;
+          color: #64748b;
+          letter-spacing: 0.01em;
         }
 
         .chat-online-dot {
