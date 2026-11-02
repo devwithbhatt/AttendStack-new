@@ -319,8 +319,8 @@ class ConversationSerializer(serializers.ModelSerializer):
             return 0
         member = obj.members.filter(user=request.user).first()
         if not member or not member.last_read_message:
-            return obj.messages.count()
-        return obj.messages.filter(created_at__gt=member.last_read_message.created_at).count()
+            return obj.messages.filter(is_deleted=False).count()
+        return obj.messages.filter(created_at__gt=member.last_read_message.created_at, is_deleted=False).count()
 
     def get_display_name(self, obj):
         request = self.context.get('request')
