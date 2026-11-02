@@ -1515,7 +1515,11 @@ function ChatPageContent() {
           }
         } else if (data.type === "message_deleted") {
           queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
-            old.filter((m) => m.id !== data.message_id)
+            old.map((m) =>
+              m.id === data.message_id
+                ? { ...m, is_deleted: true, content: "This message was deleted for everyone", attachments: [] }
+                : m
+            )
           );
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
         } else if (data.type === "message_reaction") {
@@ -1640,7 +1644,11 @@ function ChatPageContent() {
     onSuccess: (_, messageId) => {
       if (!activeConversationId) return;
       queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
-        old.filter((m) => m.id !== messageId)
+        old.map((m) =>
+          m.id === messageId
+            ? { ...m, is_deleted: true, content: "This message was deleted for everyone", attachments: [] }
+            : m
+        )
       );
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       Swal.fire({
