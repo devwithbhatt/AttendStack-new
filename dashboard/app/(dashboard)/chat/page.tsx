@@ -126,7 +126,6 @@ import {
   renameGroup,
   addGroupMembers,
   removeGroupMember,
-  sendPresenceHeartbeat,
 } from "../../../helper/chatApi";
 
 // Redux for sidebar control & Branding context
@@ -1088,13 +1087,6 @@ function ChatPageContent() {
     return () => {
       window.removeEventListener("zuperhr_chat_notification_toggle", handleNotifToggle);
     };
-  }, []);
-
-  // Presence heartbeat: update chat_last_seen_at every 60 seconds
-  useEffect(() => {
-    sendPresenceHeartbeat();
-    const interval = setInterval(() => sendPresenceHeartbeat(), 60000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleToggleSound = () => {

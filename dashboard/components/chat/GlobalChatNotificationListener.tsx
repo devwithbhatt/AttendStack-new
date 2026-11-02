@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { fetchConversations, Conversation } from '../../helper/chatApi';
+import { fetchConversations, Conversation, sendPresenceHeartbeat } from '../../helper/chatApi';
 import {
   registerChatServiceWorker,
   sendBrowserChatNotification,
@@ -38,6 +38,13 @@ export const GlobalChatNotificationListener: React.FC = () => {
   useEffect(() => {
     registerChatServiceWorker();
     preloadNotificationSound();
+  }, []);
+
+  // Presence heartbeat: keep chat_last_seen_at fresh on every page, not just chat
+  useEffect(() => {
+    sendPresenceHeartbeat();
+    const interval = setInterval(() => sendPresenceHeartbeat(), 60000);
+    return () => clearInterval(interval);
   }, []);
 
   // Poll conversations every 12 seconds in background to detect incoming messages
