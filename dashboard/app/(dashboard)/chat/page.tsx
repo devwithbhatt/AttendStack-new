@@ -1521,6 +1521,10 @@ function ChatPageContent() {
                 : m
             )
           );
+          markReadAndRefreshBadge(activeConversationId);
+          queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+            old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+          );
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
         } else if (data.type === "message_reaction") {
           queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
@@ -1649,6 +1653,10 @@ function ChatPageContent() {
             ? { ...m, is_deleted: true, content: "This message was deleted for everyone", attachments: [] }
             : m
         )
+      );
+      markReadAndRefreshBadge(activeConversationId);
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       Swal.fire({
