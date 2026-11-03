@@ -130,7 +130,7 @@ class Attachment(models.Model):
         related_name='attachments'
     )
     file = models.FileField(upload_to='chat_attachments/')
-    file_type = models.CharField(max_length=50, blank=True, null=True)  # e.g., 'image/png', 'video/mp4'
+    file_type = models.CharField(max_length=255, blank=True, null=True)
     file_size = models.BigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
