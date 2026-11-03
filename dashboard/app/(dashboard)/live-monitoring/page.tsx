@@ -25,6 +25,10 @@ import {
   IconSettings,
   IconActivity,
   IconMessage,
+  IconArrowsSort,
+  IconSortAscending,
+  IconSortDescending,
+  IconFilter,
 } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
@@ -155,6 +159,10 @@ export default function LiveMonitoringPage() {
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [inactivitySettings, setInactivitySettings] = useState<InactivitySettingsData>({ idle_threshold_minutes: 3, long_interval_threshold_minutes: 10 });
   const [inactSaving, setInactSaving] = useState(false);
+  const [durationSort, setDurationSort] = useState<"desc" | "asc" | null>(null);
+  const [appFilterOpen, setAppFilterOpen] = useState(false);
+  const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
+  const appFilterRef = useRef<HTMLDivElement>(null);
 
   // Messaging
   const [showSendMessage, setShowSendMessage] = useState(false);
@@ -571,6 +579,43 @@ export default function LiveMonitoringPage() {
     return { totalActive: fmtH(totalActive), totalIdle: fmtH(totalIdle), totalLong: fmtH(totalLong), totalOffline: fmtH(totalOffline) };
   };
 
+  const uniqueAppNames = Array.from(
+    new Set(
+      activityEntries.map((e) => e.title || e.app_name || "Unknown").filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+  const filteredSortedEntries = (() => {
+    let entries = activityEntries;
+    if (selectedApps.size > 0) {
+      entries = entries.filter((e) => {
+        const display = e.title || e.app_name || "Unknown";
+        return selectedApps.has(display);
+      });
+    }
+    if (durationSort) {
+      entries = [...entries].sort((a, b) =>
+        durationSort === "desc" ? b.duration_seconds - a.duration_seconds : a.duration_seconds - b.duration_seconds
+      );
+    }
+    return entries;
+  })();
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (appFilterRef.current && !appFilterRef.current.contains(e.target as Node)) {
+        setAppFilterOpen(false);
+      }
+    };
+    if (appFilterOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [appFilterOpen]);
+
+  useEffect(() => {
+    setSelectedApps(new Set());
+    setDurationSort(null);
+  }, [activityDate, activityDevice]);
+
   useEffect(() => () => { try { wsRef.current?.close(); pcRef.current?.close(); } catch {} }, []);
 
   const onlineCount = devices.filter((d) => d.is_online).length;
@@ -839,13 +884,90 @@ export default function LiveMonitoringPage() {
                 <thead className="table-light">
                   <tr>
                     <th>Time</th>
-                    <th>Application / Website</th>
-                    <th>Duration</th>
+                    <th style={{ position: "relative" }}>
+                      <div
+                        ref={appFilterRef}
+                        style={{ display: "inline-block", position: "relative" }}
+                      >
+                        <span
+                          style={{ cursor: "pointer", userSelect: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                          onClick={() => setAppFilterOpen((p) => !p)}
+                        >
+                          Application / Website
+                          <IconFilter size={14} stroke={1.8} style={{ color: selectedApps.size > 0 ? "#4f46e5" : "#94a3b8" }} />
+                          {selectedApps.size > 0 && (
+                            <Badge bg="primary" pill style={{ fontSize: 9, padding: "2px 6px" }}>{selectedApps.size}</Badge>
+                          )}
+                        </span>
+                        {appFilterOpen && (
+                          <div
+                            style={{
+                              position: "absolute", top: "100%", left: 0, zIndex: 10,
+                              background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+                              boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 240, maxHeight: 260,
+                              overflowY: "auto", padding: "6px 0", marginTop: 4,
+                            }}
+                          >
+                            {selectedApps.size > 0 && (
+                              <div
+                                style={{ padding: "4px 12px 8px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 12, color: "#6366f1", fontWeight: 600 }}
+                                onClick={() => setSelectedApps(new Set())}
+                              >
+                                Clear all filters
+                              </div>
+                            )}
+                            {uniqueAppNames.map((name) => (
+                              <label
+                                key={name}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 8, padding: "6px 12px",
+                                  cursor: "pointer", fontSize: 13, margin: 0,
+                                }}
+                                className="hover-bg-light"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedApps.has(name)}
+                                  onChange={() => {
+                                    setSelectedApps((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(name)) next.delete(name); else next.add(name);
+                                      return next;
+                                    });
+                                  }}
+                                  style={{ accentColor: "#4f46e5" }}
+                                />
+                                <span className="text-truncate" style={{ maxWidth: 200 }}>{name}</span>
+                              </label>
+                            ))}
+                            {uniqueAppNames.length === 0 && (
+                              <div className="text-muted small px-3 py-2">No applications found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th>
+                      <span
+                        style={{ cursor: "pointer", userSelect: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                        onClick={() => setDurationSort((prev) => prev === "desc" ? "asc" : "desc")}
+                        title="Click to sort by duration"
+                      >
+                        Duration
+                        {durationSort === "desc" ? (
+                          <IconSortDescending size={14} stroke={1.8} style={{ color: "#4f46e5" }} />
+                        ) : durationSort === "asc" ? (
+                          <IconSortAscending size={14} stroke={1.8} style={{ color: "#4f46e5" }} />
+                        ) : (
+                          <IconArrowsSort size={14} stroke={1.8} style={{ color: "#94a3b8" }} />
+                        )}
+                      </span>
+                    </th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {activityEntries.map((e) => {
+                  {filteredSortedEntries.map((e) => {
                     const st = getActivityStatus(e.duration_seconds);
                     const timeStr = new Date(e.started_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                     const display = e.url || e.title || e.app_name || "Unknown";
@@ -862,6 +984,14 @@ export default function LiveMonitoringPage() {
                       </tr>
                     );
                   })}
+                  {filteredSortedEntries.length === 0 && selectedApps.size > 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-center text-muted py-3 small">
+                        No activity found for selected filter(s).{" "}
+                        <span style={{ color: "#6366f1", cursor: "pointer" }} onClick={() => setSelectedApps(new Set())}>Clear filters</span>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </Table>
             </div>
