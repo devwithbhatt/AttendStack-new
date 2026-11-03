@@ -1206,6 +1206,8 @@ function ChatPageContent() {
     queryKey: ["conversations"],
     queryFn: fetchConversations,
     refetchInterval: 8000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   // Sync browser tab title & favicon Green Dot with total unread messages
@@ -1317,6 +1319,8 @@ function ChatPageContent() {
     },
     enabled: !!activeConversationId,
     refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   // Load older messages when scrolling to top
@@ -1471,15 +1475,16 @@ function ChatPageContent() {
             if (old.some((m) => m.id === newMsg.id)) return old;
             return [...old, newMsg];
           });
-          // Safety net: re-fetch after a short delay so the 5s polling doesn't overwrite WS data
+          // Safety net: re-fetch after a delay so the server has time to persist
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
-          }, 300);
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          }, 800);
 
           queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
             old.map((c) =>
               c.id === activeConversationId
-                ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
+                ? { ...c, last_message: newMsg, updated_at: new Date().toISOString(), unread_count: 0 }
                 : c
             )
           );
