@@ -314,6 +314,66 @@ export const connectChatWebSocket = (
   };
 };
 
+export const connectUserChatWebSocket = (
+  onMessage: (data: any) => void,
+  onError?: (err: Event) => void
+): ChatWebSocketController => {
+  let isClosedManually = false;
+  let activeWs: WebSocket | null = null;
+  let reconnectTimeout: any = null;
+
+  const connect = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    if (!token || isClosedManually) return;
+
+    const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || '').trim();
+    if (!rawBackend) return;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+    let host;
+    try {
+      if (rawBackend.startsWith('http')) {
+        host = new URL(rawBackend).host;
+      } else {
+        host = rawBackend;
+      }
+    } catch {
+      host = rawBackend.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    }
+
+    const wsUrl = `${wsProtocol}//${host}/ws/chat/user/?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl);
+    activeWs = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        onMessage(JSON.parse(event.data));
+      } catch {}
+    };
+
+    ws.onerror = (err) => {
+      if (onError) onError(err);
+    };
+
+    ws.onclose = (event) => {
+      if (!isClosedManually && event.code !== 1000 && event.code !== 4001) {
+        reconnectTimeout = setTimeout(connect, 3000);
+      }
+    };
+  };
+
+  connect();
+
+  return {
+    get ws() { return activeWs; },
+    close: () => {
+      isClosedManually = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (activeWs) activeWs.close(1000, "Unmounted");
+    },
+  };
+};
+
 export const sendPresenceHeartbeat = async (): Promise<void> => {
   try {
     await apiClient.post('/api/v1/chat/presence/heartbeat/');

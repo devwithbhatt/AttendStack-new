@@ -117,3 +117,51 @@ class ChatConsumer(AsyncWebsocketConsumer):
             conversation_id=conversation_id,
             user_id=user_id
         ).exists()
+
+
+class UserChatConsumer(AsyncWebsocketConsumer):
+    """Per-user WebSocket that receives events for ALL conversations the user belongs to."""
+
+    async def connect(self):
+        self.user = self.scope.get('user')
+        if not self.user or not self.user.is_authenticated:
+            await self.close(code=4001)
+            return
+        self.group_name = f"user_chat_{self.user.id}"
+        await self.accept()
+        try:
+            if self.channel_layer:
+                await self.channel_layer.group_add(self.group_name, self.channel_name)
+        except Exception:
+            pass
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'group_name'):
+            try:
+                if self.channel_layer:
+                    await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            except Exception:
+                pass
+
+    async def receive(self, text_data):
+        pass
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'new_message',
+            'message': event['message'],
+            'conversation_id': event.get('conversation_id'),
+        }, cls=DjangoJSONEncoder))
+
+    async def chat_message_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
+            'message_id': event['message_id'],
+            'conversation_id': event.get('conversation_id'),
+        }, cls=DjangoJSONEncoder))
+
+    async def chat_conversation_updated(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'conversation_updated',
+            'conversation': event['conversation'],
+        }, cls=DjangoJSONEncoder))

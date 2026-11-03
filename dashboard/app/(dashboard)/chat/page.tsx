@@ -117,6 +117,7 @@ import {
   searchUsers,
   markConversationAsRead,
   connectChatWebSocket,
+  connectUserChatWebSocket,
   deleteMessage,
   deleteConversation,
   clearChatHistory,
@@ -1007,6 +1008,7 @@ function ChatPageContent() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<any>(null);
+  const userWsRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
@@ -1227,6 +1229,58 @@ function ChatPageContent() {
       initNotifiedMessages(existingMsgIds);
     }
   }, [conversations]);
+
+  // Global user WebSocket: receives new messages across ALL conversations in real-time
+  useEffect(() => {
+    if (userWsRef.current) userWsRef.current.close();
+
+    const controller = connectUserChatWebSocket((data) => {
+      if (data.type === "new_message") {
+        const newMsg = data.message;
+        const convId = data.conversation_id;
+        if (!convId) return;
+
+        // Update messages cache if this is the active conversation
+        if (convId === activeConversationId) {
+          queryClient.setQueryData<Message[]>(["messages", convId], (old = []) => {
+            if (old.some((m) => m.id === newMsg.id)) return old;
+            return [...old, newMsg];
+          });
+        }
+
+        // Update conversations list: bump last_message and increment unread for non-active convs
+        const isFromMe = String(newMsg.sender?.id) === String(currentUserId);
+        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+          old.map((c) => {
+            if (c.id !== convId) return c;
+            const isActive = convId === activeConversationId;
+            return {
+              ...c,
+              last_message: newMsg,
+              updated_at: new Date().toISOString(),
+              unread_count: isActive || isFromMe ? 0 : (c.unread_count || 0) + 1,
+            };
+          })
+        );
+
+        // Play chime for messages from others
+        if (!isFromMe) {
+          playMessageChime();
+        }
+
+        // Refetch to get authoritative server state
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          if (convId === activeConversationId) {
+            queryClient.invalidateQueries({ queryKey: ["messages", convId] });
+          }
+        }, 800);
+      }
+    });
+
+    userWsRef.current = controller;
+    return () => controller.close();
+  }, [activeConversationId, currentUserId]);
 
   // Deep linking: Open specific conversation from URL query parameter (?convId=...)
   useEffect(() => {

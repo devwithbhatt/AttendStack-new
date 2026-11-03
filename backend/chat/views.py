@@ -428,6 +428,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
             if channel_layer:
                 from django.core.serializers.json import DjangoJSONEncoder
                 import json
+                member_user_ids = list(
+                    conversation.members.values_list('user_id', flat=True)
+                )
                 for md in all_msg_data:
                     clean_msg_data = json.loads(json.dumps(md, cls=DjangoJSONEncoder))
                     async_to_sync(channel_layer.group_send)(
@@ -437,6 +440,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
                             "message": clean_msg_data
                         }
                     )
+                    for uid in member_user_ids:
+                        async_to_sync(channel_layer.group_send)(
+                            f"user_chat_{uid}",
+                            {
+                                "type": "chat.message",
+                                "message": clean_msg_data,
+                                "conversation_id": str(conversation.id),
+                            }
+                        )
         except Exception as e:
             import logging
             logging.warning(f"Failed to broadcast WS message: {e}")
