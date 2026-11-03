@@ -352,7 +352,7 @@ class DeviceSnapshotSettingsView(APIView):
 
 
 class SnapshotListView(generics.ListAPIView):
-    """List snapshots for the org, optionally filtered by device."""
+    """List snapshots for the org, optionally filtered by device and date."""
 
     serializer_class = SnapshotSerializer
     permission_classes = [IsAuthenticated, IsAdminOrHR]
@@ -368,6 +368,17 @@ class SnapshotListView(generics.ListAPIView):
         device_id = self.request.query_params.get("device")
         if device_id:
             qs = qs.filter(device_id=device_id)
+        date_str = self.request.query_params.get("date")
+        if date_str:
+            from datetime import datetime, time as dtime
+            try:
+                day = datetime.strptime(date_str, "%Y-%m-%d").date()
+                from django.utils import timezone as tz
+                start = tz.make_aware(datetime.combine(day, dtime.min))
+                end = tz.make_aware(datetime.combine(day, dtime.max))
+                qs = qs.filter(captured_at__range=(start, end))
+            except (ValueError, TypeError):
+                pass
         return qs
 
 

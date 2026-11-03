@@ -131,6 +131,7 @@ export default function LiveMonitoringPage() {
   const [snapshots, setSnapshots] = useState<SnapshotItem[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotDevice, setSnapshotDevice] = useState<string>("");
+  const [snapshotDate, setSnapshotDate] = useState<string>("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [snapshotPage, setSnapshotPage] = useState(1);
   const SNAPSHOTS_PER_PAGE = 12;
@@ -328,13 +329,14 @@ export default function LiveMonitoringPage() {
   };
 
   // ------------------------------------------------------------- snapshots
-  const openSnapshots = async (deviceId?: string) => {
-    setShowSnapshots(true);
+  const fetchSnapshots = async (deviceId: string, date: string) => {
     setSnapshotsLoading(true);
-    setSnapshotDevice(deviceId || "");
     setSnapshotPage(1);
     try {
-      const url = deviceId ? `${API}/snapshots/?device=${deviceId}` : `${API}/snapshots/`;
+      const params = new URLSearchParams();
+      if (deviceId) params.set("device", deviceId);
+      if (date) params.set("date", date);
+      const url = `${API}/snapshots/${params.toString() ? `?${params}` : ""}`;
       const r = await fetch(url, { headers: authHeaders() });
       const data = await r.json();
       setSnapshots(data.results || data);
@@ -342,17 +344,16 @@ export default function LiveMonitoringPage() {
     finally { setSnapshotsLoading(false); }
   };
 
+  const openSnapshots = async (deviceId?: string) => {
+    setShowSnapshots(true);
+    setSnapshotDevice(deviceId || "");
+    setSnapshotDate("");
+    fetchSnapshots(deviceId || "", "");
+  };
+
   const loadSnapshotsForDevice = async (deviceId: string) => {
-    setSnapshotsLoading(true);
     setSnapshotDevice(deviceId);
-    setSnapshotPage(1);
-    try {
-      const url = deviceId ? `${API}/snapshots/?device=${deviceId}` : `${API}/snapshots/`;
-      const r = await fetch(url, { headers: authHeaders() });
-      const data = await r.json();
-      setSnapshots(data.results || data);
-    } catch { setSnapshots([]); }
-    finally { setSnapshotsLoading(false); }
+    fetchSnapshots(deviceId, snapshotDate);
   };
 
   // ------------------------------------------------------------- settings
@@ -782,18 +783,34 @@ export default function LiveMonitoringPage() {
           <Modal.Title className="fs-6">Snapshots</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <div className="mb-3">
+          <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
             <Form.Select
               size="sm"
               value={snapshotDevice}
               onChange={(e) => loadSnapshotsForDevice(e.target.value)}
-              style={{ maxWidth: 300 }}
+              style={{ maxWidth: 260 }}
             >
               <option value="">All devices</option>
               {devices.map((d) => (
                 <option key={d.id} value={d.id}>{d.employee_name} — {d.device_name}</option>
               ))}
             </Form.Select>
+            <Form.Control
+              type="date"
+              size="sm"
+              value={snapshotDate}
+              onChange={(e) => { setSnapshotDate(e.target.value); fetchSnapshots(snapshotDevice, e.target.value); }}
+              style={{ maxWidth: 170 }}
+            />
+            {snapshotDate && (
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => { setSnapshotDate(""); fetchSnapshots(snapshotDevice, ""); }}
+              >
+                Clear date
+              </Button>
+            )}
           </div>
 
           {previewImage ? (
