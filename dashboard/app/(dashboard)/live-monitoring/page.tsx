@@ -132,6 +132,8 @@ export default function LiveMonitoringPage() {
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [snapshotDevice, setSnapshotDevice] = useState<string>("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [snapshotPage, setSnapshotPage] = useState(1);
+  const SNAPSHOTS_PER_PAGE = 12;
 
   // Settings
   const [showSettings, setShowSettings] = useState(false);
@@ -330,6 +332,7 @@ export default function LiveMonitoringPage() {
     setShowSnapshots(true);
     setSnapshotsLoading(true);
     setSnapshotDevice(deviceId || "");
+    setSnapshotPage(1);
     try {
       const url = deviceId ? `${API}/snapshots/?device=${deviceId}` : `${API}/snapshots/`;
       const r = await fetch(url, { headers: authHeaders() });
@@ -342,6 +345,7 @@ export default function LiveMonitoringPage() {
   const loadSnapshotsForDevice = async (deviceId: string) => {
     setSnapshotsLoading(true);
     setSnapshotDevice(deviceId);
+    setSnapshotPage(1);
     try {
       const url = deviceId ? `${API}/snapshots/?device=${deviceId}` : `${API}/snapshots/`;
       const r = await fetch(url, { headers: authHeaders() });
@@ -806,27 +810,54 @@ export default function LiveMonitoringPage() {
           ) : snapshots.length === 0 ? (
             <div className="text-center text-muted py-4">No snapshots captured yet.</div>
           ) : (
-            <div className="row g-2">
-              {snapshots.map((snap) => (
-                <div key={snap.id} className="col-6 col-md-4">
-                  <div
-                    className="border rounded overflow-hidden"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => setPreviewImage(snap.image)}
-                  >
-                    <img
-                      src={snap.image}
-                      alt={`${snap.employee_name} snapshot`}
-                      style={{ width: "100%", height: 140, objectFit: "cover" }}
-                    />
-                    <div className="p-2 small">
-                      <div className="fw-medium">{snap.employee_name}</div>
-                      <div className="text-muted">{fmt(snap.captured_at)}</div>
+            <>
+              <div className="row g-2">
+                {snapshots.slice((snapshotPage - 1) * SNAPSHOTS_PER_PAGE, snapshotPage * SNAPSHOTS_PER_PAGE).map((snap) => (
+                  <div key={snap.id} className="col-6 col-md-4">
+                    <div
+                      className="border rounded overflow-hidden"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setPreviewImage(snap.image)}
+                    >
+                      <img
+                        src={snap.image}
+                        alt={`${snap.employee_name} snapshot`}
+                        style={{ width: "100%", height: 140, objectFit: "cover" }}
+                      />
+                      <div className="p-2 small">
+                        <div className="fw-medium">{snap.employee_name}</div>
+                        <div className="text-muted">{fmt(snap.captured_at)}</div>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+              {snapshots.length > SNAPSHOTS_PER_PAGE && (
+                <div className="d-flex align-items-center justify-content-between mt-3">
+                  <span className="text-muted small">
+                    Page {snapshotPage} of {Math.ceil(snapshots.length / SNAPSHOTS_PER_PAGE)} ({snapshots.length} snapshots)
+                  </span>
+                  <div className="d-flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      disabled={snapshotPage <= 1}
+                      onClick={() => setSnapshotPage((p) => p - 1)}
+                    >
+                      ← Prev
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      disabled={snapshotPage >= Math.ceil(snapshots.length / SNAPSHOTS_PER_PAGE)}
+                      onClick={() => setSnapshotPage((p) => p + 1)}
+                    >
+                      Next →
+                    </Button>
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </Modal.Body>
       </Modal>
