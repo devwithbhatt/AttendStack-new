@@ -233,10 +233,10 @@ const SafeAvatar: React.FC<SafeAvatarProps> = ({
     >
       {showRing && (
         <span
-          className={`activity-ring ${activityStatus === "online" ? "activity-ring-green" : "activity-ring-golden"}`}
+          className={`activity-dot ${activityStatus === "online" ? "activity-dot-green" : "activity-dot-golden"}`}
           style={{
-            width: `${size + 6}px`,
-            height: `${size + 6}px`,
+            width: `${Math.max(10, Math.round(size * 0.28))}px`,
+            height: `${Math.max(10, Math.round(size * 0.28))}px`,
           }}
         />
       )}
@@ -5126,51 +5126,21 @@ function ChatPageContent() {
           background: #eef2ff;
         }
 
-        /* Activity ring around avatar */
-        .activity-ring {
+        /* Activity status dot on avatar */
+        .activity-dot {
           position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
+          bottom: 0;
+          right: 0;
           border-radius: 50%;
-          z-index: 1;
+          z-index: 3;
+          border: 2px solid #fff;
           pointer-events: none;
         }
-
-        .activity-ring::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          padding: 2.5px;
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
+        .activity-dot-green {
+          background: #10b981;
         }
-
-        .activity-ring-green::before {
-          background: conic-gradient(
-            #10b981 0deg,
-            #34d399 90deg,
-            transparent 180deg,
-            transparent 360deg
-          );
-          animation: activityRingSpin 1.5s linear infinite;
-        }
-
-        .activity-ring-golden::before {
-          background: conic-gradient(
-            #f59e0b 0deg,
-            #fbbf24 90deg,
-            transparent 180deg,
-            transparent 360deg
-          );
-          animation: activityRingSpin 2.5s linear infinite;
-        }
-
-        @keyframes activityRingSpin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        .activity-dot-golden {
+          background: #f59e0b;
         }
 
         .chat-last-seen-text {
