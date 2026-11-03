@@ -1207,7 +1207,7 @@ function ChatPageContent() {
   } = useQuery({
     queryKey: ["conversations"],
     queryFn: fetchConversations,
-    refetchInterval: 8000,
+    refetchInterval: 1000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
@@ -1372,7 +1372,7 @@ function ChatPageContent() {
       return (res.results || []).slice().reverse();
     },
     enabled: !!activeConversationId,
-    refetchInterval: 5000,
+    refetchInterval: 1000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
