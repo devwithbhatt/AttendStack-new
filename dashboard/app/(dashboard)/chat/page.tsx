@@ -1356,20 +1356,25 @@ function ChatPageContent() {
     queryFn: async () => {
       if (!activeConversationId) return [];
       const res = await fetchMessages(activeConversationId);
-      markReadAndRefreshBadge(activeConversationId);
-      closeConversationNotifications(activeConversationId);
-      const fetchedIds = (res.results || []).map((m: any) => m.id).filter(Boolean);
+      const newResults = (res.results || []).slice().reverse();
+      const prevData = queryClient.getQueryData<Message[]>(["messages", activeConversationId]);
+      const prevLastId = prevData && prevData.length > 0 ? prevData[prevData.length - 1]?.id : null;
+      const newLastId = newResults.length > 0 ? newResults[newResults.length - 1]?.id : null;
+      if (!prevData || prevLastId !== newLastId) {
+        markReadAndRefreshBadge(activeConversationId);
+        closeConversationNotifications(activeConversationId);
+        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+          old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+        );
+      }
+      const fetchedIds = newResults.map((m: any) => m.id).filter(Boolean);
       if (fetchedIds.length > 0) {
         initNotifiedMessages(fetchedIds);
       }
-      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
-        old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
-      );
-      // Set nextPage to 2 only on initial load (no older messages loaded yet)
       if (res.next && olderMessages.length === 0 && nextPage === null) {
         setNextPage(2);
       }
-      return (res.results || []).slice().reverse();
+      return newResults;
     },
     enabled: !!activeConversationId,
     refetchInterval: 1000,
