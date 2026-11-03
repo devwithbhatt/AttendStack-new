@@ -44,9 +44,10 @@ export const GlobalChatNotificationListener: React.FC = () => {
   const { data: conversations = [], isSuccess } = useQuery<Conversation[]>({
     queryKey: ['global_conversations_notifications'],
     queryFn: fetchConversations,
-    refetchInterval: 12000,
+    refetchInterval: 2000,
     refetchIntervalInBackground: true,
-    staleTime: 5000,
+    refetchOnWindowFocus: true,
+    staleTime: 1000,
   });
 
   // Monitor unread and new messages

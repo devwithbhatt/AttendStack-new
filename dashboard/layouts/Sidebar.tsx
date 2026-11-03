@@ -73,9 +73,10 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   const { data: chatConversations = [] } = useQuery<Conversation[]>({
     queryKey: ["global_conversations_notifications"],
     queryFn: fetchConversations,
-    refetchInterval: 12000,
+    refetchInterval: 2000,
     refetchIntervalInBackground: true,
-    staleTime: 5000,
+    refetchOnWindowFocus: true,
+    staleTime: 1000,
   });
   const chatUnread = Array.isArray(chatConversations)
     ? chatConversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)
