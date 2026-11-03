@@ -1250,18 +1250,24 @@ function ChatPageContent() {
 
         // Update conversations list: bump last_message and increment unread for non-active convs
         const isFromMe = String(newMsg.sender?.id) === String(currentUserId);
-        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        const isActive = convId === activeConversationId;
+        const updateConvList = (old: Conversation[] = []) =>
           old.map((c) => {
             if (c.id !== convId) return c;
-            const isActive = convId === activeConversationId;
             return {
               ...c,
               last_message: newMsg,
               updated_at: new Date().toISOString(),
               unread_count: isActive || isFromMe ? 0 : (c.unread_count || 0) + 1,
             };
-          })
-        );
+          });
+        queryClient.setQueryData<Conversation[]>(["conversations"], updateConvList);
+        queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], updateConvList);
+
+        // Mark as read immediately if user is viewing this conversation
+        if (isActive && !isFromMe) {
+          markReadAndRefreshBadge(convId);
+        }
 
         // Play chime for messages from others
         if (!isFromMe) {
@@ -1271,6 +1277,7 @@ function ChatPageContent() {
         // Refetch to get authoritative server state
         setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          queryClient.invalidateQueries({ queryKey: ["global_conversations_notifications"] });
           if (convId === activeConversationId) {
             queryClient.invalidateQueries({ queryKey: ["messages", convId] });
           }
@@ -1360,13 +1367,14 @@ function ChatPageContent() {
       const prevData = queryClient.getQueryData<Message[]>(["messages", activeConversationId]);
       const prevLastId = prevData && prevData.length > 0 ? prevData[prevData.length - 1]?.id : null;
       const newLastId = newResults.length > 0 ? newResults[newResults.length - 1]?.id : null;
-      if (!prevData || prevLastId !== newLastId) {
-        markReadAndRefreshBadge(activeConversationId);
-        closeConversationNotifications(activeConversationId);
-        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
-          old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
-        );
-      }
+      markReadAndRefreshBadge(activeConversationId);
+      closeConversationNotifications(activeConversationId);
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+      );
+      queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], (old = []) =>
+        old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+      );
       const fetchedIds = newResults.map((m: any) => m.id).filter(Boolean);
       if (fetchedIds.length > 0) {
         initNotifiedMessages(fetchedIds);
@@ -1540,13 +1548,14 @@ function ChatPageContent() {
             queryClient.invalidateQueries({ queryKey: ["conversations"] });
           }, 800);
 
-          queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+          const updateActiveConv = (old: Conversation[] = []) =>
             old.map((c) =>
               c.id === activeConversationId
                 ? { ...c, last_message: newMsg, updated_at: new Date().toISOString(), unread_count: 0 }
                 : c
-            )
-          );
+            );
+          queryClient.setQueryData<Conversation[]>(["conversations"], updateActiveConv);
+          queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], updateActiveConv);
 
           // Play sound and trigger browser notification if message is from another user
           const isFromMe = String(newMsg.sender?.id) === String(currentUserId);
@@ -1587,6 +1596,9 @@ function ChatPageContent() {
           );
           markReadAndRefreshBadge(activeConversationId);
           queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+            old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+          );
+          queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], (old = []) =>
             old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
           );
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -1675,6 +1687,9 @@ function ChatPageContent() {
         queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
           old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
         );
+        queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], (old = []) =>
+          old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+        );
       }
     };
 
@@ -1701,6 +1716,9 @@ function ChatPageContent() {
     queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
       old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
     );
+    queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], (old = []) =>
+      old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
+    );
   };
 
   // TanStack Mutation: Delete Message
@@ -1720,6 +1738,9 @@ function ChatPageContent() {
       );
       markReadAndRefreshBadge(activeConversationId);
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+      );
+      queryClient.setQueryData<Conversation[]>(["global_conversations_notifications"], (old = []) =>
         old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
