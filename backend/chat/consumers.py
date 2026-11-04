@@ -111,6 +111,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'is_typing': event['is_typing']
             }, cls=DjangoJSONEncoder))
 
+    async def chat_message_pinned(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_pinned',
+            'message': event['message'],
+            'conversation_id': event.get('conversation_id'),
+        }, cls=DjangoJSONEncoder))
+
+    async def chat_message_unpinned(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_unpinned',
+            'message_id': event['message_id'],
+            'conversation_id': event.get('conversation_id'),
+        }, cls=DjangoJSONEncoder))
+
     @database_sync_to_async
     def check_membership(self, conversation_id, user_id):
         return ConversationMember.objects.filter(
@@ -156,6 +170,20 @@ class UserChatConsumer(AsyncWebsocketConsumer):
     async def chat_message_deleted(self, event):
         await self.send(text_data=json.dumps({
             'type': 'message_deleted',
+            'message_id': event['message_id'],
+            'conversation_id': event.get('conversation_id'),
+        }, cls=DjangoJSONEncoder))
+
+    async def chat_message_pinned(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_pinned',
+            'message': event['message'],
+            'conversation_id': event.get('conversation_id'),
+        }, cls=DjangoJSONEncoder))
+
+    async def chat_message_unpinned(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_unpinned',
             'message_id': event['message_id'],
             'conversation_id': event.get('conversation_id'),
         }, cls=DjangoJSONEncoder))

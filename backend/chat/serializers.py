@@ -154,13 +154,14 @@ class MessageSerializer(serializers.ModelSerializer):
     is_acknowledged_by_me = serializers.SerializerMethodField()
     reactions = serializers.SerializerMethodField()
     read_by = serializers.SerializerMethodField()
+    pinned_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
         fields = [
             'id', 'conversation', 'sender', 'reply_to', 'content',
             'message_type', 'is_edited', 'is_deleted',
-            'is_announcement', 'pinned', 'target_type',
+            'is_announcement', 'pinned', 'pinned_by_name', 'pinned_at', 'pin_expires_at', 'target_type',
             'department_target', 'requires_acknowledgement',
             'acknowledged_count', 'is_acknowledged_by_me',
             'created_at', 'attachments', 'reactions', 'read_by'
@@ -175,6 +176,12 @@ class MessageSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.acknowledged_by.filter(id=request.user.id).exists()
         return False
+
+    def get_pinned_by_name(self, obj):
+        if obj.pinned_by:
+            name = f"{obj.pinned_by.first_name} {obj.pinned_by.last_name}".strip()
+            return name or obj.pinned_by.email
+        return None
 
     def get_read_by(self, obj):
         members = ConversationMember.objects.filter(

@@ -54,6 +54,9 @@ export interface Message {
   is_deleted: boolean;
   is_announcement?: boolean;
   pinned?: boolean;
+  pinned_by_name?: string | null;
+  pinned_at?: string | null;
+  pin_expires_at?: string | null;
   target_type?: string;
   department_target?: string;
   requires_acknowledgement?: boolean;
@@ -161,6 +164,20 @@ export const searchUsers = async (query: string): Promise<UserMinimal[]> => {
 
 export const markConversationAsRead = async (conversationId: string): Promise<void> => {
   await apiClient.post(`/api/v1/chat/conversations/${conversationId}/read/`);
+};
+
+export const pinMessage = async (conversationId: string, messageId: string, durationHours?: number): Promise<Message> => {
+  const response = await apiClient.post(`/api/v1/chat/conversations/${conversationId}/pin-message/`, {
+    message_id: messageId,
+    duration_hours: durationHours || 0,
+  });
+  return response.data;
+};
+
+export const unpinMessage = async (conversationId: string, messageId: string): Promise<void> => {
+  await apiClient.post(`/api/v1/chat/conversations/${conversationId}/unpin-message/`, {
+    message_id: messageId,
+  });
 };
 
 export const deleteMessage = async (conversationId: string, messageId: string): Promise<void> => {

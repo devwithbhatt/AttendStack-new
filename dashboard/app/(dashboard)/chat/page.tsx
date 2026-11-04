@@ -118,6 +118,8 @@ import {
   markConversationAsRead,
   connectChatWebSocket,
   connectUserChatWebSocket,
+  pinMessage,
+  unpinMessage,
   deleteMessage,
   deleteConversation,
   clearChatHistory,
@@ -637,6 +639,8 @@ function ChatPageContent() {
   const [forwardSearch, setForwardSearch] = useState<string>("");
   const [forwardedConvIds, setForwardedConvIds] = useState<string[]>([]);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [pinModalMsg, setPinModalMsg] = useState<Message | null>(null);
+  const [pinDurationHours, setPinDurationHours] = useState<number>(0);
 
   // Input bar emoji, GIPHY Sticker & GIPHY GIF picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
@@ -1438,6 +1442,16 @@ function ChatPageContent() {
     return messages.slice().reverse().find((m) => m.is_announcement && m.pinned && !m.is_deleted);
   }, [messages]);
 
+  // Track pinned message (non-announcement) in active conversation
+  const pinnedMessage = useMemo(() => {
+    const now = new Date();
+    return messages.slice().reverse().find((m) => {
+      if (!m.pinned || m.is_deleted || m.is_announcement) return false;
+      if (m.pin_expires_at && new Date(m.pin_expires_at) < now) return false;
+      return true;
+    });
+  }, [messages]);
+
   // Filter messages by in-chat search query
   const displayedMessages = useMemo(() => {
     if (!inChatMessageQuery.trim()) return messages;
@@ -1720,6 +1734,32 @@ function ChatPageContent() {
       old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
     );
   };
+
+  // TanStack Mutation: Pin Message
+  const pinMessageMutation = useMutation({
+    mutationFn: async ({ messageId, durationHours }: { messageId: string; durationHours: number }) => {
+      if (!activeConversationId) return;
+      await pinMessage(activeConversationId, messageId, durationHours);
+    },
+    onSuccess: () => {
+      if (!activeConversationId) return;
+      queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
+      setPinModalMsg(null);
+      setPinDurationHours(0);
+    },
+  });
+
+  // TanStack Mutation: Unpin Message
+  const unpinMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      if (!activeConversationId) return;
+      await unpinMessage(activeConversationId, messageId);
+    },
+    onSuccess: () => {
+      if (!activeConversationId) return;
+      queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
+    },
+  });
 
   // TanStack Mutation: Delete Message
   const deleteMessageMutation = useMutation({
@@ -2903,6 +2943,22 @@ function ChatPageContent() {
                 <CornerUpRight size={13} />
                 <span>Forward</span>
               </Dropdown.Item>
+              {!msgForAction.is_deleted && (
+                <Dropdown.Item
+                  className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
+                  onClick={() => {
+                    if (msgForAction.pinned) {
+                      unpinMessageMutation.mutate(msgForAction.id);
+                    } else {
+                      setPinModalMsg(msgForAction);
+                      setPinDurationHours(0);
+                    }
+                  }}
+                >
+                  <Pin size={13} />
+                  <span>{msgForAction.pinned ? "Unpin Message" : "Pin Message"}</span>
+                </Dropdown.Item>
+              )}
               {canDelete && (
                 <>
                   <Dropdown.Divider className="my-1" />
@@ -3827,6 +3883,34 @@ function ChatPageContent() {
                 </div>
               )}
 
+              {/* Pinned Message Banner */}
+              {pinnedMessage && (
+                <div className="chat-pinned-announcement-banner d-flex align-items-center justify-content-between p-2.5 px-3 border-bottom shadow-xs">
+                  <div className="d-flex align-items-center gap-2 overflow-hidden me-2">
+                    <Pin size={15} className="text-warning flex-shrink-0" />
+                    <span className="fw-bold text-dark small flex-shrink-0">Pinned:</span>
+                    <span className="text-truncate text-secondary small">
+                      {pinnedMessage.content || (pinnedMessage.attachments?.length ? `[${pinnedMessage.attachments.length} attachment(s)]` : "Message")}
+                    </span>
+                    {pinnedMessage.pinned_by_name && (
+                      <span className="text-muted small flex-shrink-0">— by {pinnedMessage.pinned_by_name}</span>
+                    )}
+                    {pinnedMessage.pin_expires_at && (
+                      <span className="badge bg-warning-subtle text-warning-emphasis small flex-shrink-0">
+                        Expires {new Date(pinnedMessage.pin_expires_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    className="btn btn-sm btn-link text-muted p-0 flex-shrink-0"
+                    title="Unpin"
+                    onClick={() => unpinMessageMutation.mutate(pinnedMessage.id)}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {/* Messages Flex Scroll Area + Floating Button Wrapper */}
               <div className="chat-messages-wrapper">
                 <div
@@ -4423,6 +4507,61 @@ function ChatPageContent() {
                 );
               })}
           </div>
+        </Modal.Body>
+      </Modal>
+
+      {/* PIN MESSAGE DURATION MODAL */}
+      <Modal show={Boolean(pinModalMsg)} onHide={() => setPinModalMsg(null)} centered size="sm">
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
+            <Pin size={20} className="text-warning" /> Pin Message
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-3">
+          {pinModalMsg && (
+            <div className="p-2 bg-light rounded-3 mb-3 border">
+              <small className="text-muted d-block fw-semibold mb-1">Message:</small>
+              <small className="text-dark">
+                {pinModalMsg.content || (pinModalMsg.attachments?.length ? `[${pinModalMsg.attachments.length} attachment(s)]` : "Message")}
+              </small>
+            </div>
+          )}
+          <Form.Group className="mb-3">
+            <Form.Label className="small fw-semibold text-muted">Pin Duration</Form.Label>
+            <Form.Select
+              className="rounded-3 shadow-none border"
+              value={pinDurationHours}
+              onChange={(e) => setPinDurationHours(Number(e.target.value))}
+            >
+              <option value={0}>Forever (No Expiry)</option>
+              <option value={1}>1 Hour</option>
+              <option value={6}>6 Hours</option>
+              <option value={12}>12 Hours</option>
+              <option value={24}>1 Day</option>
+              <option value={72}>3 Days</option>
+              <option value={168}>1 Week</option>
+              <option value={720}>1 Month</option>
+            </Form.Select>
+          </Form.Group>
+          <Button
+            variant="primary"
+            className="w-100 rounded-3 fw-semibold"
+            style={{ backgroundColor: "#6366f1", borderColor: "#6366f1" }}
+            disabled={pinMessageMutation.isPending}
+            onClick={() => {
+              if (pinModalMsg) {
+                pinMessageMutation.mutate({ messageId: pinModalMsg.id, durationHours: pinDurationHours });
+              }
+            }}
+          >
+            {pinMessageMutation.isPending ? (
+              <Spinner animation="border" size="sm" />
+            ) : (
+              <>
+                <Pin size={14} className="me-1" /> Pin Message
+              </>
+            )}
+          </Button>
         </Modal.Body>
       </Modal>
 

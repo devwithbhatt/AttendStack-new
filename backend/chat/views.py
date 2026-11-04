@@ -552,6 +552,89 @@ class ConversationViewSet(viewsets.ModelViewSet):
                     pass
         return Response({"status": "read marked"}, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'], url_path='pin-message')
+    def pin_message(self, request, pk=None):
+        conversation = self.get_object()
+        message_id = request.data.get('message_id')
+        duration_hours = request.data.get('duration_hours')
+
+        if not message_id:
+            return Response({"error": "message_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        msg = conversation.messages.filter(id=message_id, is_deleted=False).first()
+        if not msg:
+            return Response({"error": "Message not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        now = tz.now()
+        msg.pinned = True
+        msg.pinned_by = request.user
+        msg.pinned_at = now
+        if duration_hours and int(duration_hours) > 0:
+            from datetime import timedelta
+            msg.pin_expires_at = now + timedelta(hours=int(duration_hours))
+        else:
+            msg.pin_expires_at = None
+        msg.save(update_fields=['pinned', 'pinned_by', 'pinned_at', 'pin_expires_at'])
+
+        msg_data = MessageSerializer(msg, context={'request': request}).data
+
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                from django.core.serializers.json import DjangoJSONEncoder
+                import json
+                clean_data = json.loads(json.dumps(msg_data, cls=DjangoJSONEncoder))
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{conversation.id}",
+                    {"type": "chat.message_pinned", "message": clean_data, "conversation_id": str(conversation.id)}
+                )
+                member_user_ids = list(conversation.members.values_list('user_id', flat=True))
+                for uid in member_user_ids:
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_chat_{uid}",
+                        {"type": "chat.message_pinned", "message": clean_data, "conversation_id": str(conversation.id)}
+                    )
+        except Exception:
+            pass
+
+        return Response(msg_data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='unpin-message')
+    def unpin_message(self, request, pk=None):
+        conversation = self.get_object()
+        message_id = request.data.get('message_id')
+
+        if not message_id:
+            return Response({"error": "message_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        msg = conversation.messages.filter(id=message_id).first()
+        if not msg:
+            return Response({"error": "Message not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        msg.pinned = False
+        msg.pinned_by = None
+        msg.pinned_at = None
+        msg.pin_expires_at = None
+        msg.save(update_fields=['pinned', 'pinned_by', 'pinned_at', 'pin_expires_at'])
+
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{conversation.id}",
+                    {"type": "chat.message_unpinned", "message_id": str(message_id), "conversation_id": str(conversation.id)}
+                )
+                member_user_ids = list(conversation.members.values_list('user_id', flat=True))
+                for uid in member_user_ids:
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_chat_{uid}",
+                        {"type": "chat.message_unpinned", "message_id": str(message_id), "conversation_id": str(conversation.id)}
+                    )
+        except Exception:
+            pass
+
+        return Response({"status": "unpinned"}, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='clear')
     def clear_chat(self, request, pk=None):
         conversation = self.get_object()

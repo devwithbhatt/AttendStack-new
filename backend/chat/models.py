@@ -102,6 +102,14 @@ class Message(models.Model):
     is_deleted = models.BooleanField(default=False)
     is_announcement = models.BooleanField(default=False)
     pinned = models.BooleanField(default=False)
+    pinned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pinned_messages'
+    )
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    pin_expires_at = models.DateTimeField(null=True, blank=True)
     target_type = models.CharField(max_length=20, default='EVERYONE')
     department_target = models.CharField(max_length=100, blank=True, null=True)
     requires_acknowledgement = models.BooleanField(default=False)
