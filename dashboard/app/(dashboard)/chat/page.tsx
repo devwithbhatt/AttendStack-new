@@ -2486,8 +2486,17 @@ function ChatPageContent() {
     mutationFn: (user: UserMinimal) => createDirectChat(user.id),
     onSuccess: (conv) => {
       setShowDirectModal(false);
+      setConvFilter("all");
       refetchConversations();
       selectConversation(conv);
+    },
+    onError: () => {
+      Swal.fire({
+        icon: "error",
+        title: "Could not start chat",
+        text: "Something went wrong. Please try again.",
+        confirmButtonColor: "#00a76f",
+      });
     },
   });
 
@@ -2563,6 +2572,7 @@ function ChatPageContent() {
     });
 
     if (existingConv) {
+      setConvFilter("all");
       selectConversation(existingConv);
       setShowDirectModal(false);
       return;
