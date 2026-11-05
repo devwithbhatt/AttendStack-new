@@ -1347,6 +1347,7 @@ function ChatPageContent() {
 
   // Reset pagination when switching conversations
   const prevConvIdRef = useRef<string | null>(null);
+  const lastMarkedReadIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeConversationId !== prevConvIdRef.current) {
       prevConvIdRef.current = activeConversationId;
@@ -1354,6 +1355,7 @@ function ChatPageContent() {
       setNextPage(null);
       loadingOlderRef.current = false;
       setLoadingOlder(false);
+      lastMarkedReadIdRef.current = null;
     }
   }, [activeConversationId]);
 
@@ -1368,11 +1370,12 @@ function ChatPageContent() {
       if (!activeConversationId) return [];
       const res = await fetchMessages(activeConversationId);
       const newResults = (res.results || []).slice().reverse();
-      const prevData = queryClient.getQueryData<Message[]>(["messages", activeConversationId]);
-      const prevLastId = prevData && prevData.length > 0 ? prevData[prevData.length - 1]?.id : null;
       const newLastId = newResults.length > 0 ? newResults[newResults.length - 1]?.id : null;
-      markReadAndRefreshBadge(activeConversationId);
-      closeConversationNotifications(activeConversationId);
+      if (newLastId && newLastId !== lastMarkedReadIdRef.current) {
+        lastMarkedReadIdRef.current = newLastId;
+        markReadAndRefreshBadge(activeConversationId);
+        closeConversationNotifications(activeConversationId);
+      }
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
         old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );
@@ -1389,7 +1392,7 @@ function ChatPageContent() {
       return newResults;
     },
     enabled: !!activeConversationId,
-    refetchInterval: 1000,
+    refetchInterval: 2000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });

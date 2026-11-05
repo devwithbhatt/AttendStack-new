@@ -48,6 +48,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
             members__user=self.request.user
         ).distinct().order_by('-updated_at')
 
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+
     def _is_group_manager(self, user, conversation):
         """
         True if `user` can manage (rename / add members / remove members /
@@ -318,15 +323,19 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def get_messages(self, request, pk=None):
         conversation = self.get_object()
         messages = conversation.messages.filter(is_deleted=False).order_by('-created_at')
-        
+
         paginator = MessagePagination()
         page = paginator.paginate_queryset(messages, request)
         if page is not None:
             serializer = MessageSerializer(page, many=True, context={'request': request})
-            return paginator.get_paginated_response(serializer.data)
+            response = paginator.get_paginated_response(serializer.data)
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            return response
 
         serializer = MessageSerializer(messages, many=True, context={'request': request})
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
 
     @action(detail=True, methods=['post'], url_path='send-message')
     def send_message(self, request, pk=None):

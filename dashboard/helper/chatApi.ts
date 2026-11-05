@@ -91,12 +91,12 @@ export interface Conversation {
 }
 
 export const fetchConversations = async (): Promise<Conversation[]> => {
-  const response = await apiClient.get('/api/v1/chat/conversations/');
+  const response = await apiClient.get(`/api/v1/chat/conversations/?_t=${Date.now()}`);
   return response.data.results || response.data;
 };
 
 export const fetchMessages = async (conversationId: string, page = 1): Promise<{ results: Message[]; next: string | null }> => {
-  const response = await apiClient.get(`/api/v1/chat/conversations/${conversationId}/messages/?page=${page}`);
+  const response = await apiClient.get(`/api/v1/chat/conversations/${conversationId}/messages/?page=${page}&_t=${Date.now()}`);
   if (response.data.results) {
     return response.data;
   }
