@@ -7,19 +7,13 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import UpcomingIncrementsChartWidget from "components/UpcomingIncrementsChartWidget";
 import ProjectDeliveryOverviewWidget from "components/dashboard/ProjectDeliveryOverviewWidget";
+import apiClient from "../../services/api";
 import { ApexOptions } from "apexcharts";
 
 // SSR safe dynamic import for ApexCharts
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
-
 const DEPT_COLORS = ["#4f46e5", "#10b981", "#06b6d4", "#f59e0b", "#8b5cf6", "#ec4899", "#3b82f6", "#14b8a6"];
-
-const authHeaders = (): HeadersInit => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 const formatDate = (value?: string | null) => {
   if (!value) return "--";
@@ -46,17 +40,15 @@ const DashboardPage = () => {
     setError("");
     try {
       // 1. Fetch today's live status for stats & check-ins
-      const todayRes = await fetch(`${BASE_URL}/attendance/today/`, { headers: authHeaders() });
-      if (!todayRes.ok) throw new Error("Failed to load today's statistics.");
-      const todayData = await todayRes.json();
-      setTodayRecords(todayData);
+      const todayRes = await apiClient.get('/api/v1/attendance/today/');
+      setTodayRecords(todayRes.data);
 
       // 2. Fetch recent employees
-      const empRes = await fetch(`${BASE_URL}/employees/?ordering=-joining_date&limit=5`, { headers: authHeaders() });
-      if (empRes.ok) {
-        const empData = await empRes.json();
+      try {
+        const empRes = await apiClient.get('/api/v1/employees/', { params: { ordering: '-joining_date', limit: 5 } });
+        const empData = empRes.data;
         setRecentEmployees(Array.isArray(empData) ? empData : empData.results || []);
-      }
+      } catch {}
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard data.");
     } finally {
@@ -84,30 +76,26 @@ const DashboardPage = () => {
 
       // 2. Query direct user workspace organization from backend
       try {
-        const meRes = await fetch(`${BASE_URL}/organizations/me/`, { headers: authHeaders() });
-        if (meRes.ok) {
-          orgData = await meRes.json();
-        }
+        const meRes = await apiClient.get('/api/v1/organizations/me/');
+        orgData = meRes.data;
       } catch {
         // Fallback to list query
       }
 
       if (!orgData || !orgData.id) {
-        const res = await fetch(`${BASE_URL}/organizations/?scope=me`, { headers: authHeaders() });
-        if (res.ok) {
-          const data = await res.json();
+        try {
+          const res = await apiClient.get('/api/v1/organizations/', { params: { scope: 'me' } });
+          const data = res.data;
           const orgs = Array.isArray(data) ? data : data.results || [];
-          if (orgs.length > 0) {
-            orgData = orgs[0];
-          }
-        }
+          if (orgs.length > 0) orgData = orgs[0];
+        } catch {}
       }
 
       // 3. Fallback list query with smart filtering
       if (!orgData || !orgData.id) {
-        const fallbackRes = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
-        if (fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json();
+        try {
+          const fallbackRes = await apiClient.get('/api/v1/organizations/');
+          const fallbackData = fallbackRes.data;
           const orgs = Array.isArray(fallbackData) ? fallbackData : fallbackData.results || [];
           if (orgs.length > 0) {
             const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
@@ -119,7 +107,7 @@ const DashboardPage = () => {
               orgs.find((o: any) => (o.name || "").toLowerCase().includes("bhatt")) ||
               orgs[0];
           }
-        }
+        } catch {}
       }
 
       if (orgData) {
