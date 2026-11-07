@@ -11,15 +11,18 @@ import { flexRender } from "@tanstack/react-table";
 import Pagination from "./Pagination";
 import { Spinner, Button, Alert, Form } from "react-bootstrap";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
+import apiClient from "../../services/api";
 
-const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`;
+const HOLIDAYS_URL = "/api/v1/holidays/";
 
-const authHeaders = (): HeadersInit => {
-  const token = localStorage.getItem("authToken");
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+const extractApiError = (data: any, fallback: string): string => {
+  if (typeof data === "string") return data;
+  if (data?.detail) return String(data.detail);
+  for (const val of Object.values(data || {})) {
+    if (Array.isArray(val) && val.length) return String(val[0]);
+    if (typeof val === "string") return val;
+  }
+  return fallback;
 };
 
 const HolidaysPage = () => {
@@ -100,11 +103,8 @@ const HolidaysPage = () => {
       if (year) params.append("year", year);
       if (type) params.append("type", type);
 
-      const res = await fetch(`${BASE_URL}?${params.toString()}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error("Failed to load holiday records.");
-      const data = await res.json();
+      const res = await apiClient.get(`${HOLIDAYS_URL}?${params.toString()}`);
+      const data = res.data;
       if (Array.isArray(data)) {
         setHolidays(data);
         setTotalHolidaysCount(data.length);
@@ -170,20 +170,13 @@ const HolidaysPage = () => {
       return;
     }
     try {
-      const res = await fetch(BASE_URL, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify(newHoliday),
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || errorData.date?.[0] || "Failed to create holiday record.");
-      }
+      await apiClient.post(HOLIDAYS_URL, newHoliday);
       await fetchHolidays(pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType);
-    } catch (err) {
+    } catch (err: any) {
+      const msg = extractApiError(err?.response?.data, "Failed to create holiday.");
       Swal.fire({
         title: "Creation Failed",
-        text: err instanceof Error ? err.message : "Failed to create holiday.",
+        text: msg,
         icon: "error",
         confirmButtonColor: "#dc3545",
       });
@@ -202,20 +195,13 @@ const HolidaysPage = () => {
       return;
     }
     try {
-      const res = await fetch(`${BASE_URL}${updatedHoliday.id}/`, {
-        method: "PUT",
-        headers: authHeaders(),
-        body: JSON.stringify(updatedHoliday),
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || errorData.date?.[0] || "Failed to update holiday.");
-      }
+      await apiClient.put(`${HOLIDAYS_URL}${updatedHoliday.id}/`, updatedHoliday);
       await fetchHolidays(pagination.pageIndex, pagination.pageSize, searchTerm, selectedYear, selectedType);
-    } catch (err) {
+    } catch (err: any) {
+      const msg = extractApiError(err?.response?.data, "Failed to update holiday.");
       Swal.fire({
         title: "Update Failed",
-        text: err instanceof Error ? err.message : "Failed to update holiday.",
+        text: msg,
         icon: "error",
         confirmButtonColor: "#dc3545",
       });
@@ -245,11 +231,7 @@ const HolidaysPage = () => {
     });
     if (!result.isConfirmed) return;
     try {
-      const res = await fetch(`${BASE_URL}${id}/`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error("Failed to delete the holiday record.");
+      await apiClient.delete(`${HOLIDAYS_URL}${id}/`);
       
       const newTotal = Math.max(0, totalHolidaysCount - 1);
       const newTotalPages = Math.ceil(newTotal / (pagination.pageSize || 10)) || 1;

@@ -58,7 +58,7 @@ class HolidayViewSet(viewsets.ModelViewSet):
         if exclude_pk is not None:
             clash = clash.exclude(pk=exclude_pk)
         if clash.exists():
-            raise ValidationError({"date": "A holiday already exists on this date for your company."})
+            raise ValidationError({"date": ["A holiday already exists on this date for your company."]})
 
     def perform_create(self, serializer):
         from organizations.services import resolve_organization_for_request
