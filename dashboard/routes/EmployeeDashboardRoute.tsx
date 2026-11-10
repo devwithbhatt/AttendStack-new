@@ -11,6 +11,7 @@ import {
   IconCalendarTime,
   IconListDetails,
   IconMessage,
+  IconReceiptTax,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -52,6 +53,12 @@ export const EmployeeDashboardMenu: MenuItemType[] = [
     title: "My Salary",
     link: "/employee-dashboard/salary",
     icon: <IconWallet size={18} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Tax Declaration",
+    link: "/employee-dashboard/tax-declaration",
+    icon: <IconReceiptTax size={18} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

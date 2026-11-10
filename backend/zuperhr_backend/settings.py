@@ -63,6 +63,7 @@ LOCAL_APPS = [
     "roles",
     "monitoring",
     "platform_monitoring",
+    "tax",
 ]
 
 INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

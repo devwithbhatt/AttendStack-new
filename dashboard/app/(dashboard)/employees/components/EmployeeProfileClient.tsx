@@ -86,6 +86,10 @@ type Employee = {
   pf_number?: string;
   uan_number?: string;
   esic_number?: string;
+  tds_applicable?: boolean;
+  epf_applicable?: boolean;
+  esi_applicable?: boolean;
+  pt_applicable?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -292,6 +296,36 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
   const [roleSuccessMessage, setRoleSuccessMessage] = useState("");
   const [roleErrorMessage, setRoleErrorMessage] = useState("");
 
+  // Statutory deduction toggle state
+  const [isSavingStatutory, setIsSavingStatutory] = useState(false);
+
+  // Tax breakdown state
+  const [taxBreakdown, setTaxBreakdown] = useState<any>(null);
+  const [isTaxBreakdownLoading, setIsTaxBreakdownLoading] = useState(false);
+
+  const handleStatutoryToggle = async (field: "tds_applicable" | "epf_applicable" | "esi_applicable" | "pt_applicable", value: boolean) => {
+    if (!employee) return;
+    setIsSavingStatutory(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(`${API_URL}${employee.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error("Failed to update statutory setting.");
+      const updated = (await res.json()) as Employee;
+      setEmployee(updated);
+    } catch (err) {
+      console.error("Statutory toggle error:", err);
+    } finally {
+      setIsSavingStatutory(false);
+    }
+  };
+
   // Hash change detection (for URL routing to #leave-entitlement)
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -418,6 +452,29 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
     setPhotoPreview(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [profilePhotoFile]);
+
+  useEffect(() => {
+    if (activeTab !== "compensation" || !employee || isMe) return;
+    const loadTaxBreakdown = async () => {
+      setIsTaxBreakdownLoading(true);
+      try {
+        const token = localStorage.getItem("authToken");
+        const now = new Date();
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/tax/calculator/employee-tax-breakdown/?employee_id=${employee.id}&month=${now.getMonth() + 1}&year=${now.getFullYear()}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+        );
+        if (res.ok) {
+          setTaxBreakdown(await res.json());
+        }
+      } catch (err) {
+        console.error("Tax breakdown fetch error:", err);
+      } finally {
+        setIsTaxBreakdownLoading(false);
+      }
+    };
+    loadTaxBreakdown();
+  }, [activeTab, employee, isMe]);
 
   const openShiftModal = () => {
     if (!employee) return;
@@ -1438,6 +1495,250 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
               </div>
             </div>
           </div>
+
+          {/* Statutory Deduction Toggles */}
+          {!isMe && (
+            <div className="profile-section-card mt-4">
+              <div className="section-header-row mb-3">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="icon-box-indigo">
+                    <IconShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <h5 className="mb-0 fw-bold">Statutory Deduction Settings</h5>
+                    <small className="text-muted">Enable or disable payroll deductions for this employee. Changes apply to next payroll generation.</small>
+                  </div>
+                </div>
+              </div>
+
+              <div className="row g-3">
+                {[
+                  { field: "tds_applicable" as const, label: "TDS (Income Tax)", desc: "Section 192 monthly TDS deduction based on annual income and tax regime", color: "primary" },
+                  { field: "epf_applicable" as const, label: "EPF (Provident Fund)", desc: "12% employee + 12% employer contribution on Basic+DA (ceiling ₹15,000)", color: "success" },
+                  { field: "esi_applicable" as const, label: "ESI (Insurance)", desc: "0.75% employee + 3.25% employer if gross ≤ ₹21,000/month", color: "info" },
+                  { field: "pt_applicable" as const, label: "Professional Tax", desc: "State-specific monthly professional tax based on gross salary slab", color: "warning" },
+                ].map((item) => (
+                  <div className="col-sm-6 col-xl-3" key={item.field}>
+                    <div className={`p-3 rounded-3 border bg-white h-100 shadow-xs ${employee[item.field] ? `border-${item.color}` : ""}`}>
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <span className="fw-semibold text-dark">{item.label}</span>
+                        <div className="form-check form-switch mb-0">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            checked={employee[item.field] || false}
+                            disabled={isSavingStatutory}
+                            onChange={(e) => handleStatutoryToggle(item.field, e.target.checked)}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-muted small" style={{ fontSize: "12px" }}>{item.desc}</div>
+                      <div className="mt-2">
+                        <span className={`badge ${employee[item.field] ? `bg-${item.color}-subtle text-${item.color} border border-${item.color}-subtle` : "bg-secondary-subtle text-secondary border border-secondary-subtle"}`}>
+                          {employee[item.field] ? "Enabled" : "Disabled"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tax Computation Summary */}
+          {!isMe && employee.annual_salary && (
+            <div className="profile-section-card mt-4">
+              <div className="section-header-row mb-3">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="icon-box-amber">
+                    <IconWallet size={20} />
+                  </div>
+                  <div>
+                    <h5 className="mb-0 fw-bold">Tax Computation Summary</h5>
+                    <small className="text-muted">Annual tax breakdown under the applicable regime — for transparency and employee reference</small>
+                  </div>
+                </div>
+              </div>
+
+              {isTaxBreakdownLoading ? (
+                <div className="text-center py-4"><Spinner animation="border" size="sm" /> Loading tax computation...</div>
+              ) : taxBreakdown ? (
+                <div>
+                  {/* Regime & FY Badge */}
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
+                      {taxBreakdown.regime === "NEW" ? "New Tax Regime" : "Old Tax Regime"} — FY {taxBreakdown.financial_year}
+                    </span>
+                  </div>
+
+                  <div className="row g-4">
+                    {/* Left: Income & Deductions */}
+                    <div className="col-lg-6">
+                      <table className="table table-sm table-bordered mb-0" style={{ fontSize: "13px" }}>
+                        <thead className="table-light">
+                          <tr><th colSpan={2} className="fw-bold text-dark">Income & Deductions</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Gross Annual Salary (CTC)</td>
+                            <td className="text-end fw-semibold">{formatCurrency(taxBreakdown.tax_computation.gross_salary)}</td>
+                          </tr>
+                          <tr>
+                            <td>
+                              Less: Standard Deduction
+                              <div className="text-muted mt-1" style={{ fontSize: "11px" }}>
+                                {taxBreakdown.tax_computation.standard_deduction_explanation}
+                              </div>
+                            </td>
+                            <td className="text-end text-danger">-{formatCurrency(taxBreakdown.tax_computation.standard_deduction)}</td>
+                          </tr>
+                          <tr className="table-light">
+                            <td className="fw-bold">Taxable Income</td>
+                            <td className="text-end fw-bold">{formatCurrency(taxBreakdown.tax_computation.taxable_income)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      {/* Slab Breakdown */}
+                      <table className="table table-sm table-bordered mt-3 mb-0" style={{ fontSize: "13px" }}>
+                        <thead className="table-light">
+                          <tr>
+                            <th>Income Slab</th>
+                            <th className="text-center">Rate</th>
+                            <th className="text-end">Tax</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {taxBreakdown.tax_computation.slab_breakdown?.map((slab: any, idx: number) => {
+                            const from = Number(slab.from);
+                            const to = slab.to === "Above" ? null : Number(slab.to);
+                            const fromLabel = from >= 100000 ? `₹${(from / 100000).toFixed(from % 100000 === 0 ? 0 : 1)}L` : `₹${from.toLocaleString("en-IN")}`;
+                            const toLabel = to === null ? "Above" : to >= 100000 ? `₹${(to / 100000).toFixed(to % 100000 === 0 ? 0 : 1)}L` : `₹${to.toLocaleString("en-IN")}`;
+                            const taxAmt = Number(slab.tax);
+                            return (
+                              <tr key={idx} className={taxAmt > 0 ? "" : "text-muted"}>
+                                <td>{fromLabel} – {toLabel}</td>
+                                <td className="text-center">{Number(slab.rate)}%</td>
+                                <td className="text-end">{taxAmt > 0 ? formatCurrency(slab.tax) : "₹0"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Right: Tax Calculation */}
+                    <div className="col-lg-6">
+                      <table className="table table-sm table-bordered mb-0" style={{ fontSize: "13px" }}>
+                        <thead className="table-light">
+                          <tr><th colSpan={2} className="fw-bold text-dark">Tax Calculation</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Tax on Slabs</td>
+                            <td className="text-end">{formatCurrency(taxBreakdown.tax_computation.base_tax)}</td>
+                          </tr>
+                          {Number(taxBreakdown.tax_computation.surcharge) > 0 && (
+                            <tr>
+                              <td>Surcharge</td>
+                              <td className="text-end">{formatCurrency(taxBreakdown.tax_computation.surcharge)}</td>
+                            </tr>
+                          )}
+                          {Number(taxBreakdown.tax_computation.rebate_87a) > 0 && (
+                            <tr className="table-success">
+                              <td>
+                                Less: Section 87A Rebate
+                                <div className="text-muted mt-1" style={{ fontSize: "11px" }}>
+                                  {taxBreakdown.tax_computation.rebate_87a_explanation}
+                                </div>
+                              </td>
+                              <td className="text-end text-success fw-semibold">-{formatCurrency(taxBreakdown.tax_computation.rebate_87a)}</td>
+                            </tr>
+                          )}
+                          <tr>
+                            <td>
+                              Health & Education Cess
+                              <div className="text-muted" style={{ fontSize: "11px" }}>{taxBreakdown.tax_computation.cess_explanation}</div>
+                            </td>
+                            <td className="text-end">{formatCurrency(taxBreakdown.tax_computation.cess)}</td>
+                          </tr>
+                          <tr className="table-warning">
+                            <td className="fw-bold">Total Annual Tax</td>
+                            <td className="text-end fw-bold">{formatCurrency(taxBreakdown.tax_computation.total_annual_tax)}</td>
+                          </tr>
+                          <tr className="table-primary">
+                            <td className="fw-bold">
+                              Monthly TDS (Section 192)
+                              <div className="text-muted mt-1" style={{ fontSize: "11px" }}>
+                                {taxBreakdown.tax_computation.tds_explanation}
+                              </div>
+                            </td>
+                            <td className="text-end fw-bold text-primary" style={{ fontSize: "15px" }}>
+                              {formatCurrency(taxBreakdown.tax_computation.monthly_tds)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      {/* EPF/ESI/PT Summary */}
+                      {(taxBreakdown.epf || taxBreakdown.professional_tax || taxBreakdown.esi) && (
+                        <table className="table table-sm table-bordered mt-3 mb-0" style={{ fontSize: "13px" }}>
+                          <thead className="table-light">
+                            <tr><th colSpan={2} className="fw-bold text-dark">Other Statutory Deductions (Monthly)</th></tr>
+                          </thead>
+                          <tbody>
+                            {taxBreakdown.epf && (
+                              <>
+                                <tr>
+                                  <td>
+                                    EPF (Employee {taxBreakdown.epf.employee_rate}%)
+                                    <div className="text-muted" style={{ fontSize: "11px" }}>
+                                      {taxBreakdown.epf.employee_rate}% of min(Basic+DA ₹{Number(taxBreakdown.epf.basic_plus_da).toLocaleString("en-IN")}, Ceiling ₹{Number(taxBreakdown.epf.wage_ceiling).toLocaleString("en-IN")})
+                                    </div>
+                                  </td>
+                                  <td className="text-end">{formatCurrency(taxBreakdown.epf.employee_contribution)}</td>
+                                </tr>
+                                <tr className="text-muted">
+                                  <td>EPF (Employer {taxBreakdown.epf.employer_rate}%)</td>
+                                  <td className="text-end">{formatCurrency(taxBreakdown.epf.employer_contribution)}</td>
+                                </tr>
+                              </>
+                            )}
+                            {taxBreakdown.professional_tax && (
+                              <tr>
+                                <td>
+                                  Professional Tax ({taxBreakdown.professional_tax.state})
+                                  <div className="text-muted" style={{ fontSize: "11px" }}>
+                                    Based on monthly gross ₹{Number(taxBreakdown.professional_tax.monthly_gross).toLocaleString("en-IN")} slab
+                                  </div>
+                                </td>
+                                <td className="text-end">{formatCurrency(taxBreakdown.professional_tax.monthly_tax)}</td>
+                              </tr>
+                            )}
+                            {taxBreakdown.esi && taxBreakdown.esi.applicable && (
+                              <>
+                                <tr>
+                                  <td>ESI (Employee {taxBreakdown.esi.employee_rate}%)</td>
+                                  <td className="text-end">{formatCurrency(taxBreakdown.esi.employee_contribution)}</td>
+                                </tr>
+                                <tr className="text-muted">
+                                  <td>ESI (Employer {taxBreakdown.esi.employer_rate}%)</td>
+                                  <td className="text-end">{formatCurrency(taxBreakdown.esi.employer_contribution)}</td>
+                                </tr>
+                              </>
+                            )}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted text-center py-3">Tax breakdown unavailable. Ensure the employee has a salary set.</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

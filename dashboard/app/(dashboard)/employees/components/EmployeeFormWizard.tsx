@@ -44,6 +44,10 @@ export type EmployeeFormData = {
   customIncrementType?: string;
   customIncrementValue?: string;
   incrementStatus?: string;
+  tdsApplicable?: boolean;
+  epfApplicable?: boolean;
+  esiApplicable?: boolean;
+  ptApplicable?: boolean;
 };
 
 export type EmployeeFormErrors = Partial<Record<keyof EmployeeFormData, string>>;
@@ -80,6 +84,10 @@ export const initialEmployeeFormData: EmployeeFormData = {
   customIncrementType: "PERCENTAGE",
   customIncrementValue: "10",
   incrementStatus: "ENABLED",
+  tdsApplicable: false,
+  epfApplicable: false,
+  esiApplicable: false,
+  ptApplicable: false,
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
@@ -246,6 +254,10 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
       custom_increment_type: safeTrim(formData.customIncrementType),
       custom_increment_value: safeTrim(formData.customIncrementValue),
       increment_status: safeTrim(formData.incrementStatus || "ENABLED"),
+      tds_applicable: String(Boolean(formData.tdsApplicable)),
+      epf_applicable: String(Boolean(formData.epfApplicable)),
+      esi_applicable: String(Boolean(formData.esiApplicable)),
+      pt_applicable: String(Boolean(formData.ptApplicable)),
     };
 
     Object.entries(fields).forEach(([key, value]) => {

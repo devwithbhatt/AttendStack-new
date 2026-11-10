@@ -22,6 +22,7 @@ import {
   IconCreditCard,
   IconShieldLock,
   IconDeviceDesktop,
+  IconReceiptTax,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -107,6 +108,15 @@ export const DashboardMenu: MenuItemType[] = [
     featureKey: "allows_payroll_reports",
     requiresPro: true,
     icon: <IconCoin size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Tax & Compliance",
+    link: "/tax-compliance",
+    moduleKey: "payroll",
+    featureKey: "allows_payroll_reports",
+    requiresPro: true,
+    icon: <IconReceiptTax size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

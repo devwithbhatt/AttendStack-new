@@ -106,10 +106,28 @@ class PayrollViewSet(viewsets.ModelViewSet):
             allowances = existing.allowances if existing else 0
             payroll_values = calculate_attendance_payroll(emp, month, year, allowances=allowances)
 
+            # Compute statutory deductions (TDS, EPF, ESI, PT) via the tax engine.
+            # Falls back to zeros if no CompanyTaxConfig or SalaryStructure exists.
+            from tax.tax_engine import compute_all_statutory_deductions, get_financial_year
+            from tax.models import MonthlyTDS as MonthlyTDSModel
+
+            stat = compute_all_statutory_deductions(emp, month, year)
+            statutory_fields = {
+                "tds": stat.tds,
+                "epf_employee": stat.epf_employee,
+                "epf_employer": stat.epf_employer,
+                "esi_employee": stat.esi_employee,
+                "esi_employer": stat.esi_employer,
+                "professional_tax": stat.professional_tax,
+                "total_statutory_deduction": stat.total_employee_deduction,
+            }
+
             if existing:
                 existing.basic_salary = payroll_values["basic_salary"]
                 existing.deductions = payroll_values["deductions"]
                 existing.deduction_details = payroll_values["deduction_details"]
+                for field_name, value in statutory_fields.items():
+                    setattr(existing, field_name, value)
                 existing.save()
                 updated_count += 1
             else:
@@ -121,9 +139,31 @@ class PayrollViewSet(viewsets.ModelViewSet):
                     allowances=payroll_values["allowances"],
                     deductions=payroll_values["deductions"],
                     deduction_details=payroll_values["deduction_details"],
-                    status=PayrollStatus.PENDING
+                    status=PayrollStatus.PENDING,
+                    **statutory_fields,
                 )
                 generated_count += 1
+
+            # Persist the MonthlyTDS record for compliance tracking
+            if stat.tds > 0 or stat.epf_employee > 0 or stat.professional_tax > 0:
+                fy = get_financial_year(month, year)
+                MonthlyTDSModel.objects.update_or_create(
+                    employee=emp, month=month, year=year,
+                    defaults={
+                        "financial_year": fy,
+                        "tax_regime": stat.cumulative_tds and "NEW" or "NEW",
+                        "estimated_annual_income": stat.estimated_annual_income,
+                        "estimated_annual_tax": stat.estimated_annual_tax,
+                        "cumulative_tds": stat.cumulative_tds,
+                        "tds_this_month": stat.tds,
+                        "epf_employee": stat.epf_employee,
+                        "epf_employer": stat.epf_employer,
+                        "esi_employee": stat.esi_employee,
+                        "esi_employer": stat.esi_employer,
+                        "professional_tax": stat.professional_tax,
+                        "total_statutory_deduction": stat.total_employee_deduction,
+                    },
+                )
 
         return Response({
             "detail": "Payroll generation completed successfully.",

@@ -145,6 +145,12 @@ class Employee(models.Model):
     )
 
     annual_salary = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
+    tds_applicable = models.BooleanField(default=False, help_text="Enable TDS (Income Tax) deduction for this employee.")
+    epf_applicable = models.BooleanField(default=False, help_text="Enable EPF deduction for this employee.")
+    esi_applicable = models.BooleanField(default=False, help_text="Enable ESI deduction for this employee.")
+    pt_applicable = models.BooleanField(default=False, help_text="Enable Professional Tax deduction for this employee.")
+
     casual_leave_days_override = models.DecimalField(
         max_digits=5, decimal_places=1, blank=True, null=True,
         validators=[MinValueValidator(0), MaxValueValidator(365)],

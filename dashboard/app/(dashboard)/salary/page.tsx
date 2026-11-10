@@ -593,6 +593,7 @@ const SalaryPage = () => {
                     <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
+                    <th>Statutory</th>
                     <th>Net Payout</th>
                     <th>Status</th>
                     <th className="text-end">Actions</th>
@@ -601,7 +602,7 @@ const SalaryPage = () => {
                 <tbody>
                   {payrolls.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-5 text-secondary">
+                      <td colSpan={8} className="text-center py-5 text-secondary">
                         No payroll records found for the selected filters.
                       </td>
                     </tr>
@@ -643,6 +644,29 @@ const SalaryPage = () => {
                             >
                               <IconInfoCircle size={16} />
                             </Button>
+                          </td>
+                          <td>
+                            {Number(p.total_statutory_deduction || 0) > 0 ? (
+                              <div>
+                                <span className="text-danger">-{formatCurrency(p.total_statutory_deduction)}</span>
+                                <div className="d-flex flex-column mt-1">
+                                  {Number(p.tds || 0) > 0 && (
+                                    <small className="text-muted">TDS: {formatCurrency(p.tds)}</small>
+                                  )}
+                                  {Number(p.epf_employee || 0) > 0 && (
+                                    <small className="text-muted">EPF: {formatCurrency(p.epf_employee)}</small>
+                                  )}
+                                  {Number(p.professional_tax || 0) > 0 && (
+                                    <small className="text-muted">PT: {formatCurrency(p.professional_tax)}</small>
+                                  )}
+                                  {Number(p.esi_employee || 0) > 0 && (
+                                    <small className="text-muted">ESI: {formatCurrency(p.esi_employee)}</small>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
                           </td>
                           <td>
                             <div className="fw-bold text-success">{formatCurrency(netSalary)}</div>
@@ -1120,6 +1144,8 @@ const SalaryPage = () => {
                 </strong>
                 .
               </p>
+
+              <h6 className="fw-bold mt-3 mb-2">Attendance Deductions</h6>
               <Table striped bordered hover>
                 <thead>
                   <tr>
@@ -1138,18 +1164,85 @@ const SalaryPage = () => {
                   ) : (
                     <tr>
                       <td colSpan={2} className="text-center text-muted">
-                        No deduction details available.
+                        No attendance deductions.
                       </td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot className="table-light">
                   <tr>
-                    <td className="fw-bold">Total Deductions</td>
+                    <td className="fw-bold">Attendance Subtotal</td>
                     <td className="text-end fw-bold">{formatCurrency(deductionData.deductions)}</td>
                   </tr>
                 </tfoot>
               </Table>
+
+              {Number(deductionData.total_statutory_deduction || 0) > 0 && (
+                <>
+                  <h6 className="fw-bold mt-4 mb-2">Statutory Deductions</h6>
+                  <Table striped bordered hover>
+                    <thead>
+                      <tr>
+                        <th>Component</th>
+                        <th className="text-end">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Number(deductionData.tds || 0) > 0 && (
+                        <tr>
+                          <td>TDS (Income Tax)</td>
+                          <td className="text-end">{formatCurrency(deductionData.tds)}</td>
+                        </tr>
+                      )}
+                      {Number(deductionData.epf_employee || 0) > 0 && (
+                        <tr>
+                          <td>EPF (Employee Contribution)</td>
+                          <td className="text-end">{formatCurrency(deductionData.epf_employee)}</td>
+                        </tr>
+                      )}
+                      {Number(deductionData.esi_employee || 0) > 0 && (
+                        <tr>
+                          <td>ESI (Employee Contribution)</td>
+                          <td className="text-end">{formatCurrency(deductionData.esi_employee)}</td>
+                        </tr>
+                      )}
+                      {Number(deductionData.professional_tax || 0) > 0 && (
+                        <tr>
+                          <td>Professional Tax</td>
+                          <td className="text-end">{formatCurrency(deductionData.professional_tax)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot className="table-light">
+                      <tr>
+                        <td className="fw-bold">Statutory Subtotal</td>
+                        <td className="text-end fw-bold">{formatCurrency(deductionData.total_statutory_deduction)}</td>
+                      </tr>
+                    </tfoot>
+                  </Table>
+
+                  {(Number(deductionData.epf_employer || 0) > 0 || Number(deductionData.esi_employer || 0) > 0) && (
+                    <div className="bg-light rounded p-3 mt-2">
+                      <small className="fw-bold text-muted d-block mb-1">Employer Contributions (not deducted from salary)</small>
+                      {Number(deductionData.epf_employer || 0) > 0 && (
+                        <small className="text-muted d-block">EPF Employer: {formatCurrency(deductionData.epf_employer)}</small>
+                      )}
+                      {Number(deductionData.esi_employer || 0) > 0 && (
+                        <small className="text-muted d-block">ESI Employer: {formatCurrency(deductionData.esi_employer)}</small>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="mt-3 p-3 bg-primary bg-opacity-10 rounded">
+                <div className="d-flex justify-content-between">
+                  <span className="fw-bold">Total All Deductions</span>
+                  <span className="fw-bold text-danger">
+                    {formatCurrency(Number(deductionData.deductions || 0) + Number(deductionData.total_statutory_deduction || 0))}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </Modal.Body>

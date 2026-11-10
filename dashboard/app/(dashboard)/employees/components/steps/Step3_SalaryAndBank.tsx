@@ -51,6 +51,41 @@ const Step3_SalaryAndBank = ({ data, errors, onChange }: StepProps) => {
         <div className="col-12 mt-4">
           <div className="card border bg-light-subtle">
             <div className="card-body">
+              <h6 className="fw-bold mb-3">Statutory Deduction Settings</h6>
+              <p className="text-muted small mb-3">Enable deductions that should apply to this employee's payroll. These can also be changed later from the employee profile.</p>
+              <div className="row g-3">
+                {[
+                  { field: "tdsApplicable" as const, label: "TDS (Income Tax)", desc: "Monthly TDS under Section 192" },
+                  { field: "epfApplicable" as const, label: "EPF (Provident Fund)", desc: "12% employee + 12% employer" },
+                  { field: "esiApplicable" as const, label: "ESI (Insurance)", desc: "0.75% employee + 3.25% employer" },
+                  { field: "ptApplicable" as const, label: "Professional Tax", desc: "State-specific monthly tax" },
+                ].map((item) => (
+                  <div className="col-sm-6 col-xl-3" key={item.field}>
+                    <div className="d-flex align-items-center justify-content-between p-2 rounded border bg-white">
+                      <div>
+                        <div className="fw-semibold small">{item.label}</div>
+                        <div className="text-muted" style={{ fontSize: "11px" }}>{item.desc}</div>
+                      </div>
+                      <div className="form-check form-switch mb-0 ms-2">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          checked={data[item.field] || false}
+                          onChange={(e) => onChange(item.field, e.target.checked)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 mt-4">
+          <div className="card border bg-light-subtle">
+            <div className="card-body">
               <div className="d-flex align-items-center justify-content-between mb-3">
                 <h6 className="fw-bold mb-0">Salary Increment Policy Settings</h6>
                 <div className="form-check form-switch">

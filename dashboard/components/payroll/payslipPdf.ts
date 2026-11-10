@@ -174,6 +174,48 @@ export const downloadPayslipPdf = async (payroll: any, options: PdfOptions = {})
   const paidDays = Math.max(0, daysInMonth - unpaidDays);
   const deductionRows = Object.entries(payroll.deduction_details || {});
 
+  // Statutory deductions from payroll record
+  const tds = Number(payroll.tds || 0);
+  const epfEmployee = Number(payroll.epf_employee || 0);
+  const epfEmployer = Number(payroll.epf_employer || 0);
+  const esiEmployee = Number(payroll.esi_employee || 0);
+  const esiEmployer = Number(payroll.esi_employer || 0);
+  const professionalTax = Number(payroll.professional_tax || 0);
+  const totalStatutory = Number(payroll.total_statutory_deduction || 0);
+  const annualSalary = Number(employee.annual_salary || 0);
+  const hasStatutory = totalStatutory > 0 || annualSalary > 0;
+
+  // Tax computation from annual salary (New Regime FY 2026-27)
+  const stdDeduction = Math.min(75000, annualSalary);
+  const taxableIncome = Math.max(0, annualSalary - stdDeduction);
+  const taxSlabs = [
+    { from: 0, to: 400000, rate: 0, label: "0 - 4L" },
+    { from: 400000, to: 800000, rate: 5, label: "4L - 8L" },
+    { from: 800000, to: 1200000, rate: 10, label: "8L - 12L" },
+    { from: 1200000, to: 1600000, rate: 15, label: "12L - 16L" },
+    { from: 1600000, to: 2000000, rate: 20, label: "16L - 20L" },
+    { from: 2000000, to: 2400000, rate: 25, label: "20L - 24L" },
+    { from: 2400000, to: Infinity, rate: 30, label: "Above 24L" },
+  ];
+  let baseTax = 0;
+  const slabDetails: { label: string; rate: string; amount: number }[] = [];
+  for (const s of taxSlabs) {
+    if (taxableIncome <= s.from) {
+      slabDetails.push({ label: s.label, rate: `${s.rate}%`, amount: 0 });
+      continue;
+    }
+    const upper = s.to === Infinity ? taxableIncome : s.to;
+    const taxableInSlab = Math.min(taxableIncome, upper) - s.from;
+    const taxInSlab = Math.max(0, taxableInSlab) * s.rate / 100;
+    baseTax += taxInSlab;
+    slabDetails.push({ label: s.label, rate: `${s.rate}%`, amount: Math.round(taxInSlab * 100) / 100 });
+  }
+  baseTax = Math.round(baseTax * 100) / 100;
+  const rebate87a = (taxableIncome <= 1200000) ? Math.min(baseTax, 60000) : 0;
+  const taxAfterRebate = Math.max(0, baseTax - rebate87a);
+  const cess = Math.round(taxAfterRebate * 4) / 100;
+  const totalAnnualTax = Math.round((taxAfterRebate + cess) * 100) / 100;
+
   const setTextColor = (color: [number, number, number]) => doc.setTextColor(...color);
   const setDrawColor = (color: [number, number, number]) => doc.setDrawColor(...color);
   const setFillColor = (color: [number, number, number]) => doc.setFillColor(...color);
@@ -406,9 +448,189 @@ export const downloadPayslipPdf = async (payroll: any, options: PdfOptions = {})
   doc.text("Total Deductions", margin + leadColW + leadAmtW + 3, totalY + 4.5);
   doc.text(formatCurrencyPdf(totalDeductions), right - 3, totalY + 4.5, { align: "right" });
 
+  // ─── 4B. STATUTORY DEDUCTIONS & TAX COMPUTATION ───
+  const statSectionTop = totalY + 4;
+  const halfW = contentWidth / 2;
+  const statRowH = 4.8;
+
+  if (hasStatutory) {
+    // Section header bar
+    setFillColor([241, 245, 249]);
+    setDrawColor(COLORS.border);
+    doc.rect(margin, statSectionTop, contentWidth, 6, "FD");
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text("STATUTORY DEDUCTIONS & TAX COMPUTATION", pageWidth / 2, statSectionTop + 4.2, { align: "center" });
+
+    const bodyTop = statSectionTop + 7;
+
+    // ── LEFT: Statutory Deductions ──
+    const leftX = margin;
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("Monthly Statutory Deductions", leftX + 2, bodyTop + 3);
+    setDrawColor(COLORS.borderLight);
+    doc.line(leftX, bodyTop + 4.5, leftX + halfW - 2, bodyTop + 4.5);
+
+    const statItems2: [string, string][] = [
+      ["TDS (Income Tax)", formatCurrencyPdf(tds)],
+      ["EPF (Employee 12%)", formatCurrencyPdf(epfEmployee)],
+      ["ESI (Employee 0.75%)", formatCurrencyPdf(esiEmployee)],
+      ["Professional Tax", formatCurrencyPdf(professionalTax)],
+    ];
+
+    let sy = bodyTop + 7;
+    doc.setFontSize(6.8);
+    statItems2.forEach(([label, val]) => {
+      setTextColor(COLORS.slate);
+      doc.setFont("helvetica", "normal");
+      doc.text(label, leftX + 3, sy);
+      setTextColor(COLORS.navy);
+      doc.text(val, leftX + halfW - 5, sy, { align: "right" });
+      sy += statRowH;
+    });
+
+    // Total statutory line
+    setDrawColor(COLORS.border);
+    doc.line(leftX + 2, sy - 1, leftX + halfW - 4, sy - 1);
+    sy += 1.5;
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("Total Employee Statutory", leftX + 3, sy);
+    doc.text(formatCurrencyPdf(totalStatutory), leftX + halfW - 5, sy, { align: "right" });
+    sy += statRowH + 1;
+
+    // Employer contributions
+    setTextColor(COLORS.muted);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.5);
+    doc.text("Employer Contributions (not deducted from salary):", leftX + 3, sy);
+    sy += statRowH;
+    doc.setFont("helvetica", "normal");
+    doc.text(`EPF Employer: ${formatCurrencyPdf(epfEmployer)}`, leftX + 3, sy);
+    doc.text(`ESI Employer: ${formatCurrencyPdf(esiEmployer)}`, leftX + 50, sy);
+
+    // ── RIGHT: Tax Computation ──
+    const rightX = margin + halfW + 2;
+    const rightColEnd = right;
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("Annual Tax Computation (New Regime)", rightX + 2, bodyTop + 3);
+    setDrawColor(COLORS.borderLight);
+    doc.line(rightX, bodyTop + 4.5, rightColEnd, bodyTop + 4.5);
+
+    let ty = bodyTop + 7;
+    doc.setFontSize(6.8);
+
+    // Gross salary
+    setTextColor(COLORS.slate);
+    doc.setFont("helvetica", "normal");
+    doc.text("Gross Annual Salary", rightX + 2, ty);
+    setTextColor(COLORS.navy);
+    doc.text(formatCurrencyPdf(annualSalary), rightColEnd - 2, ty, { align: "right" });
+    ty += statRowH;
+
+    // Standard deduction
+    setTextColor(COLORS.slate);
+    doc.text("Less: Standard Deduction (Sec 16(ia))", rightX + 2, ty);
+    setTextColor(COLORS.navy);
+    doc.text(`- ${formatCurrencyPdf(stdDeduction)}`, rightColEnd - 2, ty, { align: "right" });
+    ty += statRowH;
+
+    // Taxable income
+    setDrawColor(COLORS.borderLight);
+    doc.line(rightX + 2, ty - 1, rightColEnd - 2, ty - 1);
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.text("Taxable Income", rightX + 2, ty + 1);
+    doc.text(formatCurrencyPdf(taxableIncome), rightColEnd - 2, ty + 1, { align: "right" });
+    ty += statRowH + 1;
+
+    // Slab breakdown (compact)
+    setTextColor(COLORS.muted);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.2);
+    doc.text("Tax Slab Rates:", rightX + 2, ty);
+    ty += 3.5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6);
+    for (const s of slabDetails) {
+      if (s.amount > 0) {
+        setTextColor(COLORS.slate);
+        doc.text(`${s.label} @ ${s.rate}`, rightX + 4, ty);
+        setTextColor(COLORS.navy);
+        doc.text(formatCurrencyPdf(s.amount), rightColEnd - 2, ty, { align: "right" });
+        ty += 3.2;
+      }
+    }
+
+    // Base tax
+    doc.setFontSize(6.8);
+    setDrawColor(COLORS.borderLight);
+    doc.line(rightX + 2, ty, rightColEnd - 2, ty);
+    ty += 2;
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.text("Tax on Slabs", rightX + 2, ty);
+    doc.text(formatCurrencyPdf(baseTax), rightColEnd - 2, ty, { align: "right" });
+    ty += statRowH;
+
+    // Rebate
+    if (rebate87a > 0) {
+      setTextColor(COLORS.green);
+      doc.setFont("helvetica", "normal");
+      doc.text("Less: Section 87A Rebate", rightX + 2, ty);
+      doc.text(`- ${formatCurrencyPdf(rebate87a)}`, rightColEnd - 2, ty, { align: "right" });
+      ty += statRowH;
+    } else if (taxableIncome > 1200000) {
+      setTextColor(COLORS.muted);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(6);
+      doc.text("87A Rebate: Not applicable (taxable > 12L)", rightX + 2, ty);
+      doc.setFontSize(6.8);
+      ty += statRowH;
+    }
+
+    // Cess
+    setTextColor(COLORS.slate);
+    doc.setFont("helvetica", "normal");
+    doc.text("Health & Education Cess (4%)", rightX + 2, ty);
+    setTextColor(COLORS.navy);
+    doc.text(formatCurrencyPdf(cess), rightColEnd - 2, ty, { align: "right" });
+    ty += statRowH;
+
+    // Total annual tax
+    setDrawColor(COLORS.border);
+    doc.line(rightX + 2, ty - 1, rightColEnd - 2, ty - 1);
+    ty += 1;
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("Total Annual Tax", rightX + 2, ty);
+    doc.text(formatCurrencyPdf(totalAnnualTax), rightColEnd - 2, ty, { align: "right" });
+    ty += statRowH + 1;
+
+    // Monthly TDS
+    setTextColor(COLORS.slate);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.text("Monthly TDS (Sec 192)", rightX + 2, ty);
+    setTextColor(COLORS.navy);
+    doc.setFont("helvetica", "bold");
+    doc.text(formatCurrencyPdf(tds), rightColEnd - 2, ty, { align: "right" });
+  }
+
+  // Dynamic height of section 4B
+  const statSectionH = hasStatutory ? 72 : 0;
+
   // ─── 5. NET SALARY SUMMARY BOX ───
-  const netBoxTop = totalY + 9;
-  const netBoxH = 22;
+  const netBoxTop = totalY + 4 + statSectionH + 4;
+  const netBoxH = 26;
   setFillColor(COLORS.labelBg);
   setDrawColor(COLORS.border);
   doc.rect(margin, netBoxTop, contentWidth, netBoxH, "FD");
@@ -428,27 +650,30 @@ export const downloadPayslipPdf = async (payroll: any, options: PdfOptions = {})
   setTextColor(COLORS.charcoal);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.8);
-  doc.text(`In Words: ${numberToIndianWords(netPay)}`, margin + 4, netBoxTop + 18);
+  doc.text(`In Words: ${numberToIndianWords(netPay)}`, margin + 4, netBoxTop + 20);
 
-  // Right Breakdown
-  const rightCalcX = right - 60;
+  // Right Breakdown (now with statutory line)
+  const rightCalcX = right - 65;
   setTextColor(COLORS.slate);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.8);
   doc.text("Gross Earnings:", rightCalcX, netBoxTop + 5);
   doc.text(formatCurrencyPdf(grossEarnings), right - 4, netBoxTop + 5, { align: "right" });
 
-  doc.text("Total Deductions:", rightCalcX, netBoxTop + 9.5);
-  doc.text(`- ${formatCurrencyPdf(totalDeductions)}`, right - 4, netBoxTop + 9.5, { align: "right" });
+  doc.text("Attendance Deductions:", rightCalcX, netBoxTop + 9);
+  doc.text(`- ${formatCurrencyPdf(totalDeductions)}`, right - 4, netBoxTop + 9, { align: "right" });
+
+  doc.text("Statutory Deductions:", rightCalcX, netBoxTop + 13);
+  doc.text(`- ${formatCurrencyPdf(totalStatutory)}`, right - 4, netBoxTop + 13, { align: "right" });
 
   setDrawColor(COLORS.border);
-  doc.line(rightCalcX, netBoxTop + 11.5, right - 4, netBoxTop + 11.5);
+  doc.line(rightCalcX, netBoxTop + 15, right - 4, netBoxTop + 15);
 
   setTextColor(COLORS.green);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.text("Net Payable:", rightCalcX, netBoxTop + 16);
-  doc.text(formatCurrencyPdf(netPay), right - 4, netBoxTop + 16, { align: "right" });
+  doc.text("Net Payable:", rightCalcX, netBoxTop + 19.5);
+  doc.text(formatCurrencyPdf(netPay), right - 4, netBoxTop + 19.5, { align: "right" });
 
   // ─── 6. FORMAL SIGNATURES BLOCK ───
   const sigTop = netBoxTop + netBoxH + 18;

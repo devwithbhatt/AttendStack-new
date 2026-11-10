@@ -24,6 +24,9 @@ const getRouteModuleInfo = (pathname: string): { moduleKey: string | null; title
   if (pathname.startsWith("/salary")) {
     return { moduleKey: "salary_area", title: "Salary & Increments" };
   }
+  if (pathname.startsWith("/tax-compliance")) {
+    return { moduleKey: "payroll", title: "Tax & Compliance" };
+  }
   if (pathname.startsWith("/employees")) {
     return { moduleKey: "employees", title: "Employees Directory" };
   }

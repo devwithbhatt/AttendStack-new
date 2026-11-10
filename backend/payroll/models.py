@@ -18,6 +18,16 @@ class Payroll(models.Model):
     allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     deduction_details = models.JSONField(default=dict, blank=True, null=True)
+
+    # Statutory deductions (populated by the tax engine during generation)
+    tds = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Income Tax (TDS) deducted")
+    epf_employee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Employee PF contribution")
+    epf_employer = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Employer PF contribution")
+    esi_employee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Employee ESI contribution")
+    esi_employer = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Employer ESI contribution")
+    professional_tax = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_statutory_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="TDS + EPF emp + ESI emp + PT")
+
     net_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     status = models.CharField(
         max_length=20,
@@ -52,8 +62,9 @@ class Payroll(models.Model):
         self.allowances = Decimal(str(self.allowances or 0))
         self.deductions = Decimal(str(self.deductions or 0))
         
-        # Calculate net salary
-        self.net_salary = self.basic_salary + self.allowances - self.deductions
+        self.total_statutory_deduction = Decimal(str(self.total_statutory_deduction or 0))
+        # Calculate net salary (basic + allowances - attendance deductions - statutory deductions)
+        self.net_salary = self.basic_salary + self.allowances - self.deductions - self.total_statutory_deduction
         if self.status == PayrollStatus.PAID and not self.paid_on:
             self.paid_on = timezone.now()
         super().save(*args, **kwargs)
