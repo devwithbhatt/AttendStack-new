@@ -46,7 +46,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Conversation.objects.filter(
             members__user=self.request.user
-        ).distinct().order_by('-updated_at')
+        ).distinct().prefetch_related(
+            'members__user',
+        ).order_by('-updated_at')
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
@@ -322,17 +324,31 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='messages')
     def get_messages(self, request, pk=None):
         conversation = self.get_object()
-        messages = conversation.messages.filter(is_deleted=False).order_by('-created_at')
+        messages = conversation.messages.filter(
+            is_deleted=False
+        ).select_related(
+            'sender', 'reply_to', 'reply_to__sender', 'pinned_by'
+        ).prefetch_related(
+            'attachments', 'reactions__user', 'acknowledged_by'
+        ).order_by('-created_at')
+
+        conv_members = list(
+            ConversationMember.objects.filter(
+                conversation=conversation,
+                last_read_message__isnull=False,
+            ).select_related('last_read_message', 'user')
+        )
+        ctx = {'request': request, 'conv_members': conv_members}
 
         paginator = MessagePagination()
         page = paginator.paginate_queryset(messages, request)
         if page is not None:
-            serializer = MessageSerializer(page, many=True, context={'request': request})
+            serializer = MessageSerializer(page, many=True, context=ctx)
             response = paginator.get_paginated_response(serializer.data)
             response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             return response
 
-        serializer = MessageSerializer(messages, many=True, context={'request': request})
+        serializer = MessageSerializer(messages, many=True, context=ctx)
         response = Response(serializer.data)
         response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response

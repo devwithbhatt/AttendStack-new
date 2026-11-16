@@ -24,6 +24,22 @@ class UserMinimalSerializer(serializers.ModelSerializer):
             'is_online', 'chat_last_seen_at',
         ]
 
+    def _get_employee(self, obj):
+        if not hasattr(obj, '_cached_employee'):
+            from employees.models import Employee
+            obj._cached_employee = Employee.objects.filter(email=obj.email).first()
+        return obj._cached_employee
+
+    def _get_sys_settings(self, obj):
+        if not hasattr(obj, '_cached_sys_settings'):
+            try:
+                from settings.models import SystemSettings
+                from organizations.services import get_organization_for_user
+                obj._cached_sys_settings = SystemSettings.get_settings(get_organization_for_user(obj))
+            except Exception:
+                obj._cached_sys_settings = None
+        return obj._cached_sys_settings
+
     def get_is_online(self, obj):
         from django.utils import timezone as tz
         last_seen = getattr(obj, 'chat_last_seen_at', None)
@@ -39,8 +55,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         if not obj.is_active:
             return "INACTIVE"
         try:
-            from employees.models import Employee
-            emp = Employee.objects.filter(email=obj.email).first()
+            emp = self._get_employee(obj)
             if emp:
                 return emp.status
         except Exception:
@@ -49,8 +64,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
     def get_designation(self, obj):
         try:
-            from employees.models import Employee
-            emp = Employee.objects.filter(email=obj.email).first()
+            emp = self._get_employee(obj)
             if emp and emp.designation and emp.designation.strip():
                 return emp.designation.strip()
             if emp and emp.department and emp.department.strip():
@@ -68,8 +82,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
     def get_department(self, obj):
         try:
-            from employees.models import Employee
-            emp = Employee.objects.filter(email=obj.email).first()
+            emp = self._get_employee(obj)
             if emp and emp.department:
                 return emp.department
         except Exception:
@@ -79,9 +92,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
     def get_company_logo(self, obj):
         request = self.context.get('request')
         try:
-            from settings.models import SystemSettings
-            from organizations.services import get_organization_for_user
-            sys_settings = SystemSettings.get_settings(get_organization_for_user(obj))
+            sys_settings = self._get_sys_settings(obj)
             if sys_settings and sys_settings.company_logo:
                 return request.build_absolute_uri(sys_settings.company_logo.url) if request else sys_settings.company_logo.url
         except Exception:
@@ -92,8 +103,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         # 1. Check employee profile_photo (primary source)
         try:
-            from employees.models import Employee
-            emp = Employee.objects.filter(email=obj.email).first()
+            emp = self._get_employee(obj)
             if emp and emp.profile_photo:
                 if request:
                     return request.build_absolute_uri(emp.profile_photo.url)
@@ -111,9 +121,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         # 3. Fall back to company logo for Admins
         if getattr(obj, 'role', '') in ['SUPER_ADMIN', 'ADMIN']:
             try:
-                from settings.models import SystemSettings
-                from organizations.services import get_organization_for_user
-                sys_settings = SystemSettings.get_settings(get_organization_for_user(obj))
+                sys_settings = self._get_sys_settings(obj)
                 if sys_settings and sys_settings.company_logo:
                     return request.build_absolute_uri(sys_settings.company_logo.url) if request else sys_settings.company_logo.url
             except Exception:
@@ -184,12 +192,16 @@ class MessageSerializer(serializers.ModelSerializer):
         return None
 
     def get_read_by(self, obj):
-        members = ConversationMember.objects.filter(
-            conversation_id=obj.conversation_id,
-            last_read_message__isnull=False,
-        ).select_related('last_read_message', 'user').exclude(
-            user_id=obj.sender_id
-        )
+        conv_members = self.context.get('conv_members')
+        if conv_members is not None:
+            members = [m for m in conv_members if m.user_id != obj.sender_id]
+        else:
+            members = ConversationMember.objects.filter(
+                conversation_id=obj.conversation_id,
+                last_read_message__isnull=False,
+            ).select_related('last_read_message', 'user').exclude(
+                user_id=obj.sender_id
+            )
         readers = []
         for m in members:
             if m.last_read_message and m.last_read_message.created_at >= obj.created_at:

@@ -1363,6 +1363,7 @@ function ChatPageContent() {
   const {
     data: messagesData,
     isLoading: loadingMessages,
+    isError: messagesError,
     refetch: refetchMessages,
   } = useQuery({
     queryKey: ["messages", activeConversationId],
@@ -3935,6 +3936,16 @@ function ChatPageContent() {
                     <div className="chat-empty-state">
                       <Spinner animation="border" variant="primary" />
                       <p className="mt-2">Loading messages...</p>
+                    </div>
+                  ) : messagesError ? (
+                    <div className="chat-empty-state">
+                      <p className="text-danger mb-2">Failed to load messages</p>
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => refetchMessages()}
+                      >
+                        Retry
+                      </button>
                     </div>
                   ) : displayedMessages.length === 0 ? (
                     <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
